@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  # 后台爬虫服务
+  spider:
+    build: .
+    container_name: workspace-spider
+    restart: always
+    volumes:
+      - ./:/app
+    environment:
+      - TZ=Asia/Shanghai
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 前端 Web 服务 (Nginx)
+  web:
+    image: nginx:alpine
+    container_name: workspace-web
+    restart: always
+    ports:
+      - "1881:80"
+    volumes:
+      - ./public:/usr/share/nginx/html
+    environment:
+      - TZ=Asia/Shanghai
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      - spider

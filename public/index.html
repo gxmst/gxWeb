@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Vibe Workspace</title>
+    <!-- 引入 Tailwind CSS 引擎 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+            text-rendering: optimizeLegibility;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .numeric {
+            font-family: "JetBrains Mono", "SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", monospace;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* 核心：毛玻璃质感 */
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        /* 隐藏滚动条但保留滚动功能 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* 进场动画 */
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-slide-down {
+            animation: slideDown 0.4s ease-out forwards;
+        }
+
+        @keyframes subtleGlow {
+            from {
+                background: rgba(250, 204, 21, 0.14);
+            }
+
+            to {
+                background: rgba(250, 204, 21, 0);
+            }
+        }
+
+        .tab-btn {
+            color: rgba(255, 255, 255, 0.52);
+            transition: all 0.25s ease;
+        }
+
+        .tab-btn:hover {
+            color: rgba(255, 255, 255, 0.92);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .tab-btn-active {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 10px 20px rgba(0, 0, 0, 0.22);
+        }
+
+        /* 新闻项悬停优化 */
+        .news-item-hover {
+            transition: background 0.2s ease;
+            border-radius: 0.75rem;
+        }
+
+        .news-item-hover:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+
+<body
+    class="min-h-screen w-screen text-white font-sans bg-gray-900 flex flex-col md:flex-row md:h-screen md:overflow-hidden overflow-y-auto no-scrollbar">
+
+    <!-- 动态背景 -->
+    <div class="fixed inset-0 z-0">
+        <img id="bgImage" translate="no" src="bg_0.jpg"
+            class="w-full h-full object-cover pointer-events-none select-none transition-all duration-700" alt="">
+        <!-- 动态天气滤镜层 -->
+        <div id="weatherOverlay" class="absolute inset-0 bg-black/40 transition-colors duration-1000"></div>
+        <!-- 物理粒子画布 -->
+        <canvas id="weatherCanvas" class="absolute inset-0 z-0 pointer-events-none"></canvas>
+    </div>
+
+    <!-- 左上角：控制中心 -->
+    <div class="absolute top-6 left-6 flex gap-4 z-30">
+        <button onclick="toggleWallpaper()"
+            class="w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg outline-none focus:outline-none"
+            title="切换壁纸">
+            <svg class="w-5 h-5 text-white/70 group-hover:text-white" fill="none" stroke="currentColor"
+                viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
+                </path>
+            </svg>
+        </button>
+        <button onclick="toggleWeatherFilter()" id="filterBtn"
+            class="w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg text-lg outline-none focus:outline-none"
+            title="切换环境滤镜">✨</button>
+    </div>
+
+    <!-- 主体内容区 (左侧) -->
+    <main
+        class="relative z-10 flex flex-col items-center justify-center p-8 pb-20 w-full min-h-[80vh] md:flex-1 md:min-h-0">
+        <!-- 时间与天气 -->
+        <div class="flex flex-col items-center mb-8">
+            <div id="clock"
+                class="text-7xl font-semibold tracking-tight numeric drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]">00:00
+            </div>
+            <div
+                class="flex items-center gap-3 text-white/90 text-sm mt-4 tracking-wider drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] font-medium">
+                <span id="dateInfo">获取日期中...</span>
+                <span class="opacity-40">|</span>
+                <span id="weatherInfo">获取天气中...</span>
+            </div>
+        </div>
+
+        <!-- 搜索引擎切换 -->
+        <div
+            class="inline-flex gap-4 mb-4 text-xs font-medium bg-black/20 backdrop-blur-md rounded-full px-4 py-1.5 border border-white/10 shadow-lg shrink-0 overflow-x-auto no-scrollbar">
+            <button onclick="setSearchEngine('bing')" id="eng-bing"
+                class="px-3 py-0.5 rounded-full transition-all shrink-0">必应</button>
+            <button onclick="setSearchEngine('baidu')" id="eng-baidu"
+                class="px-3 py-0.5 rounded-full text-white/60 hover:text-white/80 transition-all shrink-0">百度</button>
+            <button onclick="setSearchEngine('google')" id="eng-google"
+                class="px-3 py-0.5 rounded-full text-white/60 hover:text-white/80 transition-all shrink-0">谷歌</button>
+            <button onclick="setSearchEngine('duck')" id="eng-duck"
+                class="px-3 py-0.5 rounded-full text-white/60 hover:text-white/80 transition-all shrink-0">DuckDuckGo</button>
+        </div>
+
+        <!-- 居中搜索框 -->
+        <div
+            class="w-full max-w-2xl bg-white/10 border border-white/20 backdrop-blur-xl rounded-full flex items-center p-2 mb-12 transition-transform hover:scale-[1.01] shadow-2xl">
+            <svg class="w-6 h-6 text-white/70 ml-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+            <input type="text" id="searchInput" placeholder="在网络上搜索..."
+                class="w-full bg-transparent border-none outline-none text-white px-4 text-lg placeholder-white/60"
+                onkeypress="handleSearch(event)">
+        </div>
+
+        <!-- 快捷导航 Dock -->
+        <div
+            class="flex gap-6 bg-black/20 border border-white/10 backdrop-blur-xl px-8 py-4 rounded-3xl w-full max-w-fit overflow-x-auto no-scrollbar shadow-2xl">
+            <a href="https://bilibili.com"
+                class="flex flex-col items-center gap-2 group transition-all hover:-translate-y-2 shrink-0">
+                <div
+                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/10 text-white/80 rounded-xl flex items-center justify-center group-hover:bg-[#FB7299] group-hover:text-white group-hover:border-transparent transition-all duration-300 shadow-md">
+                    B</div>
+                <span class="text-xs text-white/70 group-hover:text-white transition-colors">Bilibili</span>
+            </a>
+            <a href="https://x.com"
+                class="flex flex-col items-center gap-2 group transition-all hover:-translate-y-2 shrink-0">
+                <div
+                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/10 text-white/80 rounded-xl flex items-center justify-center group-hover:bg-black group-hover:text-white group-hover:border-transparent transition-all duration-300 shadow-md">
+                    X</div>
+                <span class="text-xs text-white/70 group-hover:text-white transition-colors">Twitter</span>
+            </a>
+            <a href="https://github.com"
+                class="flex flex-col items-center gap-2 group transition-all hover:-translate-y-2 shrink-0">
+                <div
+                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/10 text-white/80 rounded-xl flex items-center justify-center group-hover:bg-[#333333] group-hover:text-white group-hover:border-transparent transition-all duration-300 shadow-md">
+                    G</div>
+                <span class="text-xs text-white/70 group-hover:text-white transition-colors">GitHub</span>
+            </a>
+            <a href="https://douyin.com"
+                class="flex flex-col items-center gap-2 group transition-all hover:-translate-y-2 shrink-0">
+                <div
+                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/10 text-white/80 rounded-xl flex items-center justify-center group-hover:bg-[#FE2C55] group-hover:text-white group-hover:border-transparent transition-all duration-300 font-bold shadow-md">
+                    D</div>
+                <span class="text-xs text-white/70 group-hover:text-white transition-colors">抖音</span>
+            </a>
+            <a href="https://discord.com"
+                class="flex flex-col items-center gap-2 group transition-all hover:-translate-y-2 shrink-0">
+                <div
+                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/10 text-white/80 rounded-xl flex items-center justify-center group-hover:bg-[#5865F2] group-hover:text-white group-hover:border-transparent transition-all duration-300 font-bold shadow-md">
+                    Ds</div>
+                <span class="text-xs text-white/70 group-hover:text-white transition-colors">Discord</span>
+            </a>
+        </div>
+    </main>
+
+    <!-- 右侧：金融快讯面板 -->
+    <aside class="relative z-10 w-full p-6 flex flex-col group/aside md:w-[450px] md:h-screen">
+        <!-- 拖拽手柄 -->
+        <div id="resizer"
+            class="hidden md:block absolute left-0 top-0 w-1.5 h-full cursor-ew-resize z-20 hover:bg-white/30 transition-colors group-hover/aside:bg-white/10">
+        </div>
+
+        <div
+            class="bg-black/30 backdrop-blur-3xl border border-white/10 flex-1 rounded-3xl p-6 flex flex-col overflow-hidden relative shadow-2xl">
+            <!-- 标题栏 -->
+            <div class="flex items-center justify-between mb-4 border-b border-white/10 pb-4">
+                <div class="flex items-center gap-3">
+                    <h2 class="text-lg font-bold tracking-wider text-white/90">7x24 市场快讯</h2>
+                    <div class="flex items-center gap-1 bg-white/5 p-0.5 rounded-md text-[10px] border border-white/5">
+                        <button onclick="setFontSize('sm')" id="fs-sm"
+                            class="px-2 py-0.5 rounded transition-all bg-white/20 text-white shadow-sm">小</button>
+                        <button onclick="setFontSize('base')" id="fs-base"
+                            class="px-2 py-0.5 rounded transition-all text-white/50 hover:text-white/90">中</button>
+                        <button onclick="setFontSize('lg')" id="fs-lg"
+                            class="px-2 py-0.5 rounded transition-all text-white/50 hover:text-white/90">大</button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="lastUpdateTime" class="text-[10px] numeric text-white/40">更新中...</span>
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span
+                            class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- 选项卡切换 -->
+            <div
+                class="flex p-1 mb-4 bg-black/20 rounded-xl border border-white/5 backdrop-blur-md overflow-x-auto no-scrollbar">
+                <button onclick="setFilter('all')" id="tab-all"
+                    class="tab-btn tab-btn-active flex-1 py-1.5 text-xs font-bold rounded-lg shrink-0 min-w-[60px]">全部</button>
+                <button onclick="setFilter('news')" id="tab-news"
+                    class="tab-btn flex-1 py-1.5 text-xs font-medium rounded-lg shrink-0 min-w-[60px]">快讯</button>
+                <button onclick="setFilter('foreign')" id="tab-foreign"
+                    class="tab-btn flex-1 py-1.5 text-xs font-medium rounded-lg shrink-0 min-w-[60px]">外媒</button>
+                <button onclick="setFilter('english')" id="tab-english"
+                    class="tab-btn flex-1 py-1.5 text-xs font-medium rounded-lg shrink-0 min-w-[60px]">英文</button>
+            </div>
+
+            <!-- 滚动列表区 (增加 pb-24 防止被底部行情条挡住) -->
+            <div id="newsList"
+                class="flex-1 overflow-y-auto no-scrollbar flex flex-col pb-24 transition-opacity duration-300">
+                <!-- 由 JS 填充 -->
+            </div>
+
+            <!-- 回到顶部按钮 -->
+            <div id="backToTop" onclick="scrollToTop()"
+                class="absolute bottom-16 right-6 z-40 w-10 h-10 bg-white/10 backdrop-blur-xl rounded-full flex items-center justify-center cursor-pointer opacity-0 pointer-events-none transition-all duration-300 hover:bg-white/20 active:scale-95 shadow-xl border border-white/20">
+                <svg class="w-5 h-5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18">
+                    </path>
+                </svg>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 底部：实时行情条 (静态双行滑动布局) -->
+    <footer
+        class="fixed bottom-0 left-0 w-full h-[52px] z-50 bg-black/40 backdrop-blur-2xl border-t border-white/10 group/ticker">
+
+        <!-- 修复后的翻页按钮：左 -->
+        <button onclick="scrollTicker(-500)"
+            class="absolute left-2 top-1/2 -translate-y-1/2 z-50 w-8 h-8 bg-black/50 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center opacity-0 group-hover/ticker:opacity-100 transition-all hover:bg-white/20 outline-none shadow-lg">
+            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+        </button>
+
+        <!-- 真正的横向滚动容器 -->
+        <div id="tickerScroll"
+            class="flex items-center gap-12 px-14 py-1.5 w-full h-full overflow-x-auto no-scrollbar scroll-smooth">
+            <div id="tickerContent" class="flex items-center gap-14 min-w-max">
+                <!-- 由 JS 填充双行排版 -->
+            </div>
+        </div>
+
+        <!-- 修复后的翻页按钮：右 -->
+        <button onclick="scrollTicker(500)"
+            class="absolute right-2 top-1/2 -translate-y-1/2 z-50 w-8 h-8 bg-black/50 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center opacity-0 group-hover/ticker:opacity-100 transition-all hover:bg-white/20 outline-none shadow-lg">
+            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+            </svg>
+        </button>
+    </footer>
+
+    <script>
+        // ================== 1. 基础 UI 控制 ==================
+
+        // 实时时钟
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').innerText = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            const dateStr = now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+            // 完美处理日期和星期的空格
+            document.getElementById('dateInfo').innerText = dateStr.replace(/(日)\s*(星期)/, '$1 $2');
+        }
+        setInterval(updateClock, 1000); updateClock();
+
+        // 搜索引擎
+        let currentEngine = localStorage.getItem('preferredEngine') || 'bing';
+        const engines = {
+            bing: { name: '必应', url: 'https://www.bing.com/search?q=', color: '#00809D' },
+            baidu: { name: '百度', url: 'https://www.baidu.com/s?wd=', color: '#2932E1' },
+            google: { name: '谷歌', url: 'https://www.google.com/search?q=', color: '#EA4335' },
+            duck: { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=', color: '#DE5833' }
+        };
+        function setSearchEngine(engine) {
+            currentEngine = engine; localStorage.setItem('preferredEngine', engine);
+            document.getElementById('searchInput').placeholder = `在 ${engines[engine].name} 上搜索...`;
+            Object.keys(engines).forEach(key => {
+                const btn = document.getElementById('eng-' + key);
+                if (key === engine) {
+                    btn.style.color = engines[key].color;
+                    btn.classList.add('bg-white/20', 'font-bold', 'text-white');
+                    btn.classList.remove('text-white/60');
+                } else {
+                    btn.style.color = '';
+                    btn.classList.remove('bg-white/20', 'font-bold', 'text-white');
+                    btn.classList.add('text-white/60');
+                }
+            });
+        }
+        setSearchEngine(currentEngine);
+        function handleSearch(event) {
+            if (event.key === 'Enter') {
+                const query = document.getElementById('searchInput').value.trim();
+                if (query) window.open(engines[currentEngine].url + encodeURIComponent(query), '_blank');
+            }
+        }
+
+        // 壁纸轮换
+        let currentBgIndex = 0;
+        function toggleWallpaper() {
+            currentBgIndex = (currentBgIndex + 1) % 3;
+            const bgImg = document.getElementById('bgImage');
+            bgImg.style.opacity = '0';
+            setTimeout(() => { bgImg.src = `bg_${currentBgIndex}.jpg?t=${Date.now()}`; bgImg.style.opacity = '1'; }, 400);
+        }
+
+        // 行情条翻页逻辑 (AI漏掉的函数，已补全)
+        function scrollTicker(amount) {
+            document.getElementById('tickerScroll').scrollBy({ left: amount, behavior: 'smooth' });
+        }
+
+
+        // ================== 2. 天气与粒子引擎 ==================
+
+        const canvas = document.getElementById('weatherCanvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        let animationId = null;
+
+        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        window.addEventListener('resize', resizeCanvas); resizeCanvas();
+
+        class WeatherParticle {
+            constructor(type) { this.type = type; this.reset(); }
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height - canvas.height;
+                if (this.type === 'rain') {
+                    this.speed = 15 + Math.random() * 10;
+                    this.len = 15 + Math.random() * 20;
+                    this.opacity = 0.1 + Math.random() * 0.2;
+                } else {
+                    this.speed = 0.5 + Math.random() * 1.5;
+                    this.radius = 1 + Math.random() * 2.5;
+                    this.opacity = 0.3 + Math.random() * 0.5;
+                    this.swing = Math.random() * 1.5;
+                    this.swingStep = Math.random() * 100;
+                }
+            }
+            update() {
+                this.y += this.speed;
+                if (this.type === 'snow') { this.x += Math.sin(this.swingStep) * this.swing; this.swingStep += 0.02; }
+                if (this.y > canvas.height) this.reset();
+            }
+            draw() {
+                ctx.beginPath();
+                if (this.type === 'rain') {
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${this.opacity})`;
+                    ctx.lineWidth = 1.5;
+                    ctx.moveTo(this.x, this.y); ctx.lineTo(this.x + 2, this.y + this.len);
+                    ctx.stroke();
+                } else {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        function animateWeather() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(p => { p.update(); p.draw(); });
+            animationId = requestAnimationFrame(animateWeather);
+        }
+
+        function applyEnvironmentFilter(weatherKeyword) {
+            const overlay = document.getElementById('weatherOverlay');
+            cancelAnimationFrame(animationId);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles = [];
+
+            if (weatherKeyword.includes('🌧️') || weatherKeyword.includes('雨')) {
+                overlay.className = "absolute inset-0 bg-blue-900/30 transition-colors duration-1000";
+                for (let i = 0; i < 150; i++) particles.push(new WeatherParticle('rain'));
+                animateWeather();
+            } else if (weatherKeyword.includes('☀️') || weatherKeyword.includes('晴')) {
+                overlay.className = "absolute inset-0 bg-orange-700/20 mix-blend-overlay transition-colors duration-1000";
+            } else if (weatherKeyword.includes('❄️') || weatherKeyword.includes('雪')) {
+                overlay.className = "absolute inset-0 bg-slate-400/20 mix-blend-overlay transition-colors duration-1000";
+                for (let i = 0; i < 100; i++) particles.push(new WeatherParticle('snow'));
+                animateWeather();
+            } else {
+                overlay.className = "absolute inset-0 bg-black/30 transition-colors duration-1000";
+            }
+        }
+
+        let realWeather = '';
+        const filterModes = ['auto', '晴', '雨', '雪'];
+        const filterIcons = ['✨', '☀️', '🌧️', '❄️'];
+        let currentFilterIndex = 0;
+
+        function toggleWeatherFilter() {
+            currentFilterIndex = (currentFilterIndex + 1) % 4;
+            const mode = filterModes[currentFilterIndex];
+            document.getElementById('filterBtn').innerText = filterIcons[currentFilterIndex];
+            if (mode === 'auto') applyEnvironmentFilter(realWeather);
+            else applyEnvironmentFilter(mode);
+        }
+
+        async function fetchWeather() {
+            try {
+                const response = await fetch('./weather.txt?t=' + Date.now());
+                if (!response.ok) throw new Error();
+                const text = await response.text();
+                if (!text.includes('失败')) {
+                    realWeather = text;
+                    document.getElementById('weatherInfo').innerText = text;
+                    if (filterModes[currentFilterIndex] === 'auto') applyEnvironmentFilter(realWeather);
+                }
+            } catch { document.getElementById('weatherInfo').innerText = '暂无天气数据'; }
+        }
+        fetchWeather(); setInterval(fetchWeather, 600000);
+
+        // ================== 3. 底部行情双行排版 ==================
+
+        async function fetchTickerData() {
+            try {
+                const response = await fetch('./ticker.json?t=' + Date.now());
+                const items = await response.json();
+                const container = document.getElementById('tickerContent');
+                if (!items || items.length === 0) return;
+
+                if (container.children.length === 0) {
+                    let html = '';
+                    items.forEach(item => {
+                        html += `
+                        <div class="flex flex-col items-center justify-center min-w-max" data-symbol="${item.name}">
+                            <span class="text-[11px] text-white/45 mb-0.5 tracking-widest drop-shadow-md">${item.name}</span>
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-sm font-semibold text-white/75 drop-shadow-md numeric price-val">--</span>
+                                <span class="text-xs font-semibold drop-shadow-md numeric change-val">--</span>
+                            </div>
+                        </div>`;
+                    });
+                    container.innerHTML = html;
+                }
+
+                items.forEach(item => {
+                    const el = container.querySelector(`[data-symbol="${item.name}"]`);
+                    if (el) {
+                        el.querySelector('.price-val').innerText = item.price;
+                        const cEl = el.querySelector('.change-val');
+                        cEl.innerText = item.change;
+                        cEl.className = `text-xs font-semibold drop-shadow-md numeric change-val ${item.change.startsWith('-') ? 'text-emerald-400' : 'text-rose-400'}`;
+                    }
+                });
+            } catch { console.error("行情同步异常"); }
+        }
+        fetchTickerData(); setInterval(fetchTickerData, 15000);
+
+        // ================== 4. 新闻流与交互防抖 ==================
+
+        let allNewsData = [];
+        let currentFilter = 'all';
+        let lastFirstNewsContent = '';
+        let currentFontSize = 'sm';
+
+        // 字体切换
+        function setFontSize(size) {
+            currentFontSize = size;
+            ['sm', 'base', 'lg'].forEach(s => {
+                const btn = document.getElementById('fs-' + s);
+                if (s === size) { btn.classList.add('bg-white/20', 'text-white'); btn.classList.remove('text-white/50'); }
+                else { btn.classList.remove('bg-white/20', 'text-white'); btn.classList.add('text-white/50'); }
+            });
+            // 字体改变时，强制全量重绘
+            lastFirstNewsContent = '';
+            fetchRealNews();
+        }
+
+        // 极致排版的单条新闻渲染 (修复间距过大，增加极细分割线)
+        function createNewsElement(news, isNew = false) {
+            let displayText = news.content.replace('【新浪】', '');
+
+            // XSS 消毒：使用临时 div 转义
+            const tempDiv = document.createElement('div');
+            tempDiv.textContent = displayText;
+            let safeText = tempDiv.innerHTML;
+
+            // 高亮处理
+            let highlightedHtml = safeText
+                .replace(/涨|创历史新高|超预期/g, '<span class="text-red-400 font-bold">$&</span>')
+                .replace(/跌|跳水|不及预期|走弱|大跌/g, '<span class="text-green-400 font-bold">$&</span>');
+
+            // 安全外链 rel="noopener noreferrer"
+            let contentHtml = news.url ? `<a href="${news.url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 visited:text-purple-300/80 hover:text-blue-300 hover:underline transition-colors underline-offset-4">${highlightedHtml}</a>` : highlightedHtml;
+
+            const fs = currentFontSize === 'sm' ? 'text-sm' : (currentFontSize === 'base' ? 'text-base' : 'text-lg');
+            const item = document.createElement('div');
+
+            // 黄金间距：pb-3 mb-3，而不是之前的 pb-4 mb-4。最后一条去掉分割线。
+            item.className = 'border-l-2 border-white/20 pl-3 border-b border-white/5 pb-3 mb-3 last:border-b-0 last:mb-0 last:pb-0 news-item-hover' + (isNew ? ' animate-slide-down' : '');
+
+            item.innerHTML = `<div class="text-[11px] text-white/40 font-mono mb-0.5">${news.time}</div><div class="${fs} leading-relaxed text-white/90 drop-shadow-sm">${contentHtml}</div>`;
+            return item;
+        }
+
+        // 分类过滤规则
+        function applyFilter(n) {
+            const c = n.content;
+            if (currentFilter === 'news') return c.includes('【新浪】');
+            if (currentFilter === 'foreign') return ['【华尔街日报】', '【FT中文网】', '【纽约时报】', '【BBC】', '【联合早报】'].some(s => c.includes(s));
+            if (currentFilter === 'english') return ['【Yahoo】', '【CNBC】', '【FT】'].some(s => c.includes(s));
+            return true;
+        }
+
+        // 切换分类 Tab
+        function setFilter(filter) {
+            currentFilter = filter;
+            ['all', 'news', 'foreign', 'english'].forEach(t => {
+                const btn = document.getElementById('tab-' + t);
+                if (t === filter) { btn.classList.add('bg-white/20', 'text-white', 'shadow-md'); btn.classList.remove('text-white/50', 'hover:bg-white/10'); }
+                else { btn.classList.remove('bg-white/20', 'text-white', 'shadow-md'); btn.classList.add('text-white/50', 'hover:bg-white/10'); }
+            });
+            // 切换分类时，强制全量重绘
+            lastFirstNewsContent = '';
+            fetchRealNews();
+        }
+
+        async function fetchRealNews() {
+            try {
+                const response = await fetch('./finance-news.json?t=' + Date.now());
+                const newsList = await response.json();
+                if (!newsList || newsList.length === 0) return;
+
+                const listContainer = document.getElementById('newsList');
+
+                // 场景 A: 全量渲染 (首次打开 / 切换Tab / 切换字体)
+                if (lastFirstNewsContent === '') {
+                    allNewsData = newsList;
+                    const filtered = allNewsData.filter(applyFilter);
+
+                    // 淡出动画过渡
+                    listContainer.style.opacity = '0';
+                    setTimeout(() => {
+                        listContainer.innerHTML = '';
+                        if (filtered.length === 0) {
+                            listContainer.innerHTML = '<div class="text-center text-white/30 mt-10 text-sm">暂无对应快讯</div>';
+                        } else {
+                            filtered.forEach(n => listContainer.appendChild(createNewsElement(n)));
+                        }
+                        listContainer.style.opacity = '1';
+                    }, 200); // 配合 CSS transition-opacity
+
+                    lastFirstNewsContent = newsList[0].content;
+                    document.getElementById('lastUpdateTime').innerText = `${newsList[0].time}`;
+                    return;
+                }
+
+                // 场景 B: 增量检测防抖动
+                if (newsList[0].content !== lastFirstNewsContent) {
+                    const newItems = [];
+                    for (let n of newsList) {
+                        if (n.content === lastFirstNewsContent) break;
+                        if (applyFilter(n)) newItems.push(n);
+                    }
+
+                    if (newItems.length > 0) {
+                        // 记录滚动位置，防止阅读时画面乱跳
+                        const currentScroll = listContainer.scrollTop;
+                        const oldHeight = listContainer.scrollHeight;
+
+                        newItems.reverse().forEach(n => {
+                            listContainer.prepend(createNewsElement(n, true));
+                        });
+
+                        // 如果用户不在最顶部，补偿滚动高度
+                        if (currentScroll > 10) {
+                            listContainer.scrollTop = currentScroll + (listContainer.scrollHeight - oldHeight);
+                        }
+                    }
+                    lastFirstNewsContent = newsList[0].content;
+                    allNewsData = newsList;
+                    document.getElementById('lastUpdateTime').innerText = `${newsList[0].time}`;
+                }
+            } catch { console.error("快讯同步失败"); }
+        }
+
+        // ================== 5. 辅助交互 ==================
+
+        // 回到顶部悬浮按钮
+        const newsListEl = document.getElementById('newsList');
+        const bttBtn = document.getElementById('backToTop');
+        newsListEl.addEventListener('scroll', () => {
+            if (newsListEl.scrollTop > 300) { bttBtn.classList.remove('opacity-0', 'pointer-events-none'); bttBtn.classList.add('opacity-100'); }
+            else { bttBtn.classList.add('opacity-0', 'pointer-events-none'); bttBtn.classList.remove('opacity-100'); }
+        });
+        function scrollToTop() { newsListEl.scrollTo({ top: 0, behavior: 'smooth' }); }
+
+        // 侧边栏拖拽拉伸
+        const aside = document.querySelector('aside');
+        const resizer = document.getElementById('resizer');
+        let isResizing = false;
+        resizer.addEventListener('mousedown', () => { if (window.innerWidth < 768) return; isResizing = true; document.body.style.cursor = 'ew-resize'; aside.classList.add('select-none'); });
+        window.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            const newWidth = window.innerWidth - e.clientX;
+            if (newWidth >= 350 && newWidth <= window.innerWidth * 0.6) aside.style.width = `${newWidth}px`;
+        });
+        window.addEventListener('mouseup', () => { isResizing = false; document.body.style.cursor = 'default'; aside.classList.remove('select-none'); });
+
+        // 初始拉取快讯
+        fetchRealNews(); setInterval(fetchRealNews, 10000);
+    </script>
+</body>
+
+</html>

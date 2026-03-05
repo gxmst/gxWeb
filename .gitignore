@@ -1,0 +1,27 @@
+# 数据与生成文件
+public/*.json
+public/*.txt
+public/*.jpg
+finance-news.json
+ticker.json
+weather.txt
+bg_*.jpg
+bing_bg.jpg
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# 日志与临时文件
+*.log
+.DS_Store
+.idea/
+.vscode/
+.history/
