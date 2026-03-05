@@ -5,7 +5,31 @@ import os
 import requests
 import feedparser
 import calendar
+import random
 from datetime import datetime, timedelta, timezone
+
+# ================= 配置与工具 =================
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Edge/121.0.0.0"
+]
+
+def get_random_ua():
+    return random.choice(USER_AGENTS)
+
+def atomic_save_json(path, data):
+    tmp_path = f"{path}.tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, path)
+    except Exception as e:
+        print(f"❌ [系统] 原子化保存失败 ({path}): {e}")
+        if os.path.exists(tmp_path): os.remove(tmp_path)
 
 def get_beijing_time():
     # 强制获取北京时间 (UTC+8)
@@ -21,11 +45,11 @@ def fetch_bing_wallpaper():
     print(f"[{get_beijing_time().strftime('%H:%M:%S')}][壁纸引擎] 正在检查今日必应壁纸...")
     try:
         url = "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=3&mkt=zh-CN"
-        headers = {"User-Agent": "Mozilla/5.0"}
+        headers = {"User-Agent": get_random_ua()}
         data = requests.get(url, headers=headers, timeout=10).json()
         for i in range(len(data["images"])):
             img_url = "https://www.bing.com" + data["images"][i]["url"]
-            img_data = requests.get(img_url, headers=headers, timeout=15).content
+            img_data = requests.get(img_url, headers={"User-Agent": get_random_ua()}, timeout=15).content
             with open(f"./public/bg_{i}.jpg", "wb") as f: f.write(img_data)
             print(f"✅ [壁纸引擎] bg_{i}.jpg 下载成功。")
     except Exception as e: print(f"❌ [壁纸引擎] 获取失败: {e}")
@@ -34,7 +58,7 @@ def fetch_bing_wallpaper():
 def fetch_sina():
     print(f"[{get_beijing_time().strftime('%H:%M:%S')}][新浪引擎] 开始抓取...")
     url = "https://zhibo.sina.com.cn/api/zhibo/feed?page=1&page_size=100&zhibo_id=152"
-    headers = {"User-Agent": "Mozilla/5.0"}
+    headers = {"User-Agent": get_random_ua()}
     news_list = []
     try:
         resp = requests.get(url, headers=headers, timeout=10).json()
@@ -72,10 +96,10 @@ def fetch_rss_news():
         {"name": "FT", "url": "https://www.ft.com/?format=rss"}
     ]
     all_rss_news = []
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     for source in rss_sources:
         source_news = []
         try:
+            headers = {"User-Agent": get_random_ua()}
             resp = requests.get(source["url"], headers=headers, timeout=15)
             if resp.status_code != 200: continue
             feed = feedparser.parse(resp.text)
@@ -99,7 +123,8 @@ def fetch_rss_news():
 def fetch_weather():
     try:
         url = "https://api.open-meteo.com/v1/forecast?latitude=41.80&longitude=123.43&current_weather=true"
-        resp = requests.get(url, timeout=10).json()
+        headers = {"User-Agent": get_random_ua()}
+        resp = requests.get(url, headers=headers, timeout=10).json()
         curr = resp.get("current_weather", {})
         temp, code = curr.get("temperature"), curr.get("weathercode")
         emoji_map = {0: "☀️", 1: "☁️", 2: "☁️", 3: "☁️", 45: "🌫️", 48: "🌫️", 51: "🌧️", 53: "🌧️", 55: "🌧️", 61: "🌧️", 63: "🌧️", 65: "🌧️", 71: "❄️", 73: "❄️", 75: "❄️", 95: "⛈️"}
@@ -114,7 +139,7 @@ def fetch_ticker():
     print(f"[{get_beijing_time().strftime('%H:%M:%S')}][行情引擎] 开始抓取精准行情...")
     # 移除 UDI，加入英伟达、白银、铜、外汇、日经、恒指
     url = "https://hq.sinajs.cn/list=s_sh000001,gb_dji,gb_ixic,gb_nvda,hf_GC,hf_SI,hf_HG,hf_CL,fx_susdcny,fx_susdjpy,int_nikkei,int_hangseng"
-    headers = {"Referer": "https://finance.sina.com.cn/", "User-Agent": "Mozilla/5.0"}
+    headers = {"Referer": "https://finance.sina.com.cn/", "User-Agent": get_random_ua()}
     ticker_list = []
     try:
         resp = requests.get(url, headers=headers, timeout=10)
@@ -158,7 +183,7 @@ def fetch_ticker():
                 ticker_list.append({"name": name, "price": price, "symbol": symbol, "change": change_str})
             except Exception as e: continue
         if ticker_list:
-            with open("./public/ticker.json", "w", encoding="utf-8") as f: json.dump(ticker_list, f, ensure_ascii=False, indent=2)
+            atomic_save_json("./public/ticker.json", ticker_list)
             print(f"✅ [行情引擎] 已同步 {len(ticker_list)} 条行情。")
     except Exception as e: print(f"❌ [行情引擎] 失败: {e}")
 
@@ -166,39 +191,50 @@ def fetch_ticker():
 def main():
     last_wallpaper_date = None
     while True:
-        now = get_beijing_time()
-        print(f"\n--- {now.strftime('%Y-%m-%d %H:%M:%S')} 开始轮询 ---")
-        if now.strftime('%Y-%m-%d') != last_wallpaper_date or not os.path.exists("./public/bg_0.jpg"):
-            fetch_bing_wallpaper(); last_wallpaper_date = now.strftime('%Y-%m-%d')
-        fetch_weather(); fetch_ticker()
-        
-        # 1. 抓取新浪快讯
-        sina_news_raw = fetch_sina()
-        seen_sina = set(); unique_sina = []
-        for item in sina_news_raw:
-            if item["content"] not in seen_sina:
-                unique_sina.append(item); seen_sina.add(item["content"])
-        unique_sina.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
-        sina_1500 = unique_sina[:1500] # 新浪配额提升至 1500 条
+        try:
+            now = get_beijing_time()
+            print(f"\n--- {now.strftime('%Y-%m-%d %H:%M:%S')} 开始轮询 ---")
+            
+            # 壁纸逻辑
+            if now.strftime('%Y-%m-%d') != last_wallpaper_date or not os.path.exists("./public/bg_0.jpg"):
+                fetch_bing_wallpaper(); last_wallpaper_date = now.strftime('%Y-%m-%d')
+            
+            fetch_weather(); fetch_ticker()
+            
+            # 1. 抓取新浪快讯
+            sina_news_raw = fetch_sina()
+            seen_sina = set(); unique_sina = []
+            for item in sina_news_raw:
+                if item["content"] not in seen_sina:
+                    unique_sina.append(item); seen_sina.add(item["content"])
+            unique_sina.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
+            sina_1500 = unique_sina[:1500] 
 
-        # 2. 抓取 RSS 快讯
-        rss_news_raw = fetch_rss_news()
-        seen_rss = set(); unique_rss = []
-        for item in rss_news_raw:
-            if item["content"] not in seen_rss:
-                unique_rss.append(item); seen_rss.add(item["content"])
-        unique_rss.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
-        rss_500 = unique_rss[:500] # RSS 配额提升至 500 条
+            # 2. 抓取 RSS 快讯
+            rss_news_raw = fetch_rss_news()
+            seen_rss = set(); unique_rss = []
+            for item in rss_news_raw:
+                if item["content"] not in seen_rss:
+                    unique_rss.append(item); seen_rss.add(item["content"])
+            unique_rss.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
+            rss_500 = unique_rss[:500] 
 
-        # 3. 合并并最终全局排序 (总库 2000 条)
-        final_news = sina_1500 + rss_500
-        final_news.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
-        
-        with open("./public/finance-news.json", "w", encoding="utf-8") as f: json.dump(final_news, f, ensure_ascii=False, indent=2)
-        print(f"✅ 更新完成：总库 {len(final_news)} 条。")
+            # 3. 合并并最终全局排序 (总库 2000 条)
+            final_news = sina_1500 + rss_500
+            final_news.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
+            
+            if final_news:
+                atomic_save_json("./public/finance-news.json", final_news)
+                print(f"✅ 更新完成：总库 {len(final_news)} 条。")
+                
+        except Exception as e:
+            print(f"🚨 [主循环] 发生严重异常: {e}")
             
         print("休眠 60 秒...")
         time.sleep(60)
+
+if __name__ == "__main__":
+    main()
 
 if __name__ == "__main__":
     main()

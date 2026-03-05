@@ -229,11 +229,14 @@
                 </div>
                 <div class="flex items-center gap-2">
                     <span id="lastUpdateTime" class="text-[10px] numeric text-white/40">更新中...</span>
-                    <span class="relative flex h-2.5 w-2.5">
-                        <span
-                            class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
-                    </span>
+                    <div id="heartbeatStatus" class="flex items-center gap-1.5">
+                        <span id="statusText" class="text-[10px] font-bold text-green-400">LIVE</span>
+                        <span class="relative flex h-2 w-2">
+                            <span id="statusPing"
+                                class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span id="statusDot" class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                        </span>
+                    </div>
                 </div>
             </div>
 
@@ -567,6 +570,36 @@
             try {
                 const response = await fetch('./finance-news.json?t=' + Date.now());
                 const newsList = await response.json();
+
+                // 心跳监测逻辑
+                const statusText = document.getElementById('statusText');
+                const statusPing = document.getElementById('statusPing');
+                const statusDot = document.getElementById('statusDot');
+
+                if (newsList && newsList.length > 0) {
+                    const latest = newsList[0];
+                    const [h, m] = latest.time.split(':').map(Number);
+                    const lastDate = new Date();
+                    lastDate.setHours(h, m, 0, 0);
+
+                    let diffMinutes = (new Date() - lastDate) / 60000;
+                    if (diffMinutes < -1000) diffMinutes += 1440; // 跨天处理
+
+                    if (diffMinutes <= 3) {
+                        statusText.innerText = 'LIVE';
+                        statusText.className = 'text-[10px] font-bold text-green-400';
+                        statusPing.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75';
+                        statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-green-500';
+                    } else {
+                        statusText.innerText = '离线';
+                        statusText.className = 'text-[10px] font-bold text-red-400';
+                        statusPing.className = 'hidden';
+                        statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-red-500';
+                    }
+                } else {
+                    throw new Error("Empty news list");
+                }
+
                 if (!newsList || newsList.length === 0) return;
 
                 const listContainer = document.getElementById('newsList');
@@ -619,10 +652,31 @@
                     allNewsData = newsList;
                     document.getElementById('lastUpdateTime').innerText = `${newsList[0].time}`;
                 }
-            } catch { console.error("快讯同步失败"); }
+            } catch (e) {
+                console.error("快讯同步失败:", e);
+                document.getElementById('statusText').innerText = '断连';
+                document.getElementById('statusText').className = 'text-[10px] font-bold text-red-400';
+                document.getElementById('statusPing').className = 'hidden';
+                document.getElementById('statusDot').className = 'relative inline-flex rounded-full h-2 w-2 bg-red-500';
+            }
         }
 
-        // ================== 5. 辅助交互 ==================
+        // ================== 5. 辅助交互与快捷键 ==================
+
+        // 全局快捷键监听
+        window.addEventListener('keydown', (e) => {
+            const searchInput = document.getElementById('searchInput');
+            // 一键聚焦搜索框 ( / 键 )
+            if (e.key === '/' && document.activeElement !== searchInput && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+                e.preventDefault();
+                searchInput.focus();
+            }
+            // 一键清空并退出搜索 ( Esc 键 )
+            if (e.key === 'Escape' && document.activeElement === searchInput) {
+                searchInput.value = '';
+                searchInput.blur();
+            }
+        });
 
         // 回到顶部悬浮按钮
         const newsListEl = document.getElementById('newsList');
