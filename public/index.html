@@ -303,7 +303,7 @@
     </aside>
 
     <!-- 底部：实时行情条 (静态双行滑动布局) -->
-    <footer
+    <footer id="bottom-ticker"
         class="fixed bottom-0 left-0 w-full h-[48px] z-50 bg-white/5 bg-gradient-to-t from-black/50 to-transparent backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border-t border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] group/ticker">
 
         <!-- 修复后的翻页按钮：左 -->
@@ -406,9 +406,11 @@
         function updateUIBounds() {
             const bar = document.getElementById('search-bar');
             const panel = document.getElementById('news-panel');
+            const ticker = document.getElementById('bottom-ticker');
             uiBounds = [];
             if (bar) uiBounds.push(bar.getBoundingClientRect());
             if (panel) uiBounds.push(panel.getBoundingClientRect());
+            if (ticker) uiBounds.push(ticker.getBoundingClientRect());
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
@@ -441,8 +443,8 @@
                 // 积雪逻辑
                 if (this.isLanded) {
                     this.landedTime++;
-                    if (this.landedTime > 300 + Math.random() * 180) { // 5-8秒积雪
-                        this.opacity -= 0.01; // 融化
+                    if (this.landedTime > 1500 + Math.random() * 900) { // 延长积雪停留时间
+                        this.opacity -= 0.002; // 降低融化速度
                         if (this.opacity <= 0) this.reset();
                     }
                     return;
@@ -477,7 +479,7 @@
                     }
                 }
 
-                if (this.y > canvas.height) this.reset();
+                if (this.y > canvas.height + 50) this.reset();
             }
             draw() {
                 if (this.isLanded) {
