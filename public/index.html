@@ -425,12 +425,15 @@
                 this.isSplashing = false;
                 this.splashRadius = 0;
                 this.splashAlpha = 1;
+                this.isPuddled = false;
+                this.puddleAlpha = 0;
+                this.puddleWidth = 0;
 
                 if (this.type === 'rain') {
-                    this.speed = 22 + Math.random() * 10;
-                    this.len = 20 + Math.random() * 20;
-                    this.opacity = 0.3 + Math.random() * 0.3;
-                    this.lineWidth = 1 + Math.random() * 1;
+                    this.speed = 15 + Math.random() * 8;
+                    this.len = 10 + Math.random() * 10;
+                    this.opacity = 0.15 + Math.random() * 0.2;
+                    this.lineWidth = 0.5 + Math.random() * 0.5;
                 } else {
                     this.speed = 0.6 + Math.random() * 1.8;
                     this.radius = Math.random() * 3 + 1;
@@ -440,6 +443,13 @@
                 }
             }
             update() {
+                // 积水蒸发逻辑
+                if (this.isPuddled) {
+                    this.puddleAlpha -= 0.003;
+                    if (this.puddleAlpha <= 0) this.reset();
+                    return;
+                }
+
                 // 积雪逻辑
                 if (this.isLanded) {
                     this.landedTime++;
@@ -454,7 +464,12 @@
                 if (this.isSplashing) {
                     this.splashRadius += 1.2;
                     this.splashAlpha -= 0.08; // 约 12 帧消失
-                    if (this.splashAlpha <= 0) this.reset();
+                    if (this.splashAlpha <= 0) {
+                        this.isSplashing = false;
+                        this.isPuddled = true;
+                        this.puddleAlpha = 0.2;
+                        this.puddleWidth = Math.random() * 10 + 5;
+                    }
                     return;
                 }
 
@@ -494,9 +509,17 @@
                     ctx.beginPath();
                     ctx.strokeStyle = `rgba(255, 255, 255, ${this.splashAlpha})`;
                     ctx.lineWidth = 1.5;
-                    const r = Math.min(this.splashRadius, 25); // 增大水花半径
+                    const r = Math.min(this.splashRadius, 12); // 限制水花大小
                     ctx.ellipse(this.x, this.y, r, r * 0.3, 0, 0, Math.PI * 2);
                     ctx.stroke();
+                    return;
+                }
+
+                if (this.isPuddled) {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${this.puddleAlpha})`;
+                    ctx.beginPath();
+                    ctx.ellipse(this.x, this.y, this.puddleWidth, 1, 0, 0, Math.PI * 2);
+                    ctx.fill();
                     return;
                 }
 
@@ -529,7 +552,7 @@
 
             if (weatherKeyword.includes('🌧️') || weatherKeyword.includes('雨')) {
                 overlay.className = "absolute inset-0 bg-blue-900/30 transition-colors duration-1000 z-20";
-                for (let i = 0; i < 120; i++) particles.push(new WeatherParticle('rain'));
+                for (let i = 0; i < 200; i++) particles.push(new WeatherParticle('rain'));
                 animateWeather();
             } else if (weatherKeyword.includes('☀️') || weatherKeyword.includes('晴')) {
                 overlay.className = "absolute inset-0 bg-orange-700/20 mix-blend-overlay transition-colors duration-1000 z-20";
