@@ -66,6 +66,9 @@ def fetch_sina():
         for item in items:
             clean_txt = clean_html(item.get("rich_text", "").replace("<br>", ""))
             if clean_txt:
+                # 提取重要性标记 (focus字段或is_top字段)
+                is_important = str(item.get("focus", "0")) == "1" or str(item.get("is_top", "0")) == "1"
+                
                 ts_val = item.get("create_time")
                 try:
                     if isinstance(ts_val, str):
@@ -77,7 +80,13 @@ def fetch_sina():
                         time_str = (datetime.utcfromtimestamp(ts).replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=8)))).strftime('%H:%M')
                 except Exception as e:
                     now = get_beijing_time(); ts = int(now.timestamp()); time_str = now.strftime('%H:%M')
-                news_list.append({"time": time_str, "raw_time": ts, "content": f"【新浪】{clean_txt}", "url": ""})
+                news_list.append({
+                    "time": time_str, 
+                    "raw_time": ts, 
+                    "content": f"【新浪】{clean_txt}", 
+                    "url": "",
+                    "is_important": is_important
+                })
         print(f"✅ [新浪引擎] 成功抓取 {len(news_list)} 条。")
     except Exception as e: print(f"❌ [新浪引擎] 失败: {e}")
     return news_list
@@ -112,7 +121,13 @@ def fetch_rss_news():
                     pub_parsed = entry.get("published_parsed")
                     if pub_parsed: ts = calendar.timegm(pub_parsed)
                     time_str = (datetime.utcfromtimestamp(ts).replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=8)))).strftime('%H:%M')
-                    source_news.append({"time": time_str, "raw_time": ts, "content": f"【{source['name']}】{title}", "url": link})
+                    source_news.append({
+                        "time": time_str, 
+                        "raw_time": ts, 
+                        "content": f"【{source['name']}】{title}", 
+                        "url": link,
+                        "is_important": False
+                    })
                 except Exception as e: continue
             print(f"✅ [RSS引擎] {source['name']} 成功解析 {len(source_news)} 条")
             all_rss_news.extend(source_news)
@@ -201,13 +216,13 @@ def main():
             
             fetch_weather(); fetch_ticker()
             
-            # 1. 抓取新浪快讯
+            # 1. 抓取新浪快讯 (保留官方原生排序，仅去重)
             sina_news_raw = fetch_sina()
             seen_sina = set(); unique_sina = []
             for item in sina_news_raw:
                 if item["content"] not in seen_sina:
                     unique_sina.append(item); seen_sina.add(item["content"])
-            unique_sina.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
+            # 不再对 unique_sina 进行重排，保留新浪官方原生顺序
             sina_1500 = unique_sina[:1500] 
 
             # 2. 抓取 RSS 快讯
@@ -219,12 +234,17 @@ def main():
             unique_rss.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
             rss_500 = unique_rss[:500] 
 
-            # 3. 合并并最终全局排序 (总库 2000 条)
+            # 3. 合并并排序
+            # 为了确保新浪置顶新闻稳居第一，采用 (重要性, 时间) 双重排序
             final_news = sina_1500 + rss_500
-            final_news.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
+            final_news.sort(key=lambda x: (x.get("is_important", False), x.get("raw_time", 0)), reverse=True)
             
             if final_news:
-                atomic_save_json("./public/finance-news.json", final_news)
+                output_data = {
+                    "last_updated": int(get_beijing_time().timestamp()),
+                    "news_list": final_news
+                }
+                atomic_save_json("./public/finance-news.json", output_data)
                 print(f"✅ 更新完成：总库 {len(final_news)} 条。")
                 
         except Exception as e:

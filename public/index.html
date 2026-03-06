@@ -537,10 +537,14 @@
             const fs = currentFontSize === 'sm' ? 'text-sm' : (currentFontSize === 'base' ? 'text-base' : 'text-lg');
             const item = document.createElement('div');
 
-            // 黄金间距：pb-3 mb-3，而不是之前的 pb-4 mb-4。最后一条去掉分割线。
-            item.className = 'border-l-2 border-white/20 pl-3 border-b border-white/5 pb-3 mb-3 last:border-b-0 last:mb-0 last:pb-0 news-item-hover' + (isNew ? ' animate-slide-down' : '');
+            // 重要性标记
+            let importantTag = news.is_important ? `<span class="ml-2 px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[9px] font-bold rounded border border-red-500/30 animate-pulse">🔥 重大</span>` : '';
+            let importantClass = news.is_important ? ' bg-red-500/10 border-red-500/20' : ' border-white/20';
 
-            item.innerHTML = `<div class="text-[11px] text-white/40 font-mono mb-0.5">${news.time}</div><div class="${fs} leading-relaxed text-white/90 drop-shadow-sm">${contentHtml}</div>`;
+            // 黄金间距：pb-3 mb-3，而不是之前的 pb-4 mb-4。最后一条去掉分割线。
+            item.className = `border-l-2 ${importantClass} pl-3 border-b border-white/5 pb-3 mb-3 last:border-b-0 last:mb-0 last:pb-0 news-item-hover` + (isNew ? ' animate-slide-down' : '');
+
+            item.innerHTML = `<div class="text-[11px] text-white/40 font-mono mb-0.5 flex items-center">${news.time}${importantTag}</div><div class="${fs} leading-relaxed text-white/90 drop-shadow-sm">${contentHtml}</div>`;
             return item;
         }
 
@@ -569,21 +573,16 @@
         async function fetchRealNews() {
             try {
                 const response = await fetch('./finance-news.json?t=' + Date.now());
-                const newsList = await response.json();
+                const data = await response.json();
 
-                // 心跳监测逻辑
+                // 心跳监测逻辑 (使用后端的 last_updated)
                 const statusText = document.getElementById('statusText');
                 const statusPing = document.getElementById('statusPing');
                 const statusDot = document.getElementById('statusDot');
 
-                if (newsList && newsList.length > 0) {
-                    const latest = newsList[0];
-                    const [h, m] = latest.time.split(':').map(Number);
-                    const lastDate = new Date();
-                    lastDate.setHours(h, m, 0, 0);
-
-                    let diffMinutes = (new Date() - lastDate) / 60000;
-                    if (diffMinutes < -1000) diffMinutes += 1440; // 跨天处理
+                if (data && data.last_updated) {
+                    const lastUpdatedMs = data.last_updated * 1000;
+                    const diffMinutes = (Date.now() - lastUpdatedMs) / 60000;
 
                     if (diffMinutes <= 3) {
                         statusText.innerText = 'LIVE';
@@ -596,10 +595,9 @@
                         statusPing.className = 'hidden';
                         statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-red-500';
                     }
-                } else {
-                    throw new Error("Empty news list");
                 }
 
+                const newsList = data.news_list;
                 if (!newsList || newsList.length === 0) return;
 
                 const listContainer = document.getElementById('newsList');
