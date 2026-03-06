@@ -428,9 +428,9 @@
 
                 if (this.type === 'rain') {
                     this.speed = 22 + Math.random() * 10;
-                    this.len = 15 + Math.random() * 15;
-                    this.opacity = 0.15 + Math.random() * 0.2;
-                    this.lineWidth = 0.5 + Math.random() * 0.5;
+                    this.len = 20 + Math.random() * 20;
+                    this.opacity = 0.3 + Math.random() * 0.3;
+                    this.lineWidth = 1 + Math.random() * 1;
                 } else {
                     this.speed = 0.6 + Math.random() * 1.8;
                     this.radius = Math.random() * 3 + 1;
@@ -443,8 +443,8 @@
                 // 积雪逻辑
                 if (this.isLanded) {
                     this.landedTime++;
-                    if (this.landedTime > 1500 + Math.random() * 900) { // 延长积雪停留时间
-                        this.opacity -= 0.002; // 降低融化速度
+                    if (this.landedTime > 600 + Math.random() * 400) { // 停留约 10-16 秒
+                        this.opacity -= 0.005; // 融化速度略微提升
                         if (this.opacity <= 0) this.reset();
                     }
                     return;
@@ -493,8 +493,8 @@
                 if (this.isSplashing) {
                     ctx.beginPath();
                     ctx.strokeStyle = `rgba(255, 255, 255, ${this.splashAlpha})`;
-                    ctx.lineWidth = 0.8;
-                    const r = Math.min(this.splashRadius, 15); // 限制水花大小
+                    ctx.lineWidth = 1.5;
+                    const r = Math.min(this.splashRadius, 25); // 增大水花半径
                     ctx.ellipse(this.x, this.y, r, r * 0.3, 0, 0, Math.PI * 2);
                     ctx.stroke();
                     return;
@@ -535,7 +535,7 @@
                 overlay.className = "absolute inset-0 bg-orange-700/20 mix-blend-overlay transition-colors duration-1000 z-20";
             } else if (weatherKeyword.includes('❄️') || weatherKeyword.includes('雪')) {
                 overlay.className = "absolute inset-0 bg-slate-800/40 transition-colors duration-1000 z-20";
-                for (let i = 0; i < 150; i++) particles.push(new WeatherParticle('snow'));
+                for (let i = 0; i < 250; i++) particles.push(new WeatherParticle('snow'));
                 animateWeather();
             } else {
                 overlay.className = "absolute inset-0 bg-black/30 transition-colors duration-1000 z-20";
