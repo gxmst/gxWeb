@@ -58,37 +58,53 @@ def fetch_bing_wallpaper():
 def fetch_sina():
     print(f"[{get_beijing_time().strftime('%H:%M:%S')}][新浪引擎] 开始抓取...")
     url = "https://zhibo.sina.com.cn/api/zhibo/feed?page=1&page_size=100&zhibo_id=152"
-    headers = {"User-Agent": get_random_ua()}
+    
     news_list = []
-    try:
-        resp = requests.get(url, headers=headers, timeout=10).json()
-        items = resp.get("result", {}).get("data", {}).get("feed", {}).get("list", [])
-        for item in items:
-            clean_txt = clean_html(item.get("rich_text", "").replace("<br>", ""))
-            if clean_txt:
-                # 提取重要性标记 (focus字段或is_top字段)
-                is_important = str(item.get("focus", "0")) == "1" or str(item.get("is_top", "0")) == "1"
-                
-                ts_val = item.get("create_time")
-                try:
-                    if isinstance(ts_val, str):
-                        dt = datetime.strptime(ts_val, '%Y-%m-%d %H:%M:%S')
-                        ts = int(dt.timestamp())
-                        time_str = dt.strftime('%H:%M')
-                    else:
-                        ts = int(ts_val)
-                        time_str = (datetime.utcfromtimestamp(ts).replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=8)))).strftime('%H:%M')
-                except Exception as e:
-                    now = get_beijing_time(); ts = int(now.timestamp()); time_str = now.strftime('%H:%M')
-                news_list.append({
-                    "time": time_str, 
-                    "raw_time": ts, 
-                    "content": f"【新浪】{clean_txt}", 
-                    "url": "",
-                    "is_important": is_important
-                })
-        print(f"✅ [新浪引擎] 成功抓取 {len(news_list)} 条。")
-    except Exception as e: print(f"❌ [新浪引擎] 失败: {e}")
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # 斩断僵尸连接，加入弹性超时
+            headers = {
+                "User-Agent": get_random_ua(),
+                "Connection": "close"
+            }
+            resp = requests.get(url, headers=headers, timeout=15)
+            data = resp.json()
+            items = data.get("result", {}).get("data", {}).get("feed", {}).get("list", [])
+            
+            for item in items:
+                clean_txt = clean_html(item.get("rich_text", "").replace("<br>", ""))
+                if clean_txt:
+                    # 提取重要性标记 (focus字段或is_top字段)
+                    is_important = str(item.get("focus", "0")) == "1" or str(item.get("is_top", "0")) == "1"
+                    
+                    ts_val = item.get("create_time")
+                    try:
+                        if isinstance(ts_val, str):
+                            dt = datetime.strptime(ts_val, '%Y-%m-%d %H:%M:%S')
+                            ts = int(dt.timestamp())
+                            time_str = dt.strftime('%H:%M')
+                        else:
+                            ts = int(ts_val)
+                            time_str = (datetime.utcfromtimestamp(ts).replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=8)))).strftime('%H:%M')
+                    except Exception as e:
+                        now = get_beijing_time(); ts = int(now.timestamp()); time_str = now.strftime('%H:%M')
+                    news_list.append({
+                        "time": time_str, 
+                        "raw_time": ts, 
+                        "content": f"【新浪】{clean_txt}", 
+                        "url": "",
+                        "is_important": is_important
+                    })
+            print(f"✅ [新浪引擎] 成功抓取 {len(news_list)} 条。")
+            return news_list  # 成功抓取后直接返回
+        except Exception as e:
+            print(f"⚠️ [新浪引擎] 第 {attempt + 1} 次尝试失败: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(2)
+            else:
+                print(f"❌ [新浪引擎] 达到最大重试次数，抓取任务终止。")
+    
     return news_list
 
 # ================= 引擎 3：强化版 RSS 引擎 =================
