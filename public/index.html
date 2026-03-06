@@ -304,7 +304,7 @@
 
     <!-- 底部：实时行情条 (静态双行滑动布局) -->
     <footer
-        class="fixed bottom-0 left-0 w-full h-[52px] z-50 bg-white/5 bg-gradient-to-t from-black/50 to-transparent backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border-t border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] group/ticker">
+        class="fixed bottom-0 left-0 w-full h-[48px] z-50 bg-white/5 bg-gradient-to-t from-black/50 to-transparent backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border-t border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] group/ticker">
 
         <!-- 修复后的翻页按钮：左 -->
         <button onclick="scrollTicker(-500)"
@@ -462,9 +462,9 @@
                     this.swingStep += 0.02;
                 }
 
-                // 物理碰撞检测 (实时 uiBounds 在 animateWeather 中更新)
+                // 物理碰撞检测 (向内收缩 20px 以适配圆角，实时 uiBounds 在 animateWeather 中更新)
                 for (const bound of uiBounds) {
-                    if (this.x > bound.left && this.x < bound.right && this.y > bound.top && this.y < bound.top + 15) {
+                    if (this.x > bound.left + 20 && this.x < bound.right - 20 && this.y > bound.top && this.y < bound.top + 15) {
                         if (this.type === 'snow') {
                             this.isLanded = true;
                             this.y = bound.top;
@@ -580,11 +580,11 @@
                     let html = '';
                     items.forEach(item => {
                         html += `
-                        <div class="flex flex-col items-center justify-center min-w-max" data-symbol="${item.name}">
-                            <span class="text-sm text-white/60 mb-0.5 tracking-widest drop-shadow-md">${item.name}</span>
-                            <div class="flex items-baseline gap-2">
-                                <span class="text-base font-bold text-white drop-shadow-md numeric price-val">--</span>
-                                <span class="text-xs font-semibold drop-shadow-md numeric change-val">--</span>
+                        <div class="flex flex-col items-center justify-center min-w-max gap-0.5" data-symbol="${item.name}">
+                            <span class="text-[10px] text-white/60 tracking-wider drop-shadow-md">${item.name}</span>
+                            <div class="flex items-baseline gap-1.5">
+                                <span class="text-xs font-bold text-white drop-shadow-md numeric price-val">--</span>
+                                <span class="text-[10px] font-semibold drop-shadow-md numeric change-val">--</span>
                             </div>
                         </div>`;
                     });
@@ -597,7 +597,7 @@
                         el.querySelector('.price-val').innerText = item.price;
                         const cEl = el.querySelector('.change-val');
                         cEl.innerText = item.change;
-                        cEl.className = `text-xs font-semibold drop-shadow-md numeric change-val ${item.change.startsWith('-') ? 'text-emerald-400' : 'text-rose-400'}`;
+                        cEl.className = `text-[10px] font-semibold drop-shadow-md numeric change-val ${item.change.startsWith('-') ? 'text-emerald-400' : 'text-rose-400'}`;
                     }
                 });
             } catch { console.error("行情同步异常"); }
