@@ -377,6 +377,12 @@
         let animationId = null;
         let uiBounds = [];
 
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            updateUIBounds();
+        }
+
         function updateUIBounds() {
             const bar = document.getElementById('search-bar');
             const panel = document.getElementById('news-panel');
@@ -384,8 +390,8 @@
             if (bar) uiBounds.push(bar.getBoundingClientRect());
             if (panel) uiBounds.push(panel.getBoundingClientRect());
         }
-        window.addEventListener('resize', () => { resizeCanvas(); updateUIBounds(); });
-        resizeCanvas(); updateUIBounds();
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
 
         class WeatherParticle {
             constructor(type) { this.type = type; this.reset(); }
