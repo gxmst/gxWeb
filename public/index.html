@@ -176,38 +176,38 @@
         <!-- 快捷导航 Dock -->
         <div
             class="flex gap-6 bg-white/5 backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border border-white/20 px-8 py-4 rounded-3xl w-full max-w-fit overflow-x-auto no-scrollbar shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_20px_50px_rgba(0,0,0,0.5)]">
-            <a href="https://bilibili.com"
+            <a href="https://bilibili.com" target="_blank" rel="noopener noreferrer"
                 class="flex flex-col items-center gap-2 group transition-all hover:-translate-y-2 shrink-0">
                 <div
-                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/10 text-white/80 rounded-xl flex items-center justify-center group-hover:bg-[#FB7299] group-hover:text-white group-hover:border-transparent transition-all duration-300 shadow-md">
+                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white/80 rounded-xl flex items-center justify-center group-hover:bg-[#FB7299] group-hover:text-white group-hover:border-transparent group-hover:scale-105 transition-all duration-300 shadow-md">
                     B</div>
                 <span class="text-xs text-white/70 group-hover:text-white transition-colors">Bilibili</span>
             </a>
-            <a href="https://x.com"
+            <a href="https://x.com" target="_blank" rel="noopener noreferrer"
                 class="flex flex-col items-center gap-2 group transition-all hover:-translate-y-2 shrink-0">
                 <div
-                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/10 text-white/80 rounded-xl flex items-center justify-center group-hover:bg-black group-hover:text-white group-hover:border-transparent transition-all duration-300 shadow-md">
+                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white/80 rounded-xl flex items-center justify-center group-hover:bg-black group-hover:text-white group-hover:border-transparent group-hover:scale-105 transition-all duration-300 shadow-md">
                     X</div>
                 <span class="text-xs text-white/70 group-hover:text-white transition-colors">Twitter</span>
             </a>
-            <a href="https://github.com"
+            <a href="https://github.com" target="_blank" rel="noopener noreferrer"
                 class="flex flex-col items-center gap-2 group transition-all hover:-translate-y-2 shrink-0">
                 <div
-                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/10 text-white/80 rounded-xl flex items-center justify-center group-hover:bg-[#333333] group-hover:text-white group-hover:border-transparent transition-all duration-300 shadow-md">
+                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white/80 rounded-xl flex items-center justify-center group-hover:bg-[#333333] group-hover:text-white group-hover:border-transparent group-hover:scale-105 transition-all duration-300 shadow-md">
                     G</div>
                 <span class="text-xs text-white/70 group-hover:text-white transition-colors">GitHub</span>
             </a>
-            <a href="https://douyin.com"
+            <a href="https://douyin.com" target="_blank" rel="noopener noreferrer"
                 class="flex flex-col items-center gap-2 group transition-all hover:-translate-y-2 shrink-0">
                 <div
-                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/10 text-white/80 rounded-xl flex items-center justify-center group-hover:bg-[#FE2C55] group-hover:text-white group-hover:border-transparent transition-all duration-300 font-bold shadow-md">
+                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white/80 rounded-xl flex items-center justify-center group-hover:bg-[#FE2C55] group-hover:text-white group-hover:border-transparent group-hover:scale-105 transition-all duration-300 font-bold shadow-md">
                     D</div>
                 <span class="text-xs text-white/70 group-hover:text-white transition-colors">抖音</span>
             </a>
-            <a href="https://discord.com"
+            <a href="https://discord.com" target="_blank" rel="noopener noreferrer"
                 class="flex flex-col items-center gap-2 group transition-all hover:-translate-y-2 shrink-0">
                 <div
-                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/10 text-white/80 rounded-xl flex items-center justify-center group-hover:bg-[#5865F2] group-hover:text-white group-hover:border-transparent transition-all duration-300 font-bold shadow-md">
+                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white/80 rounded-xl flex items-center justify-center group-hover:bg-[#5865F2] group-hover:text-white group-hover:border-transparent group-hover:scale-105 transition-all duration-300 font-bold shadow-md">
                     Ds</div>
                 <span class="text-xs text-white/70 group-hover:text-white transition-colors">Discord</span>
             </a>
@@ -281,7 +281,7 @@
 
     <!-- 底部：实时行情条 (静态双行滑动布局) -->
     <footer
-        class="fixed bottom-0 left-0 w-full h-[52px] z-50 bg-white/5 backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border-t border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] group/ticker">
+        class="fixed bottom-0 left-0 w-full h-[52px] z-50 bg-white/5 bg-gradient-to-t from-black/50 to-transparent backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border-t border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] group/ticker">
 
         <!-- 修复后的翻页按钮：左 -->
         <button onclick="scrollTicker(-500)"
@@ -481,9 +481,9 @@
                     items.forEach(item => {
                         html += `
                         <div class="flex flex-col items-center justify-center min-w-max" data-symbol="${item.name}">
-                            <span class="text-[11px] text-white/45 mb-0.5 tracking-widest drop-shadow-md">${item.name}</span>
+                            <span class="text-sm text-white/60 mb-0.5 tracking-widest drop-shadow-md">${item.name}</span>
                             <div class="flex items-baseline gap-2">
-                                <span class="text-sm font-semibold text-white/75 drop-shadow-md numeric price-val">--</span>
+                                <span class="text-base font-bold text-white drop-shadow-md numeric price-val">--</span>
                                 <span class="text-xs font-semibold drop-shadow-md numeric change-val">--</span>
                             </div>
                         </div>`;
