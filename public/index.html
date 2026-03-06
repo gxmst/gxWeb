@@ -149,7 +149,7 @@
         </div>
 
         <!-- 融合搜索框 (内嵌引擎选择) -->
-        <div
+        <div id="search-bar"
             class="w-full max-w-2xl bg-white/5 backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border border-white/20 rounded-full flex items-center p-1.5 pr-4 mb-12 transition-all duration-300 hover:scale-[1.01] focus-within:scale-[1.05] focus-within:ring-4 focus-within:ring-white/20 focus-within:bg-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_20px_50px_rgba(0,0,0,0.4)] overflow-hidden">
             <svg class="w-5 h-5 text-white/50 ml-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -224,7 +224,7 @@
             class="hidden md:block absolute left-0 top-0 w-1.5 h-full cursor-ew-resize z-20 hover:bg-white/30 transition-colors group-hover/aside:bg-white/10">
         </div>
 
-        <div
+        <div id="news-panel"
             class="bg-white/5 backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border border-white/20 flex-1 rounded-3xl p-6 flex flex-col overflow-hidden relative shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_25px_50px_rgba(0,0,0,0.5)]">
             <!-- 标题栏 -->
             <div class="flex items-center justify-between mb-4 border-b border-white/10 pb-4">
@@ -369,21 +369,33 @@
         }
 
 
-        // ================== 2. 天气与粒子引擎 ==================
+        // ================== 2. 天气与粒子物理引擎 ==================
 
         const canvas = document.getElementById('weatherCanvas');
         const ctx = canvas.getContext('2d');
         let particles = [];
         let animationId = null;
+        let uiBounds = [];
 
-        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-        window.addEventListener('resize', resizeCanvas); resizeCanvas();
+        function updateUIBounds() {
+            const bar = document.getElementById('search-bar');
+            const panel = document.getElementById('news-panel');
+            uiBounds = [];
+            if (bar) uiBounds.push(bar.getBoundingClientRect());
+            if (panel) uiBounds.push(panel.getBoundingClientRect());
+        }
+        window.addEventListener('resize', () => { resizeCanvas(); updateUIBounds(); });
+        resizeCanvas(); updateUIBounds();
 
         class WeatherParticle {
             constructor(type) { this.type = type; this.reset(); }
             reset() {
                 this.x = Math.random() * canvas.width;
                 this.y = Math.random() * canvas.height - canvas.height;
+                this.isStuck = false;
+                this.stuckTime = 0;
+                this.splash = false;
+                this.splashLife = 0;
                 if (this.type === 'rain') {
                     this.speed = 15 + Math.random() * 10;
                     this.len = 15 + Math.random() * 20;
@@ -397,13 +409,49 @@
                 }
             }
             update() {
+                if (this.isStuck) {
+                    this.stuckTime++;
+                    if (this.stuckTime > 150) { // 停留约 2.5s
+                        this.opacity -= 0.01;
+                        if (this.opacity <= 0) this.reset();
+                    }
+                    return;
+                }
+                if (this.splash) {
+                    this.splashLife--;
+                    if (this.splashLife <= 0) this.reset();
+                    return;
+                }
+
                 this.y += this.speed;
-                if (this.type === 'snow') { this.x += Math.sin(this.swingStep) * this.swing; this.swingStep += 0.02; }
+                if (this.type === 'snow') {
+                    this.x += Math.sin(this.swingStep) * this.swing;
+                    this.swingStep += 0.02;
+                }
+
+                // 物理碰撞检测
+                for (const bound of uiBounds) {
+                    if (this.x > bound.left && this.x < bound.right && this.y > bound.top && this.y < bound.top + 10) {
+                        if (this.type === 'snow') {
+                            this.isStuck = true;
+                            this.y = bound.top; // 停留在边缘
+                        } else {
+                            this.splash = true;
+                            this.splashLife = 8; // 水花生命周期
+                        }
+                        return;
+                    }
+                }
+
                 if (this.y > canvas.height) this.reset();
             }
             draw() {
                 ctx.beginPath();
-                if (this.type === 'rain') {
+                if (this.splash) {
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${this.opacity})`;
+                    ctx.ellipse(this.x, this.y, 4, 1.5, 0, 0, Math.PI * 2);
+                    ctx.stroke();
+                } else if (this.type === 'rain') {
                     ctx.strokeStyle = `rgba(255, 255, 255, ${this.opacity})`;
                     ctx.lineWidth = 1.5;
                     ctx.moveTo(this.x, this.y); ctx.lineTo(this.x + 2, this.y + this.len);
@@ -427,19 +475,20 @@
             cancelAnimationFrame(animationId);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             particles = [];
+            updateUIBounds(); // 每次切换天气重新获取边界
 
             if (weatherKeyword.includes('🌧️') || weatherKeyword.includes('雨')) {
-                overlay.className = "absolute inset-0 bg-blue-900/30 transition-colors duration-1000";
+                overlay.className = "absolute inset-0 bg-blue-900/30 transition-colors duration-1000 z-20";
                 for (let i = 0; i < 150; i++) particles.push(new WeatherParticle('rain'));
                 animateWeather();
             } else if (weatherKeyword.includes('☀️') || weatherKeyword.includes('晴')) {
-                overlay.className = "absolute inset-0 bg-orange-700/20 mix-blend-overlay transition-colors duration-1000";
+                overlay.className = "absolute inset-0 bg-orange-700/20 mix-blend-overlay transition-colors duration-1000 z-20";
             } else if (weatherKeyword.includes('❄️') || weatherKeyword.includes('雪')) {
-                overlay.className = "absolute inset-0 bg-slate-400/20 mix-blend-overlay transition-colors duration-1000";
+                overlay.className = "absolute inset-0 bg-slate-400/20 mix-blend-overlay transition-colors duration-1000 z-20";
                 for (let i = 0; i < 100; i++) particles.push(new WeatherParticle('snow'));
                 animateWeather();
             } else {
-                overlay.className = "absolute inset-0 bg-black/30 transition-colors duration-1000";
+                overlay.className = "absolute inset-0 bg-black/30 transition-colors duration-1000 z-20";
             }
         }
 
