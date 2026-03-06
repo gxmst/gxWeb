@@ -405,10 +405,10 @@
                 this.splashAlpha = 1;
 
                 if (this.type === 'rain') {
-                    this.speed = 18 + Math.random() * 12;
-                    this.len = 20 + Math.random() * 20;
-                    this.opacity = 0.2 + Math.random() * 0.3;
-                    this.lineWidth = 2;
+                    this.speed = 22 + Math.random() * 10;
+                    this.len = 15 + Math.random() * 15;
+                    this.opacity = 0.15 + Math.random() * 0.2;
+                    this.lineWidth = 0.5 + Math.random() * 0.5;
                 } else {
                     this.speed = 0.6 + Math.random() * 1.8;
                     this.radius = Math.random() * 3 + 1;
@@ -422,16 +422,16 @@
                 if (this.isLanded) {
                     this.landedTime++;
                     if (this.landedTime > 300 + Math.random() * 180) { // 5-8秒积雪
-                        this.opacity -= 0.01; // 2秒融化 (60fps * 2s = 120 frames, roughly)
+                        this.opacity -= 0.01; // 融化
                         if (this.opacity <= 0) this.reset();
                     }
                     return;
                 }
 
-                // 雨滴飞溅逻辑
+                // 雨滴飞溅逻辑 (微型快速水花)
                 if (this.isSplashing) {
-                    this.splashRadius += 0.8;
-                    this.splashAlpha -= 0.04;
+                    this.splashRadius += 1.2;
+                    this.splashAlpha -= 0.08; // 约 12 帧消失
                     if (this.splashAlpha <= 0) this.reset();
                     return;
                 }
@@ -442,16 +442,16 @@
                     this.swingStep += 0.02;
                 }
 
-                // 物理碰撞检测
+                // 物理碰撞检测 (实时 uiBounds 在 animateWeather 中更新)
                 for (const bound of uiBounds) {
-                    if (this.x > bound.left && this.x < bound.right && this.y > bound.top && this.y < bound.top + 12) {
+                    if (this.x > bound.left && this.x < bound.right && this.y > bound.top && this.y < bound.top + 15) {
                         if (this.type === 'snow') {
                             this.isLanded = true;
                             this.y = bound.top;
                         } else {
                             this.isSplashing = true;
-                            this.splashRadius = 2;
-                            this.splashAlpha = this.opacity * 2;
+                            this.splashRadius = 1;
+                            this.splashAlpha = 0.6;
                         }
                         return;
                     }
@@ -461,7 +461,6 @@
             }
             draw() {
                 if (this.isLanded) {
-                    // 画积雪 (扁平椭圆)
                     ctx.beginPath();
                     ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
                     ctx.ellipse(this.x, this.y, this.radius * 2, this.radius * 0.6, 0, 0, Math.PI * 2);
@@ -470,11 +469,11 @@
                 }
 
                 if (this.isSplashing) {
-                    // 画飞溅 (空心扩散椭圆)
                     ctx.beginPath();
                     ctx.strokeStyle = `rgba(255, 255, 255, ${this.splashAlpha})`;
-                    ctx.lineWidth = 1;
-                    ctx.ellipse(this.x, this.y, this.splashRadius, this.splashRadius * 0.4, 0, 0, Math.PI * 2);
+                    ctx.lineWidth = 0.8;
+                    const r = Math.min(this.splashRadius, 15); // 限制水花大小
+                    ctx.ellipse(this.x, this.y, r, r * 0.3, 0, 0, Math.PI * 2);
                     ctx.stroke();
                     return;
                 }
@@ -483,7 +482,7 @@
                 if (this.type === 'rain') {
                     ctx.strokeStyle = `rgba(255, 255, 255, ${this.opacity})`;
                     ctx.lineWidth = this.lineWidth;
-                    ctx.moveTo(this.x, this.y); ctx.lineTo(this.x + 1, this.y + this.len);
+                    ctx.moveTo(this.x, this.y); ctx.lineTo(this.x, this.y + this.len);
                     ctx.stroke();
                 } else {
                     ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
@@ -494,6 +493,7 @@
         }
 
         function animateWeather() {
+            updateUIBounds(); // 实时更新 UI 坐标，适配面板拖拽
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             particles.forEach(p => { p.update(); p.draw(); });
             animationId = requestAnimationFrame(animateWeather);
@@ -504,11 +504,10 @@
             cancelAnimationFrame(animationId);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             particles = [];
-            updateUIBounds();
 
             if (weatherKeyword.includes('🌧️') || weatherKeyword.includes('雨')) {
                 overlay.className = "absolute inset-0 bg-blue-900/30 transition-colors duration-1000 z-20";
-                for (let i = 0; i < 250; i++) particles.push(new WeatherParticle('rain'));
+                for (let i = 0; i < 120; i++) particles.push(new WeatherParticle('rain'));
                 animateWeather();
             } else if (weatherKeyword.includes('☀️') || weatherKeyword.includes('晴')) {
                 overlay.className = "absolute inset-0 bg-orange-700/20 mix-blend-overlay transition-colors duration-1000 z-20";
