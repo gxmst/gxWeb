@@ -332,6 +332,9 @@
     </footer>
 
     <script>
+        // 预加载壁纸，确保切换 0 延迟
+        [0, 1, 2].forEach(i => { const img = new Image(); img.src = `bg_${i}.jpg`; });
+
         // ================== 1. 基础 UI 控制 ==================
 
         // 实时时钟
@@ -380,7 +383,15 @@
             currentBgIndex = (currentBgIndex + 1) % 3;
             const bgImg = document.getElementById('bgImage');
             bgImg.style.opacity = '0';
-            setTimeout(() => { bgImg.src = `bg_${currentBgIndex}.jpg?t=${Date.now()}`; bgImg.style.opacity = '1'; }, 400);
+
+            // 利用图片 onload 事件确保切换丝滑
+            const nextSrc = `bg_${currentBgIndex}.jpg`;
+            const tempImg = new Image();
+            tempImg.src = nextSrc;
+            tempImg.onload = () => {
+                bgImg.src = nextSrc;
+                bgImg.style.opacity = '1';
+            };
         }
 
         // 行情条翻页逻辑 (AI漏掉的函数，已补全)
