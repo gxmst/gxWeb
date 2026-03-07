@@ -7,6 +7,8 @@ import feedparser
 import calendar
 import random
 from datetime import datetime, timedelta, timezone
+from PIL import Image
+import io
 
 # ================= 配置与工具 =================
 USER_AGENTS = [
@@ -44,14 +46,17 @@ def clean_html(text):
 def fetch_bing_wallpaper():
     print(f"[{get_beijing_time().strftime('%H:%M:%S')}][壁纸引擎] 正在检查今日必应壁纸...")
     try:
-        url = "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=3&mkt=zh-CN"
+        url = "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=5&mkt=zh-CN"
         headers = {"User-Agent": get_random_ua()}
         data = requests.get(url, headers=headers, timeout=10).json()
         for i in range(len(data["images"])):
             img_url = "https://www.bing.com" + data["images"][i]["url"]
             img_data = requests.get(img_url, headers={"User-Agent": get_random_ua()}, timeout=15).content
-            with open(f"./public/bg_{i}.jpg", "wb") as f: f.write(img_data)
-            print(f"✅ [壁纸引擎] bg_{i}.jpg 下载成功。")
+            
+            # 使用 Pillow 压缩图片，降低体积
+            img = Image.open(io.BytesIO(img_data)).convert('RGB')
+            img.save(f"./public/bg_{i}.jpg", "JPEG", quality=82)
+            print(f"✅ [壁纸引擎] bg_{i}.jpg 下载并压缩成功。")
     except Exception as e: print(f"❌ [壁纸引擎] 获取失败: {e}")
 
 # ================= 引擎 2：新浪快讯 =================
@@ -219,45 +224,63 @@ def fetch_ticker():
     except Exception as e: print(f"❌ [行情引擎] 失败: {e}")
 
 # ================= 主循环控制 =================
+global_rss_news = []
+
 def main():
+    global global_rss_news
     last_wallpaper_date = None
+    last_rss_time = 0
+    last_weather_time = 0
+    
     while True:
         try:
-            now = get_beijing_time()
-            print(f"\n--- {now.strftime('%Y-%m-%d %H:%M:%S')} 开始轮询 ---")
+            now_ts = time.time()
+            now_bj = get_beijing_time()
+            print(f"\n--- {now_bj.strftime('%Y-%m-%d %H:%M:%S')} 开始轮询 ---")
             
-            # 壁纸逻辑
-            if now.strftime('%Y-%m-%d') != last_wallpaper_date or not os.path.exists("./public/bg_0.jpg"):
-                fetch_bing_wallpaper(); last_wallpaper_date = now.strftime('%Y-%m-%d')
+            # 1. 壁纸逻辑 (每天一次)
+            if now_bj.strftime('%Y-%m-%d') != last_wallpaper_date or not os.path.exists("./public/bg_0.jpg"):
+                fetch_bing_wallpaper()
+                last_wallpaper_date = now_bj.strftime('%Y-%m-%d')
             
-            fetch_weather(); fetch_ticker()
+            # 2. 天气逻辑 (每 30 分钟)
+            if now_ts - last_weather_time >= 1800:
+                fetch_weather()
+                last_weather_time = now_ts
+                
+            # 3. 行情逻辑 (每 60 秒)
+            fetch_ticker()
             
-            # 1. 抓取新浪快讯 (保留官方原生排序，仅去重)
+            # 4. RSS 逻辑 (每 15 分钟)
+            if now_ts - last_rss_time >= 900 or not global_rss_news:
+                rss_news_raw = fetch_rss_news()
+                seen_rss = set()
+                unique_rss = []
+                for item in rss_news_raw:
+                    if item["content"] not in seen_rss:
+                        unique_rss.append(item)
+                        seen_rss.add(item["content"])
+                unique_rss.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
+                global_rss_news = unique_rss[:500]
+                last_rss_time = now_ts
+
+            # 5. 新浪快讯 (每 60 秒)
             sina_news_raw = fetch_sina()
-            seen_sina = set(); unique_sina = []
+            seen_sina = set()
+            unique_sina = []
             for item in sina_news_raw:
                 if item["content"] not in seen_sina:
-                    unique_sina.append(item); seen_sina.add(item["content"])
-            # 不再对 unique_sina 进行重排，保留新浪官方原生顺序
-            sina_1500 = unique_sina[:1500] 
+                    unique_sina.append(item)
+                    seen_sina.add(item["content"])
+            sina_1500 = unique_sina[:1500]
 
-            # 2. 抓取 RSS 快讯
-            rss_news_raw = fetch_rss_news()
-            seen_rss = set(); unique_rss = []
-            for item in rss_news_raw:
-                if item["content"] not in seen_rss:
-                    unique_rss.append(item); seen_rss.add(item["content"])
-            unique_rss.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
-            rss_500 = unique_rss[:500] 
-
-            # 3. 合并并排序
-            # 为了确保新浪置顶新闻稳居第一，采用 (重要性, 时间) 双重排序
-            final_news = sina_1500 + rss_500
+            # 6. 合并并保存
+            final_news = sina_1500 + global_rss_news
             final_news.sort(key=lambda x: (x.get("is_important", False), x.get("raw_time", 0)), reverse=True)
             
             if final_news:
                 output_data = {
-                    "last_updated": int(get_beijing_time().timestamp()),
+                    "last_updated": int(now_bj.timestamp()),
                     "news_list": final_news
                 }
                 atomic_save_json("./public/finance-news.json", output_data)
@@ -268,9 +291,6 @@ def main():
             
         print("休眠 60 秒...")
         time.sleep(60)
-
-if __name__ == "__main__":
-    main()
 
 if __name__ == "__main__":
     main()
