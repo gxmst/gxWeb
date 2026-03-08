@@ -121,7 +121,7 @@
 
     <!-- 左上角：控制中心 -->
     <div class="absolute top-6 left-6 flex gap-4 z-30">
-        <button onclick="toggleWallpaper()"
+        <button id="wallpaperBtn" onclick="toggleWallpaper()" style="opacity: 0.5; pointer-events: none;"
             class="w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg outline-none focus:outline-none"
             title="切换壁纸">
             <svg class="w-5 h-5 text-white/70 group-hover:text-white" fill="none" stroke="currentColor"
@@ -336,11 +336,35 @@
     </footer>
 
     <script>
-        // 预加载壁纸，确保切换 0 延迟 (Apple 官网式交叉淡入淡出优化)
+        // ================== 1. 壁纸收藏夹引擎 (动态加载) ==================
+        let wallpapersArray = [];
+        let currentBgIndex = 0;
+        let activeLayer = 1;
         const vSuffix = new Date().toLocaleDateString('zh-CN');
-        [0, 1, 2, 3, 4].forEach(i => { const img = new Image(); img.src = `bg_${i}.jpg?v=${vSuffix}`; });
 
-        // ================== 1. 基础 UI 控制 ==================
+        async function initWallpapers() {
+            try {
+                const resp = await fetch('./wallpapers.json?t=' + Date.now());
+                wallpapersArray = await resp.json();
+                if (wallpapersArray && wallpapersArray.length > 0) {
+                    // 初始化第一张并预加载
+                    document.getElementById('bgImage1').src = wallpapersArray[0] + '?v=' + vSuffix;
+                    wallpapersArray.forEach(url => {
+                        const img = new Image();
+                        img.src = url + '?v=' + vSuffix;
+                    });
+                    // 列表加载成功后激活切换按钮
+                    const btn = document.getElementById('wallpaperBtn');
+                    btn.style.opacity = '1';
+                    btn.style.pointerEvents = 'auto';
+                }
+            } catch (e) {
+                console.error("加载壁纸列表失败:", e);
+            }
+        }
+        initWallpapers();
+
+        // ================== 2. 基础 UI 控制 ==================
 
         // 实时时钟
         function updateClock() {
@@ -382,13 +406,11 @@
             }
         }
 
-        // 壁纸轮换 (Ping-Pong 双层交叉淡入淡出)
-        let currentBgIndex = 0;
-        let activeLayer = 1;
+        // 壁纸轮换 (动态适配收藏夹 + 必应 5 图)
         function toggleWallpaper() {
-            currentBgIndex = (currentBgIndex + 1) % 5;
-            const vSuffix = new Date().toLocaleDateString('zh-CN');
-            const nextSrc = `bg_${currentBgIndex}.jpg?v=${vSuffix}`;
+            if (wallpapersArray.length === 0) return;
+            currentBgIndex = (currentBgIndex + 1) % wallpapersArray.length;
+            const nextSrc = wallpapersArray[currentBgIndex] + '?v=' + vSuffix;
 
             const img1 = document.getElementById('bgImage1');
             const img2 = document.getElementById('bgImage2');

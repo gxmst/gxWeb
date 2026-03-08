@@ -59,6 +59,28 @@ def fetch_bing_wallpaper():
             print(f"✅ [壁纸引擎] bg_{i}.jpg 下载并压缩成功。")
     except Exception as e: print(f"❌ [壁纸引擎] 获取失败: {e}")
 
+def update_wallpaper_list():
+    favorite_dir = "./public/favorite"
+    if not os.path.exists(favorite_dir):
+        os.makedirs(favorite_dir)
+    
+    # 扫描收藏夹图片
+    favorite_files = []
+    try:
+        files = os.listdir(favorite_dir)
+        for f in files:
+            if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
+                favorite_files.append(f"favorite/{f}")
+    except Exception as e:
+        print(f"❌ [壁纸引擎] 扫描收藏夹失败: {e}")
+    
+    # 构建完整列表：收藏夹在前，必应 5 图在后
+    bing_files = [f"bg_{i}.jpg" for i in range(5) if os.path.exists(f"./public/bg_{i}.jpg")]
+    wallpapers = favorite_files + bing_files
+    
+    atomic_save_json("./public/wallpapers.json", wallpapers)
+    print(f"✅ [壁纸引擎] 已更新 wallpapers.json，共包含 {len(wallpapers)} 张壁纸。")
+
 # ================= 引擎 2：新浪快讯 =================
 def fetch_sina():
     print(f"[{get_beijing_time().strftime('%H:%M:%S')}][新浪引擎] 开始抓取...")
@@ -247,8 +269,11 @@ def main():
             if now_ts - last_weather_time >= 1800:
                 fetch_weather()
                 last_weather_time = now_ts
+
+            # 3. 扫描壁纸列表 (每 60 秒)
+            update_wallpaper_list()
                 
-            # 3. 行情逻辑 (每 60 秒)
+            # 4. 行情逻辑 (每 60 秒)
             fetch_ticker()
             
             # 4. RSS 逻辑 (每 15 分钟)
@@ -264,7 +289,7 @@ def main():
                 global_rss_news = unique_rss[:500]
                 last_rss_time = now_ts
 
-            # 5. 新浪快讯 (每 60 秒)
+            # 6. 新浪快讯 (每 60 秒)
             sina_news_raw = fetch_sina()
             seen_sina = set()
             unique_sina = []
@@ -274,7 +299,7 @@ def main():
                     seen_sina.add(item["content"])
             sina_1500 = unique_sina[:1500]
 
-            # 6. 合并并保存
+            # 7. 合并并保存
             final_news = sina_1500 + global_rss_news
             final_news.sort(key=lambda x: (x.get("is_important", False), x.get("raw_time", 0)), reverse=True)
             
