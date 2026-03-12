@@ -91,6 +91,18 @@
         .news-item-hover:hover {
             background: rgba(255, 255, 255, 0.05);
         }
+
+        /* 科技聚合块样式适配 */
+        .tech-content br {
+            display: block;
+            margin-top: 0.5rem;
+            content: "";
+        }
+
+        .tech-content a:hover {
+            filter: brightness(1.2);
+            text-decoration: underline;
+        }
     </style>
 </head>
 
@@ -722,7 +734,7 @@
             // 黄金间距：pb-3 mb-3，而不是之前的 pb-4 mb-4。最后一条去掉分割线。
             item.className = `border-l-2 ${importantClass} pl-3 border-b border-white/5 pb-3 mb-3 last:border-b-0 last:mb-0 last:pb-0 news-item-hover` + (isNew ? ' animate-slide-down' : '');
 
-            item.innerHTML = `<div class="text-[11px] text-white/40 font-mono mb-0.5 flex items-center">${news.time}${importantTag}</div><div class="${fs} leading-relaxed text-white/90 drop-shadow-sm">${contentHtml}</div>`;
+            item.innerHTML = `<div class="text-[11px] text-white/40 font-mono mb-0.5 flex items-center">${news.time}${importantTag}</div><div class="${fs} leading-loose text-white/90 drop-shadow-sm tech-content">${contentHtml}</div>`;
             return item;
         }
 

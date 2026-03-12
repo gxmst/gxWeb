@@ -9,6 +9,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from PIL import Image
 import io
+from deep_translator import GoogleTranslator
 
 # ================= 配置与工具 =================
 USER_AGENTS = [
@@ -177,65 +178,78 @@ def fetch_rss_news():
         except Exception as e: print(f"❌ [RSS引擎] {source['name']} 失败: {e}")
     return all_rss_news
 
-# ================= 引擎 4：科技趋势 (V2EX, HN, GitHub) =================
+def translate_en_to_zh(text):
+    if not text: return ""
+    try:
+        translated = GoogleTranslator(source='en', target='zh-CN').translate(text)
+        time.sleep(0.5) # 降低翻译频率，防止被封
+        return translated
+    except Exception as e:
+        print(f"⚠️ [翻译引擎] 失败: {e}")
+        return text
+
+# ================= 引擎 4：科技趋势聚合 (V2EX, HN, GitHub) =================
 def fetch_tech_news():
-    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][科技引擎] 开始抓取趋势...")
-    tech_news = []
-    ts = int(get_beijing_time().timestamp())
+    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][科技引擎] 开始抓取并聚合趋势...")
+    tech_blocks = []
+    now_bj = get_beijing_time()
+    ts = int(now_bj.timestamp())
+    time_str = now_bj.strftime('%H:%M')
     
-    # 1. V2EX
-    try:
-        resp = requests.get("https://www.v2ex.com/index.xml", headers={"User-Agent": get_random_ua()}, timeout=15)
-        if resp.status_code == 200:
-            feed = feedparser.parse(resp.text)
-            for entry in feed.entries[:15]:
-                tech_news.append({
-                    "time": get_beijing_time().strftime('%H:%M'),
-                    "raw_time": ts,
-                    "content": f"【V2EX】{entry.get('title', '').strip()}",
-                    "url": entry.get("link", ""),
-                    "is_important": False
-                })
-            print(f"✅ [科技引擎] V2EX 抓取成功 {len(feed.entries[:15])} 条")
-    except Exception as e: print(f"❌ [科技引擎] V2EX 失败: {e}")
-
-    # 2. Hacker News
-    try:
-        resp = requests.get("https://hnrss.org/frontpage?points=50", headers={"User-Agent": get_random_ua()}, timeout=15)
-        if resp.status_code == 200:
-            feed = feedparser.parse(resp.text)
-            for entry in feed.entries[:15]:
-                tech_news.append({
-                    "time": get_beijing_time().strftime('%H:%M'),
-                    "raw_time": ts,
-                    "content": f"【HN】{entry.get('title', '').strip()}",
-                    "url": entry.get("link", ""),
-                    "is_important": False
-                })
-            print(f"✅ [科技引擎] HN 抓取成功 {len(feed.entries[:15])} 条")
-    except Exception as e: print(f"❌ [科技引擎] HN 失败: {e}")
-
-    # 3. GitHub Trends (14 days)
+    # 1. GitHub Trends (聚合模式)
     try:
         date_14d = (datetime.now(timezone.utc) - timedelta(days=14)).strftime('%Y-%m-%d')
         url = f"https://api.github.com/search/repositories?q=created:>{date_14d}&sort=stars&order=desc"
         resp = requests.get(url, headers={"User-Agent": get_random_ua()}, timeout=15).json()
         items = resp.get("items", [])[:10]
+        
+        github_html = "【GitHub 趋势 (已翻译)】"
         for repo in items:
             name = repo.get("full_name")
             stars = repo.get("stargazers_count")
-            desc = repo.get("description") or "无描述"
-            tech_news.append({
-                "time": get_beijing_time().strftime('%H:%M'),
-                "raw_time": ts,
-                "content": f"【GitHub】{name} (⭐{stars}) - {desc[:100]}",
-                "url": repo.get("html_url", ""),
-                "is_important": False
-            })
-        print(f"✅ [科技引擎] GitHub 抓取成功 {len(items)} 条")
+            desc_en = repo.get("description") or "No description"
+            desc_zh = translate_en_to_zh(desc_en[:200])
+            github_html += f'<br>• <a href="{repo.get("html_url")}" target="_blank">{name} (⭐{stars})</a> - {desc_zh}'
+        
+        tech_blocks.append({
+            "time": time_str, "raw_time": ts, "content": github_html, "url": "", "is_important": False, "category": "tech"
+        })
+        print(f"✅ [科技引擎] GitHub 聚合成功")
     except Exception as e: print(f"❌ [科技引擎] GitHub 失败: {e}")
 
-    return tech_news
+    # 2. Hacker News (聚合模式)
+    try:
+        resp = requests.get("https://hnrss.org/frontpage?points=50", headers={"User-Agent": get_random_ua()}, timeout=15)
+        if resp.status_code == 200:
+            feed = feedparser.parse(resp.text)
+            hn_html = "【HN 热帖 (已翻译)】"
+            for i, entry in enumerate(feed.entries[:10]):
+                title_en = entry.get("title", "").strip()
+                title_zh = translate_en_to_zh(title_en)
+                hn_html += f'<br>{i+1}. <a href="{entry.get("link")}" target="_blank">{title_zh}</a>'
+            
+            tech_blocks.append({
+                "time": time_str, "raw_time": ts, "content": hn_html, "url": "", "is_important": False, "category": "tech"
+            })
+            print(f"✅ [科技引擎] HN 聚合成功")
+    except Exception as e: print(f"❌ [科技引擎] HN 失败: {e}")
+
+    # 3. V2EX (聚合模式)
+    try:
+        resp = requests.get("https://www.v2ex.com/index.xml", headers={"User-Agent": get_random_ua()}, timeout=15)
+        if resp.status_code == 200:
+            feed = feedparser.parse(resp.text)
+            v2ex_html = "【V2EX 热门】"
+            for i, entry in enumerate(feed.entries[:10]):
+                v2ex_html += f'<br>{i+1}. <a href="{entry.get("link")}" target="_blank">{entry.get("title", "").strip()}</a>'
+            
+            tech_blocks.append({
+                "time": time_str, "raw_time": ts, "content": v2ex_html, "url": "", "is_important": False, "category": "tech"
+            })
+            print(f"✅ [科技引擎] V2EX 聚合成功")
+    except Exception as e: print(f"❌ [科技引擎] V2EX 失败: {e}")
+
+    return tech_blocks
 
 # ================= 引擎 5：稳定天气 (Open-Meteo) =================
 def fetch_weather():
