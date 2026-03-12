@@ -201,17 +201,18 @@ def fetch_tech_news():
         date_14d = (datetime.now(timezone.utc) - timedelta(days=14)).strftime('%Y-%m-%d')
         url = f"https://api.github.com/search/repositories?q=created:>{date_14d}&sort=stars&order=desc"
         resp = requests.get(url, headers={"User-Agent": get_random_ua()}, timeout=15).json()
-        items = resp.get("items", [])[:10]
+        items = resp.get("items", [])[:20]
         
-        github_html = "【GitHub 趋势 (双语对照)】"
-        for repo in items:
+        github_html = "【GitHub 趋势 (双语对照/悬停展开)】"
+        for i, repo in enumerate(items):
             name = repo.get("full_name")
             stars = repo.get("stargazers_count")
             desc_en = repo.get("description") or "No description"
             desc_zh = translate_en_to_zh(desc_en[:200])
-            github_html += f'<br>• <a href="{repo.get("html_url")}" target="_blank">{name} (⭐{stars})</a>'
-            github_html += f'<br><span class="text-white/70 text-sm">EN: {desc_en}</span>'
-            github_html += f'<br><span class="text-white/50 text-xs">ZH: {desc_zh}</span><br>'
+            github_html += f'<div class="group mb-3 border-b border-white/5 pb-2 last:border-0">'
+            github_html += f'<a href="{repo.get("html_url")}" target="_blank" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {name} (⭐{stars})</a>'
+            github_html += f'<div class="text-white/80 text-sm mt-1">{desc_en}</div>'
+            github_html += f'<div class="overflow-hidden max-h-0 opacity-0 group-hover:max-h-24 group-hover:opacity-100 transition-all duration-500 ease-in-out text-white/50 text-xs mt-1">↳ ZH: {desc_zh}</div></div>'
         
         tech_blocks.append({
             "time": time_str, "raw_time": ts, "content": github_html, "url": "", "is_important": False, "category": "tech"
@@ -224,12 +225,13 @@ def fetch_tech_news():
         resp = requests.get("https://hnrss.org/frontpage?points=50", headers={"User-Agent": get_random_ua()}, timeout=15)
         if resp.status_code == 200:
             feed = feedparser.parse(resp.text)
-            hn_html = "【HN 热帖 (双语对照)】"
+            hn_html = "【HN 热帖 (双语对照/悬停展开)】"
             for i, entry in enumerate(feed.entries[:10]):
                 title_en = entry.get("title", "").strip()
                 title_zh = translate_en_to_zh(title_en)
-                hn_html += f'<br><a href="{entry.get("link")}" target="_blank" class="font-bold">{i+1}. {title_en}</a>'
-                hn_html += f'<br><span class="text-white/50 text-xs">↳ {title_zh}</span><br>'
+                hn_html += f'<div class="group mb-3 border-b border-white/5 pb-2 last:border-0">'
+                hn_html += f'<a href="{entry.get("link")}" target="_blank" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {title_en}</a>'
+                hn_html += f'<div class="overflow-hidden max-h-0 opacity-0 group-hover:max-h-20 group-hover:opacity-100 transition-all duration-500 ease-in-out text-white/50 text-xs mt-1">↳ ZH: {title_zh}</div></div>'
             
             tech_blocks.append({
                 "time": time_str, "raw_time": ts, "content": hn_html, "url": "", "is_important": False, "category": "tech"
@@ -244,7 +246,8 @@ def fetch_tech_news():
             feed = feedparser.parse(resp.text)
             v2ex_html = "【V2EX 热门】"
             for i, entry in enumerate(feed.entries[:10]):
-                v2ex_html += f'<br>{i+1}. <a href="{entry.get("link")}" target="_blank">{entry.get("title", "").strip()}</a>'
+                v2ex_html += f'<div class="mb-3 border-b border-white/5 pb-2 last:border-0">'
+                v2ex_html += f'<a href="{entry.get("link")}" target="_blank" class="text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {entry.get("title", "").strip()}</a></div>'
             
             tech_blocks.append({
                 "time": time_str, "raw_time": ts, "content": v2ex_html, "url": "", "is_important": False, "category": "tech"
