@@ -203,13 +203,15 @@ def fetch_tech_news():
         resp = requests.get(url, headers={"User-Agent": get_random_ua()}, timeout=15).json()
         items = resp.get("items", [])[:10]
         
-        github_html = "【GitHub 趋势 (已翻译)】"
+        github_html = "【GitHub 趋势 (双语对照)】"
         for repo in items:
             name = repo.get("full_name")
             stars = repo.get("stargazers_count")
             desc_en = repo.get("description") or "No description"
             desc_zh = translate_en_to_zh(desc_en[:200])
-            github_html += f'<br>• <a href="{repo.get("html_url")}" target="_blank">{name} (⭐{stars})</a> - {desc_zh}'
+            github_html += f'<br>• <a href="{repo.get("html_url")}" target="_blank">{name} (⭐{stars})</a>'
+            github_html += f'<br><span class="text-white/70 text-sm">EN: {desc_en}</span>'
+            github_html += f'<br><span class="text-white/50 text-xs">ZH: {desc_zh}</span><br>'
         
         tech_blocks.append({
             "time": time_str, "raw_time": ts, "content": github_html, "url": "", "is_important": False, "category": "tech"
@@ -222,11 +224,12 @@ def fetch_tech_news():
         resp = requests.get("https://hnrss.org/frontpage?points=50", headers={"User-Agent": get_random_ua()}, timeout=15)
         if resp.status_code == 200:
             feed = feedparser.parse(resp.text)
-            hn_html = "【HN 热帖 (已翻译)】"
+            hn_html = "【HN 热帖 (双语对照)】"
             for i, entry in enumerate(feed.entries[:10]):
                 title_en = entry.get("title", "").strip()
                 title_zh = translate_en_to_zh(title_en)
-                hn_html += f'<br>{i+1}. <a href="{entry.get("link")}" target="_blank">{title_zh}</a>'
+                hn_html += f'<br><a href="{entry.get("link")}" target="_blank" class="font-bold">{i+1}. {title_en}</a>'
+                hn_html += f'<br><span class="text-white/50 text-xs">↳ {title_zh}</span><br>'
             
             tech_blocks.append({
                 "time": time_str, "raw_time": ts, "content": hn_html, "url": "", "is_important": False, "category": "tech"
