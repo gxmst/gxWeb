@@ -286,8 +286,8 @@
                     class="flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]">快讯</button>
                 <button onclick="setFilter('foreign')" id="tab-foreign"
                     class="flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]">外媒</button>
-                <button onclick="setFilter('english')" id="tab-english"
-                    class="flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]">英文</button>
+                <button onclick="setFilter('tech')" id="tab-tech"
+                    class="flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]">科技</button>
             </div>
 
             <!-- 滚动列表区 (增加 pb-24 防止被底部行情条挡住) -->
@@ -730,20 +730,22 @@
         function applyFilter(n) {
             const c = n.content;
             if (currentFilter === 'news') return c.includes('【新浪】');
-            if (currentFilter === 'foreign') return ['【华尔街日报】', '【FT中文网】', '【纽约时报】', '【BBC】', '【联合早报】'].some(s => c.includes(s));
-            if (currentFilter === 'english') return ['【Yahoo】', '【CNBC】', '【FT】'].some(s => c.includes(s));
+            if (currentFilter === 'foreign') return ['【华尔街日报】', '【FT中文网】', '【纽约时报】', '【BBC】', '【联合早报】', '【Yahoo】', '【CNBC】', '【FT】'].some(s => c.includes(s));
+            if (currentFilter === 'tech') return ['【V2EX】', '【HN】', '【GitHub】'].some(s => c.includes(s));
             return true;
         }
 
         // 切换分类 Tab
         function setFilter(filter) {
             currentFilter = filter;
-            ['all', 'news', 'foreign', 'english'].forEach(t => {
+            ['all', 'news', 'foreign', 'tech'].forEach(t => {
                 const btn = document.getElementById('tab-' + t);
-                if (t === filter) {
-                    btn.className = 'flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 bg-white/20 text-white shadow-lg shrink-0 min-w-[60px] scale-[1.02] border border-white/20';
-                } else {
-                    btn.className = 'flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]';
+                if (btn) {
+                    if (t === filter) {
+                        btn.className = 'flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 bg-white/20 text-white shadow-lg shrink-0 min-w-[60px] scale-[1.02] border border-white/20';
+                    } else {
+                        btn.className = 'flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]';
+                    }
                 }
             });
             // 切换分类时，强制全量重绘

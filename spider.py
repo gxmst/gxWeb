@@ -177,7 +177,67 @@ def fetch_rss_news():
         except Exception as e: print(f"❌ [RSS引擎] {source['name']} 失败: {e}")
     return all_rss_news
 
-# ================= 引擎 4：稳定天气 (Open-Meteo) =================
+# ================= 引擎 4：科技趋势 (V2EX, HN, GitHub) =================
+def fetch_tech_news():
+    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][科技引擎] 开始抓取趋势...")
+    tech_news = []
+    ts = int(get_beijing_time().timestamp())
+    
+    # 1. V2EX
+    try:
+        resp = requests.get("https://www.v2ex.com/index.xml", headers={"User-Agent": get_random_ua()}, timeout=15)
+        if resp.status_code == 200:
+            feed = feedparser.parse(resp.text)
+            for entry in feed.entries[:15]:
+                tech_news.append({
+                    "time": get_beijing_time().strftime('%H:%M'),
+                    "raw_time": ts,
+                    "content": f"【V2EX】{entry.get('title', '').strip()}",
+                    "url": entry.get("link", ""),
+                    "is_important": False
+                })
+            print(f"✅ [科技引擎] V2EX 抓取成功 {len(feed.entries[:15])} 条")
+    except Exception as e: print(f"❌ [科技引擎] V2EX 失败: {e}")
+
+    # 2. Hacker News
+    try:
+        resp = requests.get("https://hnrss.org/frontpage?points=50", headers={"User-Agent": get_random_ua()}, timeout=15)
+        if resp.status_code == 200:
+            feed = feedparser.parse(resp.text)
+            for entry in feed.entries[:15]:
+                tech_news.append({
+                    "time": get_beijing_time().strftime('%H:%M'),
+                    "raw_time": ts,
+                    "content": f"【HN】{entry.get('title', '').strip()}",
+                    "url": entry.get("link", ""),
+                    "is_important": False
+                })
+            print(f"✅ [科技引擎] HN 抓取成功 {len(feed.entries[:15])} 条")
+    except Exception as e: print(f"❌ [科技引擎] HN 失败: {e}")
+
+    # 3. GitHub Trends (14 days)
+    try:
+        date_14d = (datetime.now(timezone.utc) - timedelta(days=14)).strftime('%Y-%m-%d')
+        url = f"https://api.github.com/search/repositories?q=created:>{date_14d}&sort=stars&order=desc"
+        resp = requests.get(url, headers={"User-Agent": get_random_ua()}, timeout=15).json()
+        items = resp.get("items", [])[:10]
+        for repo in items:
+            name = repo.get("full_name")
+            stars = repo.get("stargazers_count")
+            desc = repo.get("description") or "无描述"
+            tech_news.append({
+                "time": get_beijing_time().strftime('%H:%M'),
+                "raw_time": ts,
+                "content": f"【GitHub】{name} (⭐{stars}) - {desc[:100]}",
+                "url": repo.get("html_url", ""),
+                "is_important": False
+            })
+        print(f"✅ [科技引擎] GitHub 抓取成功 {len(items)} 条")
+    except Exception as e: print(f"❌ [科技引擎] GitHub 失败: {e}")
+
+    return tech_news
+
+# ================= 引擎 5：稳定天气 (Open-Meteo) =================
 def fetch_weather():
     try:
         url = "https://api.open-meteo.com/v1/forecast?latitude=41.80&longitude=123.43&current_weather=true"
@@ -247,12 +307,14 @@ def fetch_ticker():
 
 # ================= 主循环控制 =================
 global_rss_news = []
+global_tech_news = []
 
 def main():
-    global global_rss_news
+    global global_rss_news, global_tech_news
     last_wallpaper_date = None
     last_rss_time = 0
     last_weather_time = 0
+    last_tech_time = 0
     
     while True:
         try:
@@ -276,20 +338,28 @@ def main():
             # 4. 行情逻辑 (每 60 秒)
             fetch_ticker()
             
-            # 4. RSS 逻辑 (每 15 分钟)
+            # 5. RSS 逻辑 (每 15 分钟)
             if now_ts - last_rss_time >= 900 or not global_rss_news:
                 rss_news_raw = fetch_rss_news()
-                seen_rss = set()
-                unique_rss = []
+                seen_rss = set(); unique_rss = []
                 for item in rss_news_raw:
                     if item["content"] not in seen_rss:
-                        unique_rss.append(item)
-                        seen_rss.add(item["content"])
+                        unique_rss.append(item); seen_rss.add(item["content"])
                 unique_rss.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
                 global_rss_news = unique_rss[:500]
                 last_rss_time = now_ts
 
-            # 6. 新浪快讯 (每 60 秒)
+            # 6. 科技逻辑 (每 15 分钟)
+            if now_ts - last_tech_time >= 900 or not global_tech_news:
+                tech_news_raw = fetch_tech_news()
+                seen_tech = set(); unique_tech = []
+                for item in tech_news_raw:
+                    if item["content"] not in seen_tech:
+                        unique_tech.append(item); seen_tech.add(item["content"])
+                global_tech_news = unique_tech[:100]
+                last_tech_time = now_ts
+
+            # 7. 新浪快讯 (每 60 秒)
             sina_news_raw = fetch_sina()
             seen_sina = set()
             unique_sina = []
@@ -299,8 +369,8 @@ def main():
                     seen_sina.add(item["content"])
             sina_1500 = unique_sina[:1500]
 
-            # 7. 合并并保存
-            final_news = sina_1500 + global_rss_news
+            # 8. 合并并保存
+            final_news = sina_1500 + global_rss_news + global_tech_news
             final_news.sort(key=lambda x: (x.get("is_important", False), x.get("raw_time", 0)), reverse=True)
             
             if final_news:
