@@ -711,17 +711,12 @@
         function createNewsElement(news, isNew = false) {
             let displayText = news.content.replace('【新浪】', '');
 
-            // XSS 消毒：使用临时 div 转义
-            const tempDiv = document.createElement('div');
-            tempDiv.textContent = displayText;
-            let safeText = tempDiv.innerHTML;
-
-            // 高亮处理
-            let highlightedHtml = safeText
+            // 允许后端传入 HTML (聚合块)，直接进行关键词高亮
+            let highlightedHtml = displayText
                 .replace(/涨|创历史新高|超预期/g, '<span class="text-red-400 font-bold">$&</span>')
                 .replace(/跌|跳水|不及预期|走弱|大跌/g, '<span class="text-green-400 font-bold">$&</span>');
 
-            // 安全外链 rel="noopener noreferrer"
+            // 安全外链渲染 (聚合列表内部自带 a 标签，这里处理单条带 url 的新闻)
             let contentHtml = news.url ? `<a href="${news.url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 visited:text-purple-300/80 hover:text-blue-300 hover:underline transition-colors underline-offset-4">${highlightedHtml}</a>` : highlightedHtml;
 
             const fs = currentFontSize === 'sm' ? 'text-sm' : (currentFontSize === 'base' ? 'text-base' : 'text-lg');
@@ -731,8 +726,8 @@
             let importantTag = news.is_important ? `<span class="ml-2 px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[9px] font-bold rounded border border-red-500/30 animate-pulse">🔥 重大</span>` : '';
             let importantClass = news.is_important ? ' bg-red-500/10 border-red-500/20' : ' border-white/20';
 
-            // 黄金间距：pb-3 mb-3，而不是之前的 pb-4 mb-4。最后一条去掉分割线。
-            item.className = `border-l-2 ${importantClass} pl-3 border-b border-white/5 pb-3 mb-3 last:border-b-0 last:mb-0 last:pb-0 news-item-hover` + (isNew ? ' animate-slide-down' : '');
+            // 黄金间距与聚合列表样式适配
+            item.className = `border-l-2 ${importantClass} pl-3 border-b border-white/5 pb-3 mb-3 last:border-b-0 last:mb-0 last:pb-0 news-item-hover [&_a]:text-blue-400 [&_a]:underline [&_a]:hover:text-blue-300` + (isNew ? ' animate-slide-down' : '');
 
             item.innerHTML = `<div class="text-[11px] text-white/40 font-mono mb-0.5 flex items-center">${news.time}${importantTag}</div><div class="${fs} leading-loose text-white/90 drop-shadow-sm tech-content">${contentHtml}</div>`;
             return item;
@@ -743,7 +738,7 @@
             const c = n.content;
             if (currentFilter === 'news') return c.includes('【新浪】');
             if (currentFilter === 'foreign') return ['【华尔街日报】', '【FT中文网】', '【纽约时报】', '【BBC】', '【联合早报】', '【Yahoo】', '【CNBC】', '【FT】'].some(s => c.includes(s));
-            if (currentFilter === 'tech') return ['【V2EX】', '【HN】', '【GitHub】'].some(s => c.includes(s));
+            if (currentFilter === 'tech') return ['【V2EX', '【HN', '【GitHub'].some(s => c.includes(s));
             return true;
         }
 
