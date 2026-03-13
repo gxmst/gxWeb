@@ -380,12 +380,15 @@
         // ================== 2. 基础 UI 控制 ==================
 
         // 实时时钟
+        const clockEl = document.getElementById('clock');
+        const dateInfoEl = document.getElementById('dateInfo');
+
         function updateClock() {
             const now = new Date();
-            document.getElementById('clock').innerText = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            clockEl.innerText = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
             const dateStr = now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
             // 完美处理日期和星期的空格
-            document.getElementById('dateInfo').innerText = dateStr.replace(/(日)\s*(星期)/, '$1 $2');
+            dateInfoEl.innerText = dateStr.replace(/(日)\s*(星期)/, '$1 $2');
         }
         setInterval(updateClock, 1000); updateClock();
 
@@ -658,6 +661,9 @@
                 const items = await response.json();
                 const container = document.getElementById('tickerContent');
                 if (!items || items.length === 0) return;
+
+                // 优化：如果后端增删了行情条目（数量不一致），则清空重绘，确保列表同步
+                if (container.children.length !== items.length) container.innerHTML = '';
 
                 if (container.children.length === 0) {
                     let html = '';
