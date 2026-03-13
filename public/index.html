@@ -693,14 +693,27 @@
         }
         fetchTickerData(); setInterval(fetchTickerData, 15000);
 
-        // ================== 4. 新闻流与交互防抖 ==================
+        // ================== 4. 新闻流与交互渲染 ==================
 
         let allNewsData = [];
         let currentFilter = 'all';
         let lastFirstNewsContent = '';
         let currentFontSize = 'sm';
 
-        // 字体切换
+        // 统一渲染函数：根据当前数据和过滤条件，全量重绘列表
+        function renderNewsList() {
+            const listContainer = document.getElementById('newsList');
+            const filtered = allNewsData.filter(applyFilter);
+
+            listContainer.innerHTML = '';
+            if (filtered.length === 0) {
+                listContainer.innerHTML = '<div class="text-center text-white/30 mt-10 text-sm">暂无对应快讯</div>';
+            } else {
+                filtered.forEach(n => listContainer.appendChild(createNewsElement(n)));
+            }
+        }
+
+        // 字体切换 (0 延时本地秒切)
         function setFontSize(size) {
             currentFontSize = size;
             ['sm', 'base', 'lg'].forEach(s => {
@@ -708,9 +721,7 @@
                 if (s === size) { btn.classList.add('bg-white/20', 'text-white'); btn.classList.remove('text-white/50'); }
                 else { btn.classList.remove('bg-white/20', 'text-white'); btn.classList.add('text-white/50'); }
             });
-            // 字体改变时，强制全量重绘
-            lastFirstNewsContent = '';
-            fetchRealNews();
+            renderNewsList();
         }
 
         // 极致排版的单条新闻渲染 (修复间距过大，增加极细分割线)
@@ -748,7 +759,7 @@
             return true;
         }
 
-        // 切换分类 Tab
+        // 切换分类 Tab (0 延时本地秒切)
         function setFilter(filter) {
             currentFilter = filter;
             ['all', 'news', 'foreign', 'tech'].forEach(t => {
@@ -761,9 +772,7 @@
                     }
                 }
             });
-            // 切换分类时，强制全量重绘
-            lastFirstNewsContent = '';
-            fetchRealNews();
+            renderNewsList();
         }
 
         async function fetchRealNews() {
@@ -798,25 +807,16 @@
 
                 const listContainer = document.getElementById('newsList');
 
-                // 场景 A: 全量渲染 (首次打开 / 切换Tab / 切换字体)
-                if (lastFirstNewsContent === '') {
+                // 首次加载：初始化数据并全量渲染
+                if (allNewsData.length === 0) {
                     allNewsData = newsList;
-                    const filtered = allNewsData.filter(applyFilter);
-
-                    // 直接渲染，去除延迟动画
-                    listContainer.innerHTML = '';
-                    if (filtered.length === 0) {
-                        listContainer.innerHTML = '<div class="text-center text-white/30 mt-10 text-sm">暂无对应快讯</div>';
-                    } else {
-                        filtered.forEach(n => listContainer.appendChild(createNewsElement(n)));
-                    }
-
                     lastFirstNewsContent = newsList[0].content;
                     document.getElementById('lastUpdateTime').innerText = `${newsList[0].time}`;
+                    renderNewsList();
                     return;
                 }
 
-                // 场景 B: 增量检测防抖动
+                // 增量同步：发现新数据时，执行平滑插入
                 if (newsList[0].content !== lastFirstNewsContent) {
                     const newItems = [];
                     for (let n of newsList) {
