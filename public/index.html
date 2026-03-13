@@ -803,17 +803,13 @@
                     allNewsData = newsList;
                     const filtered = allNewsData.filter(applyFilter);
 
-                    // 淡出动画过渡
-                    listContainer.style.opacity = '0';
-                    setTimeout(() => {
-                        listContainer.innerHTML = '';
-                        if (filtered.length === 0) {
-                            listContainer.innerHTML = '<div class="text-center text-white/30 mt-10 text-sm">暂无对应快讯</div>';
-                        } else {
-                            filtered.forEach(n => listContainer.appendChild(createNewsElement(n)));
-                        }
-                        listContainer.style.opacity = '1';
-                    }, 200); // 配合 CSS transition-opacity
+                    // 直接渲染，去除延迟动画
+                    listContainer.innerHTML = '';
+                    if (filtered.length === 0) {
+                        listContainer.innerHTML = '<div class="text-center text-white/30 mt-10 text-sm">暂无对应快讯</div>';
+                    } else {
+                        filtered.forEach(n => listContainer.appendChild(createNewsElement(n)));
+                    }
 
                     lastFirstNewsContent = newsList[0].content;
                     document.getElementById('lastUpdateTime').innerText = `${newsList[0].time}`;
