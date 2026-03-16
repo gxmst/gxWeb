@@ -352,7 +352,8 @@
         // ================== 1. 壁纸收藏夹引擎 (动态加载) ==================
         let wallpapersArray = [];
         let currentBgIndex = 0;
-        let activeLayer = 1;
+        let activeBgLayer = 1;
+        let isSwitchingBg = false;
         const vSuffix = new Date().toLocaleDateString('zh-CN');
 
         async function initWallpapers() {
@@ -425,23 +426,33 @@
         // 壁纸轮换 (动态适配收藏夹 + 必应 5 图)
         function toggleWallpaper() {
             if (wallpapersArray.length === 0) return;
+            if (isSwitchingBg) return;
+            isSwitchingBg = true;
+
             currentBgIndex = (currentBgIndex + 1) % wallpapersArray.length;
             const nextSrc = wallpapersArray[currentBgIndex] + '?v=' + vSuffix;
 
             const img1 = document.getElementById('bgImage1');
             const img2 = document.getElementById('bgImage2');
 
-            if (activeLayer === 1) {
-                img2.src = nextSrc;
-                img2.style.opacity = '1';
-                img1.style.opacity = '0';
-                activeLayer = 2;
-            } else {
-                img1.src = nextSrc;
-                img1.style.opacity = '1';
-                img2.style.opacity = '0';
-                activeLayer = 1;
-            }
+            const currentLayer = activeBgLayer === 1 ? img1 : img2;
+            const hiddenLayer = activeBgLayer === 1 ? img2 : img1;
+
+            hiddenLayer.onload = () => {
+                hiddenLayer.style.opacity = '1';
+                currentLayer.style.opacity = '0';
+                activeBgLayer = activeBgLayer === 1 ? 2 : 1;
+
+                setTimeout(() => {
+                    isSwitchingBg = false;
+                }, 1000);
+            };
+
+            hiddenLayer.onerror = () => {
+                isSwitchingBg = false;
+            };
+
+            hiddenLayer.src = nextSrc;
         }
 
         // 行情条翻页逻辑 (AI漏掉的函数，已补全)
