@@ -111,10 +111,10 @@
 
     <!-- 动态背景 -->
     <div class="fixed inset-0 z-0">
-        <img id="bgImage1" translate="no" src="bg_0.jpg"
-            class="absolute inset-0 w-full h-full object-cover pointer-events-none select-none transition-opacity duration-1000 ease-in-out z-[1] opacity-100"
+        <img id="bgImage1" translate="no" src=""
+            class="absolute inset-0 w-full h-full object-cover pointer-events-none select-none transition-opacity duration-1000 ease-in-out z-[1] opacity-0"
             alt="">
-        <img id="bgImage2" translate="no" src="bg_0.jpg"
+        <img id="bgImage2" translate="no" src=""
             class="absolute inset-0 w-full h-full object-cover pointer-events-none select-none transition-opacity duration-1000 ease-in-out z-[2] opacity-0"
             alt="">
 
@@ -362,7 +362,15 @@
                 wallpapersArray = await resp.json();
                 if (wallpapersArray && wallpapersArray.length > 0) {
                     // 初始化第一张并预加载
-                    document.getElementById('bgImage1').src = wallpapersArray[0] + '?v=' + vSuffix;
+                    const img1 = document.getElementById('bgImage1');
+                    const img2 = document.getElementById('bgImage2');
+                    const firstSrc = wallpapersArray[0] + '?v=' + vSuffix;
+                    img1.onload = () => {
+                        img1.classList.remove('opacity-0');
+                        img1.classList.add('opacity-100');
+                    };
+                    img1.src = firstSrc;
+                    img2.src = firstSrc;
                     wallpapersArray.forEach(url => {
                         const img = new Image();
                         img.src = url + '?v=' + vSuffix;
