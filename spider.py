@@ -240,9 +240,9 @@ def translate_en_to_zh(text):
         return text
 
 # ================= 引擎 4：科技趋势聚合 (V2EX, HN, GitHub) =================
-def fetch_github_trends():
-    date_14d = (datetime.now(timezone.utc) - timedelta(days=14)).strftime('%Y-%m-%d')
-    url = f"https://api.github.com/search/repositories?q=created:>{date_14d}&sort=stars&order=desc"
+def fetch_github_trends(days=7, limit=10):
+    since_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime('%Y-%m-%d')
+    url = f"https://api.github.com/search/repositories?q=created:>{since_date}&sort=stars&order=desc"
     headers = {
         "User-Agent": get_random_ua(),
         "Accept": "application/vnd.github+json",
@@ -258,9 +258,9 @@ def fetch_github_trends():
     data = resp.json()
     if not isinstance(data, dict):
         raise ValueError("GitHub API response format is invalid")
-    return data.get("items", [])[:20]
+    return data.get("items", [])[:limit]
 
-def build_github_html(items):
+def build_github_html_legacy(items):
     github_html = "銆怗itHub 瓒嬪娍 (鍙岃瀵圭収/鎮仠灞曞紑)銆?"
     for i, repo in enumerate(items):
         name = escape_text(repo.get("full_name"))
@@ -273,6 +273,23 @@ def build_github_html(items):
         github_html += f'<a href="{repo_url}" target="_blank" rel="noopener noreferrer" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {name} (STAR {stars})</a>'
         github_html += f'<div class="text-white/80 text-sm mt-1">{desc_en}</div>'
         github_html += f'<div class="overflow-hidden max-h-0 opacity-0 group-hover:max-h-24 group-hover:opacity-100 transition-all duration-500 ease-in-out text-white/50 text-xs mt-1">鈫?ZH: {desc_zh}</div></div>'
+    return github_html
+
+def build_github_html(sections):
+    github_html = '<div class="font-semibold text-white mb-3">GitHub Trends</div>'
+    for section in sections:
+        github_html += f'<div class="text-white/60 text-xs uppercase tracking-[0.2em] mt-4 mb-2">{escape_text(section["label"])}</div>'
+        for i, repo in enumerate(section["items"]):
+            name = escape_text(repo.get("full_name"))
+            stars = int(repo.get("stargazers_count") or 0)
+            desc_en_raw = repo.get("description") or "No description"
+            desc_en = escape_text(desc_en_raw)
+            desc_zh = escape_text(translate_en_to_zh(desc_en_raw[:200]))
+            repo_url = escape_text(sanitize_url(repo.get("html_url")))
+            github_html += f'<div class="group mb-3 border-b border-white/5 pb-2 last:border-0">'
+            github_html += f'<a href="{repo_url}" target="_blank" rel="noopener noreferrer" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {name} (STAR {stars})</a>'
+            github_html += f'<div class="text-white/80 text-sm mt-1">{desc_en}</div>'
+            github_html += f'<div class="overflow-hidden max-h-0 opacity-0 group-hover:max-h-24 group-hover:opacity-100 transition-all duration-500 ease-in-out text-white/50 text-xs mt-1">ZH: {desc_zh}</div></div>'
     return github_html
 
 def fetch_tech_news_legacy():
@@ -483,11 +500,14 @@ def fetch_tech_news():
     time_str = now_bj.strftime('%H:%M')
 
     try:
-        items = fetch_github_trends()
+        github_sections = [
+            {"label": "Last 7 Days", "items": fetch_github_trends(days=7, limit=10)},
+            {"label": "Last 30 Days", "items": fetch_github_trends(days=30, limit=10)}
+        ]
         tech_block = {
             "time": time_str,
             "raw_time": ts,
-            "content": build_github_html(items),
+            "content": build_github_html(github_sections),
             "url": "",
             "is_important": False,
             "category": "tech",
@@ -534,13 +554,13 @@ def fetch_tech_news():
         print(f"[tech] HN request failed: {e}")
 
     try:
-        resp = requests.get("https://www.v2ex.com/index.xml", headers={"User-Agent": get_random_ua()}, timeout=15)
+        resp = requests.get("https://www.v2ex.com/api/topics/hot.json", headers={"User-Agent": get_random_ua()}, timeout=15)
         if resp.status_code == 200:
-            feed = feedparser.parse(resp.text)
-            v2ex_html = "V2EX Trends"
-            for i, entry in enumerate(feed.entries[:10]):
+            topics = resp.json()
+            v2ex_html = "V2EX Hot"
+            for i, entry in enumerate(topics[:30]):
                 entry_title = escape_text(entry.get("title", "").strip())
-                entry_url = escape_text(sanitize_url(entry.get("link")))
+                entry_url = escape_text(sanitize_url(f'https://www.v2ex.com/t/{entry.get("id")}'))
                 v2ex_html += f'<div class="mb-3 border-b border-white/5 pb-2 last:border-0">'
                 v2ex_html += f'<a href="{entry_url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {entry_title}</a></div>'
 
