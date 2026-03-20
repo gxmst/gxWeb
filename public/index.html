@@ -103,6 +103,38 @@
             filter: brightness(1.2);
             text-decoration: underline;
         }
+
+        .tech-content a {
+            color: #7dd3fc !important;
+            text-decoration: underline;
+            text-decoration-color: rgba(125, 211, 252, 0.55);
+            text-underline-offset: 0.18em;
+            text-shadow: 0 1px 10px rgba(8, 47, 73, 0.3);
+        }
+
+        .tech-content a:hover {
+            color: #e0f2fe !important;
+            text-decoration-color: rgba(224, 242, 254, 0.9);
+            background: linear-gradient(180deg, rgba(8, 47, 73, 0.22), rgba(8, 47, 73, 0.08));
+        }
+
+        .news-link {
+            color: #7dd3fc;
+            text-decoration: underline;
+            text-decoration-color: rgba(125, 211, 252, 0.55);
+            text-underline-offset: 0.18em;
+            text-shadow: 0 1px 10px rgba(8, 47, 73, 0.3);
+            transition: color 0.2s ease, text-decoration-color 0.2s ease, background-color 0.2s ease;
+            border-radius: 0.35rem;
+            padding: 0 0.1rem;
+            background: linear-gradient(180deg, rgba(8, 47, 73, 0.14), rgba(8, 47, 73, 0.02));
+        }
+
+        .news-link:hover {
+            color: #bae6fd;
+            text-decoration-color: rgba(186, 230, 253, 0.9);
+            background: linear-gradient(180deg, rgba(8, 47, 73, 0.22), rgba(8, 47, 73, 0.08));
+        }
     </style>
 </head>
 
@@ -635,7 +667,7 @@
                 for (let i = 0; i < 200; i++) particles.push(new WeatherParticle('rain'));
                 animateWeather();
             } else if (weatherKeyword.includes('☀️') || weatherKeyword.includes('晴')) {
-                overlay.className = "absolute inset-0 bg-orange-700/20 mix-blend-overlay transition-colors duration-1000 z-20";
+                overlay.className = "absolute inset-0 bg-amber-200/12 transition-colors duration-1000 z-20";
             } else if (weatherKeyword.includes('❄️') || weatherKeyword.includes('雪')) {
                 overlay.className = "absolute inset-0 bg-slate-800/40 transition-colors duration-1000 z-20";
                 for (let i = 0; i < 250; i++) particles.push(new WeatherParticle('snow'));
@@ -833,7 +865,7 @@
                 link.href = safeUrl;
                 link.target = '_blank';
                 link.rel = 'noopener noreferrer';
-                link.className = 'text-blue-400 visited:text-purple-300/80 hover:text-blue-300 hover:underline transition-colors underline-offset-4';
+                link.className = 'news-link visited:text-sky-200';
                 link.textContent = displayText;
                 body.appendChild(link);
             } else {
