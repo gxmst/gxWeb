@@ -629,7 +629,7 @@ def main():
             fetch_ticker()
             
             # 5. RSS 逻辑 (每 15 分钟)
-            if now_ts - last_rss_time >= 900 or not global_rss_news:
+            if now_ts - last_rss_time >= 1800 or not global_rss_news:
                 rss_news_raw = fetch_rss_news()
                 seen_rss = set(); unique_rss = []
                 for item in rss_news_raw:
@@ -640,7 +640,7 @@ def main():
                 last_rss_time = now_ts
 
             # 6. 科技逻辑 (每 15 分钟)
-            if now_ts - last_tech_time >= 900 or not global_tech_news:
+            if now_ts - last_tech_time >= 1800 or not global_tech_news:
                 tech_news_raw = fetch_tech_news()
                 seen_tech = set(); unique_tech = []
                 for item in tech_news_raw:
