@@ -836,12 +836,20 @@
             }
         }
 
+        function normalizeNewsDisplayText(news) {
+            const rawText = news.display_content || news.content || '';
+            if ((news.category || '') === 'news') {
+                return rawText.replace(/^【[^】]+】\s*/, '');
+            }
+            return rawText;
+        }
+
         function createNewsElement(news, isNew = false) {
             const fs = currentFontSize === 'sm' ? 'text-sm' : (currentFontSize === 'base' ? 'text-base' : 'text-lg');
             const item = document.createElement('div');
             const header = document.createElement('div');
             const body = document.createElement('div');
-            const displayText = news.display_content || news.content || '';
+            const displayText = normalizeNewsDisplayText(news);
             const safeUrl = sanitizeHttpUrl(news.url);
             const isHtmlBlock = news.format === 'html';
             const importantClass = news.is_important ? ' bg-red-500/10 border-red-500/20' : ' border-white/20';

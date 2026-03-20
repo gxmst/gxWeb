@@ -1,50 +1,146 @@
-# My Vibe Workspace 🚀
+# gxWeb
 
-一个高性能、高审美且具备极致透明感（Glassmorphism）的金融与生活信息工作站。
+一个面向个人主页场景的实时信息工作台。
 
-## 🌟 核心特性
+它把市场快讯、海外媒体 RSS、GitHub / Hacker News / V2EX 科技聚合、天气信息、行情 ticker 和壁纸背景整合到一个轻量前端里，适合部署在个人 VPS 上长期运行。
 
--   **实时市场快讯**：集成新浪财经 7x24 小时快讯及多家全球顶尖 RSS 新闻源（WSJ, FT, NYT, BBC 等）。
--   **精准行情追踪**：实时展示 A 股、美股、期货及外汇等核心市场行情。
--   **智能天气引擎**：接入 Open-Meteo 数据，支持自动/手动环境滤镜与动态粒子背景。
--   **极致 UI 交互**：全站基于 Tailwind CSS 开发，采用 `backdrop-blur-3xl` 毛玻璃质感与 `tabular-nums` 数据排版。
--   **容器化部署**：支持 Docker Compose 一键启动，包含后端抓取引擎与 Nginx 前端服务。
+## Features
 
-## 🛠️ 技术栈
+- `7x24` 实时资讯流：聚合新浪财经快讯、海外 RSS、科技内容。
+- 科技趋势聚合：内置 GitHub、Hacker News、V2EX 热门与新帖抓取。
+- 天气与环境滤镜：根据天气切换前端氛围层和粒子效果。
+- 实时 ticker：输出前端底部滚动行情条所需的数据。
+- 壁纸管理：自动生成前端使用的 `wallpapers.json`。
+- Docker 部署友好：前后端分离，适合在 VPS 上常驻运行。
 
--   **Backend**: Python 3.9+ (requests, feedparser)
--   **Frontend**: HTML5, Tailwind CSS, Vanilla JavaScript
--   **Infrastructure**: Nginx, Docker, Docker Compose
+## Stack
 
-## 🚀 快速启动
+- Backend: Python 3.11, `requests`, `feedparser`, `Pillow`, `deep-translator`
+- Frontend: HTML, Tailwind CSS, Vanilla JavaScript
+- Runtime: Docker, Docker Compose / `docker compose`, Nginx
 
-1.  **克隆项目**
-    ```bash
-    git clone https://github.com/gxmst/gxWeb.git
-    cd gxWeb
-    ```
+## Architecture
 
-2.  **Docker Compose 部署**
-    ```bash
-    docker-compose up -d --build
-    ```
+项目由两个容器组成：
 
-3.  **访问项目**
-    默认访问地址：`http://localhost`
+- `spider`
+  负责定时抓取、聚合、翻译、清洗数据，并把结果写入 `public/`
+- `web`
+  使用 Nginx 直接托管 `public/index.html` 和爬虫生成的数据文件
 
-## 📂 项目结构
+爬虫会持续更新这些前端依赖文件：
 
-```text
-.
-├── public/              # 前端根目录 (Nginx Root)
-│   └── index.html      # 前端主页面
-├── spider.py           # 后端数据抓取引擎
-├── Dockerfile          # 后端镜像定义
-├── docker-compose.yml  # 多容器编排
-├── requirements.txt    # Python 依赖
-└── .gitignore          # Git 忽略文件
+- `public/finance-news.json`
+- `public/ticker.json`
+- `public/weather.txt`
+- `public/wallpapers.json`
+- `public/github-tech-cache-v2.json`
+
+## Quick Start
+
+### 1. Clone
+
+```bash
+git clone https://github.com/gxmst/gxWeb.git
+cd gxWeb
 ```
 
-## ⚖️ 开源协议
+### 2. Start
 
-本项目仅供学习与个人使用，数据版权归原提供商所有。
+推荐使用新版命令：
+
+```bash
+docker compose up -d --build
+```
+
+如果你的环境仍然使用旧版独立命令，也可以：
+
+```bash
+docker-compose up -d --build
+```
+
+### 3. Open
+
+默认端口映射为：
+
+```text
+http://localhost:1881
+```
+
+如果你部署在 VPS 上，把 `localhost` 换成你的服务器 IP 或域名即可。
+
+## Configuration
+
+`docker-compose.yml` 里当前支持这些环境变量：
+
+- `TZ`
+  容器时区，默认使用 `Asia/Shanghai`
+- `GITHUB_TOKEN`
+  可选。用于提高 GitHub API 稳定性和速率限制表现
+- `GITHUB_API_TIMEOUT`
+  可选。控制 GitHub API 请求超时时间，默认回退到 `20`
+
+一个常见做法是先在宿主机设置环境变量，再启动：
+
+```bash
+export GITHUB_TOKEN=your_token_here
+export GITHUB_API_TIMEOUT=20
+docker compose up -d --build
+```
+
+如果你是 Windows PowerShell：
+
+```powershell
+$env:GITHUB_TOKEN="your_token_here"
+$env:GITHUB_API_TIMEOUT="20"
+docker compose up -d --build
+```
+
+## Project Structure
+
+```text
+gxWeb/
+├─ public/
+│  ├─ index.html
+│  └─ favicon.png
+├─ spider.py
+├─ Dockerfile
+├─ docker-compose.yml
+├─ requirements.txt
+└─ README.md
+```
+
+## Development Notes
+
+- 前端主文件是 `public/index.html`
+- 抓取、聚合、翻译、缓存逻辑都在 `spider.py`
+- 当前 Compose 使用了 volume 挂载：
+  - `./:/app`
+  - `./public:/usr/share/nginx/html`
+
+这意味着很多代码改动在 `git pull` 后就能直接被容器看到；但如果你改了依赖、镜像、启动方式，还是建议执行：
+
+```bash
+docker compose up -d --build
+```
+
+## Deployment Tips
+
+- 建议把站点部署在美国或网络质量较好的 VPS 上，GitHub / HN / V2EX 抓取会更稳定。
+- 如果 GitHub 聚合偶发失败，优先检查：
+  - 服务器是否能访问 `api.github.com`
+  - `GITHUB_TOKEN` 是否已配置
+  - 本机或容器是否误用了失效代理
+- 如果前端数据没有刷新，先看 `spider` 容器日志是否正常写出了 `public/*.json`
+
+## Limitations
+
+- GitHub、V2EX、RSS 等第三方源的可用性取决于外部网络和对方接口状态
+- 翻译质量取决于第三方翻译服务
+- 当前项目以单文件前端和单脚本爬虫为主，更适合个人站，而不是复杂团队协作场景
+
+## License
+
+本项目更适合作为个人主页 / 学习 / 自用站点使用。
+
+第三方内容版权归对应来源所有，请自行确认公开展示、转载和长期缓存的合规性。
