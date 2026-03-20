@@ -905,6 +905,11 @@
 
                 // 增量同步：发现新数据时，执行平滑插入
                 if (newsList[0].content !== lastFirstNewsContent) {
+                    lastFirstNewsContent = newsList[0].content;
+                    allNewsData = newsList;
+                    document.getElementById('lastUpdateTime').innerText = `${newsList[0].time}`;
+                    renderNewsList();
+                    return;
                     const newItems = [];
                     for (let n of newsList) {
                         if (n.content === lastFirstNewsContent) break;

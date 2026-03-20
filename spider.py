@@ -45,7 +45,7 @@ def build_http_session():
     return session
 
 HTTP_SESSION = build_http_session()
-GITHUB_CACHE_PATH = "./public/github-tech-cache.json"
+GITHUB_CACHE_PATH = "./public/github-tech-cache-v2.json"
 
 def atomic_save_json(path, data):
     tmp_path = f"{path}.tmp"
@@ -291,6 +291,25 @@ def build_github_html(sections):
             github_html += f'<div class="text-white/80 text-sm mt-1">{desc_en}</div>'
             github_html += f'<div class="overflow-hidden max-h-0 opacity-0 group-hover:max-h-24 group-hover:opacity-100 transition-all duration-500 ease-in-out text-white/50 text-xs mt-1">ZH: {desc_zh}</div></div>'
     return github_html
+
+def build_v2ex_html(hot_topics, new_topics):
+    v2ex_html = '<div class="font-semibold text-white mb-3">V2EX</div>'
+
+    v2ex_html += '<div class="text-white/60 text-xs uppercase tracking-[0.2em] mt-4 mb-2">Hot</div>'
+    for i, entry in enumerate(hot_topics):
+        entry_title = escape_text(entry.get("title", "").strip())
+        entry_url = escape_text(sanitize_url(f'https://www.v2ex.com/t/{entry.get("id")}'))
+        v2ex_html += f'<div class="mb-3 border-b border-white/5 pb-2 last:border-0">'
+        v2ex_html += f'<a href="{entry_url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {entry_title}</a></div>'
+
+    v2ex_html += '<div class="text-white/60 text-xs uppercase tracking-[0.2em] mt-4 mb-2">New</div>'
+    for i, entry in enumerate(new_topics):
+        entry_title = escape_text(entry.get("title", "").strip())
+        entry_url = escape_text(sanitize_url(f'https://www.v2ex.com/t/{entry.get("id")}'))
+        v2ex_html += f'<div class="mb-3 border-b border-white/5 pb-2 last:border-0">'
+        v2ex_html += f'<a href="{entry_url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {entry_title}</a></div>'
+
+    return v2ex_html
 
 def fetch_tech_news_legacy():
     print(f"[{get_beijing_time().strftime('%H:%M:%S')}][科技引擎] 开始抓取并聚合趋势...")
@@ -554,15 +573,12 @@ def fetch_tech_news():
         print(f"[tech] HN request failed: {e}")
 
     try:
-        resp = requests.get("https://www.v2ex.com/api/topics/hot.json", headers={"User-Agent": get_random_ua()}, timeout=15)
-        if resp.status_code == 200:
-            topics = resp.json()
-            v2ex_html = "V2EX Hot"
-            for i, entry in enumerate(topics[:30]):
-                entry_title = escape_text(entry.get("title", "").strip())
-                entry_url = escape_text(sanitize_url(f'https://www.v2ex.com/t/{entry.get("id")}'))
-                v2ex_html += f'<div class="mb-3 border-b border-white/5 pb-2 last:border-0">'
-                v2ex_html += f'<a href="{entry_url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {entry_title}</a></div>'
+        hot_resp = requests.get("https://www.v2ex.com/api/topics/hot.json", headers={"User-Agent": get_random_ua()}, timeout=15)
+        new_resp = requests.get("https://www.v2ex.com/api/topics/latest.json", headers={"User-Agent": get_random_ua()}, timeout=15)
+        if hot_resp.status_code == 200 and new_resp.status_code == 200:
+            hot_topics = hot_resp.json()
+            new_topics = new_resp.json()
+            v2ex_html = build_v2ex_html(hot_topics[:30], new_topics[:20])
 
             tech_blocks.append({
                 "time": time_str,
