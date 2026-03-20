@@ -10,6 +10,8 @@ services:
       - ./:/app
     environment:
       - TZ=Asia/Shanghai
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - GITHUB_API_TIMEOUT=${GITHUB_API_TIMEOUT:-20}
     logging:
       driver: "json-file"
       options:

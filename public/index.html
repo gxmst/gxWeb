@@ -786,6 +786,65 @@
             renderNewsList();
         }
 
+        function sanitizeHttpUrl(url) {
+            if (!url) return '';
+            try {
+                const parsed = new URL(url, window.location.origin);
+                return ['http:', 'https:'].includes(parsed.protocol) ? parsed.href : '';
+            } catch {
+                return '';
+            }
+        }
+
+        function createNewsElement(news, isNew = false) {
+            const fs = currentFontSize === 'sm' ? 'text-sm' : (currentFontSize === 'base' ? 'text-base' : 'text-lg');
+            const item = document.createElement('div');
+            const header = document.createElement('div');
+            const body = document.createElement('div');
+            const displayText = news.display_content || news.content || '';
+            const safeUrl = sanitizeHttpUrl(news.url);
+            const isHtmlBlock = news.format === 'html';
+            const importantClass = news.is_important ? ' bg-red-500/10 border-red-500/20' : ' border-white/20';
+
+            item.className = `border-l-2 ${importantClass} pl-3 border-b border-white/5 pb-3 mb-3 last:border-b-0 last:mb-0 last:pb-0 news-item-hover [&_a]:text-blue-400 [&_a]:underline [&_a]:hover:text-blue-300` + (isNew ? ' animate-slide-down' : '');
+
+            header.className = 'text-[11px] text-white/40 font-mono mb-0.5 flex items-center';
+            header.append(document.createTextNode(news.time || ''));
+            if (news.is_important) {
+                const badge = document.createElement('span');
+                badge.className = 'ml-2 px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[9px] font-bold rounded border border-red-500/30 animate-pulse';
+                badge.textContent = 'IMPORTANT';
+                header.appendChild(badge);
+            }
+
+            body.className = `${fs} leading-loose text-white/90 drop-shadow-sm tech-content`;
+            if (isHtmlBlock) {
+                body.innerHTML = news.content || '';
+            } else if (safeUrl) {
+                const link = document.createElement('a');
+                link.href = safeUrl;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                link.className = 'text-blue-400 visited:text-purple-300/80 hover:text-blue-300 hover:underline transition-colors underline-offset-4';
+                link.textContent = displayText;
+                body.appendChild(link);
+            } else {
+                body.textContent = displayText;
+            }
+
+            item.appendChild(header);
+            item.appendChild(body);
+            return item;
+        }
+
+        function applyFilter(n) {
+            const category = n.category || 'all';
+            if (currentFilter === 'news') return category === 'news';
+            if (currentFilter === 'foreign') return category === 'foreign';
+            if (currentFilter === 'tech') return category === 'tech';
+            return true;
+        }
+
         async function fetchRealNews() {
             try {
                 const response = await fetch('./finance-news.json?t=' + Date.now());
@@ -813,7 +872,16 @@
                     }
                 }
 
-                const newsList = data.news_list;
+                const newsList = (data.news_list || []).map(item => {
+                    const normalized = { ...item };
+                    if (!normalized.category) {
+                        if ((normalized.content || '').includes('GitHub') || (normalized.content || '').includes('HN') || (normalized.content || '').includes('V2EX')) normalized.category = 'tech';
+                        else if (normalized.url) normalized.category = 'foreign';
+                        else normalized.category = 'news';
+                    }
+                    if (!normalized.format) normalized.format = normalized.category === 'tech' && !normalized.url ? 'html' : 'text';
+                    return normalized;
+                });
                 if (!newsList || newsList.length === 0) return;
 
                 const listContainer = document.getElementById('newsList');

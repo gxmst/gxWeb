@@ -2,6 +2,7 @@ import re
 import json
 import time
 import os
+import html
 import requests
 import feedparser
 import calendar
@@ -10,6 +11,9 @@ from datetime import datetime, timedelta, timezone
 from PIL import Image
 import io
 from deep_translator import GoogleTranslator
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from urllib.parse import urlparse
 
 # ================= 配置与工具 =================
 USER_AGENTS = [
@@ -24,6 +28,25 @@ USER_AGENTS = [
 def get_random_ua():
     return random.choice(USER_AGENTS)
 
+def build_http_session():
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+        raise_on_status=False
+    )
+    session = requests.Session()
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+HTTP_SESSION = build_http_session()
+GITHUB_CACHE_PATH = "./public/github-tech-cache.json"
+
 def atomic_save_json(path, data):
     tmp_path = f"{path}.tmp"
     try:
@@ -33,6 +56,18 @@ def atomic_save_json(path, data):
     except Exception as e:
         print(f"❌ [系统] 原子化保存失败 ({path}): {e}")
         if os.path.exists(tmp_path): os.remove(tmp_path)
+
+def atomic_load_json(path, default=None):
+    if default is None:
+        default = []
+    try:
+        if not os.path.exists(path):
+            return default
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"鈿狅笍 [绯荤粺] 璇诲彇缂撳瓨澶辫触 ({path}): {e}")
+        return default
 
 def get_beijing_time():
     # 强制获取北京时间 (UTC+8)
@@ -44,6 +79,18 @@ def clean_html(text):
     return clean.replace('&nbsp;', ' ').replace('&mdash;', '—').strip()
 
 # ================= 引擎 1：必应壁纸 =================
+def escape_text(value):
+    return html.escape(str(value or ""), quote=True)
+
+def sanitize_url(url):
+    candidate = (url or "").strip()
+    if not candidate:
+        return ""
+    parsed = urlparse(candidate)
+    if parsed.scheme not in ("http", "https"):
+        return ""
+    return candidate
+
 def fetch_bing_wallpaper():
     print(f"[{get_beijing_time().strftime('%H:%M:%S')}][壁纸引擎] 正在检查今日必应壁纸...")
     try:
@@ -122,7 +169,9 @@ def fetch_sina():
                         "raw_time": ts, 
                         "content": f"【新浪】{clean_txt}", 
                         "url": "",
-                        "is_important": is_important
+                        "is_important": is_important,
+                        "category": "news",
+                        "source": "sina"
                     })
             print(f"✅ [新浪引擎] 成功抓取 {len(news_list)} 条。")
             return news_list  # 成功抓取后直接返回
@@ -169,8 +218,10 @@ def fetch_rss_news():
                         "time": time_str, 
                         "raw_time": ts, 
                         "content": f"【{source['name']}】{title}", 
-                        "url": link,
-                        "is_important": False
+                        "url": sanitize_url(link),
+                        "is_important": False,
+                        "category": "foreign",
+                        "source": source["name"]
                     })
                 except Exception as e: continue
             print(f"✅ [RSS引擎] {source['name']} 成功解析 {len(source_news)} 条")
@@ -189,7 +240,42 @@ def translate_en_to_zh(text):
         return text
 
 # ================= 引擎 4：科技趋势聚合 (V2EX, HN, GitHub) =================
-def fetch_tech_news():
+def fetch_github_trends():
+    date_14d = (datetime.now(timezone.utc) - timedelta(days=14)).strftime('%Y-%m-%d')
+    url = f"https://api.github.com/search/repositories?q=created:>{date_14d}&sort=stars&order=desc"
+    headers = {
+        "User-Agent": get_random_ua(),
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+    }
+    github_token = os.getenv("GITHUB_TOKEN", "").strip()
+    if github_token:
+        headers["Authorization"] = f"Bearer {github_token}"
+
+    timeout = float(os.getenv("GITHUB_API_TIMEOUT", "20"))
+    resp = HTTP_SESSION.get(url, headers=headers, timeout=(5, timeout))
+    resp.raise_for_status()
+    data = resp.json()
+    if not isinstance(data, dict):
+        raise ValueError("GitHub API response format is invalid")
+    return data.get("items", [])[:20]
+
+def build_github_html(items):
+    github_html = "銆怗itHub 瓒嬪娍 (鍙岃瀵圭収/鎮仠灞曞紑)銆?"
+    for i, repo in enumerate(items):
+        name = escape_text(repo.get("full_name"))
+        stars = int(repo.get("stargazers_count") or 0)
+        desc_en_raw = repo.get("description") or "No description"
+        desc_en = escape_text(desc_en_raw)
+        desc_zh = escape_text(translate_en_to_zh(desc_en_raw[:200]))
+        repo_url = escape_text(sanitize_url(repo.get("html_url")))
+        github_html += f'<div class="group mb-3 border-b border-white/5 pb-2 last:border-0">'
+        github_html += f'<a href="{repo_url}" target="_blank" rel="noopener noreferrer" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {name} (STAR {stars})</a>'
+        github_html += f'<div class="text-white/80 text-sm mt-1">{desc_en}</div>'
+        github_html += f'<div class="overflow-hidden max-h-0 opacity-0 group-hover:max-h-24 group-hover:opacity-100 transition-all duration-500 ease-in-out text-white/50 text-xs mt-1">鈫?ZH: {desc_zh}</div></div>'
+    return github_html
+
+def fetch_tech_news_legacy():
     print(f"[{get_beijing_time().strftime('%H:%M:%S')}][科技引擎] 开始抓取并聚合趋势...")
     tech_blocks = []
     now_bj = get_beijing_time()
@@ -198,10 +284,7 @@ def fetch_tech_news():
     
     # 1. GitHub Trends (聚合模式)
     try:
-        date_14d = (datetime.now(timezone.utc) - timedelta(days=14)).strftime('%Y-%m-%d')
-        url = f"https://api.github.com/search/repositories?q=created:>{date_14d}&sort=stars&order=desc"
-        resp = requests.get(url, headers={"User-Agent": get_random_ua()}, timeout=15).json()
-        items = resp.get("items", [])[:20]
+        items = fetch_github_trends()
         
         github_html = "【GitHub 趋势 (双语对照/悬停展开)】"
         for i, repo in enumerate(items):
@@ -326,6 +409,157 @@ def fetch_ticker():
     except Exception as e: print(f"❌ [行情引擎] 失败: {e}")
 
 # ================= 主循环控制 =================
+def fetch_tech_news_legacy_2():
+    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][绉戞妧寮曟搸] 寮€濮嬫姄鍙栧苟鑱氬悎瓒嬪娍...")
+    tech_blocks = []
+    now_bj = get_beijing_time()
+    ts = int(now_bj.timestamp())
+    time_str = now_bj.strftime('%H:%M')
+
+    try:
+        items = fetch_github_trends()
+        github_html = build_github_html(items)
+        tech_block = {
+            "time": time_str,
+            "raw_time": ts,
+            "content": github_html,
+            "url": "",
+            "is_important": False,
+            "category": "tech"
+        }
+        tech_blocks.append(tech_block)
+        atomic_save_json(GITHUB_CACHE_PATH, tech_block)
+        print(f"鉁?[绉戞妧寮曟搸] GitHub 鑱氬悎鎴愬姛")
+    except Exception as e:
+        cached_github = atomic_load_json(GITHUB_CACHE_PATH, default={})
+        if cached_github:
+            tech_blocks.append(cached_github)
+            print(f"鈿狅笍 [绉戞妧寮曟搸] GitHub 澶辫触锛屼娇鐢ㄤ笂娆＄紦瀛? {e}")
+        else:
+            print(f"鉂?[绉戞妧寮曟搸] GitHub 澶辫触: {e}")
+
+    try:
+        resp = requests.get("https://hnrss.org/frontpage?points=50", headers={"User-Agent": get_random_ua()}, timeout=15)
+        if resp.status_code == 200:
+            feed = feedparser.parse(resp.text)
+            hn_html = "銆怘N 鐑笘 (鍙岃瀵圭収/鎮仠灞曞紑)銆?"
+            for i, entry in enumerate(feed.entries[:10]):
+                title_en = entry.get("title", "").strip()
+                title_zh = translate_en_to_zh(title_en)
+                hn_html += f'<div class="group mb-3 border-b border-white/5 pb-2 last:border-0">'
+                hn_html += f'<a href="{entry.get("link")}" target="_blank" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {title_en}</a>'
+                hn_html += f'<div class="overflow-hidden max-h-0 opacity-0 group-hover:max-h-20 group-hover:opacity-100 transition-all duration-500 ease-in-out text-white/50 text-xs mt-1">鈫?ZH: {title_zh}</div></div>'
+
+            tech_blocks.append({
+                "time": time_str, "raw_time": ts, "content": hn_html, "url": "", "is_important": False, "category": "tech"
+            })
+            print(f"鉁?[绉戞妧寮曟搸] HN 鑱氬悎鎴愬姛")
+    except Exception as e:
+        print(f"鉂?[绉戞妧寮曟搸] HN 澶辫触: {e}")
+
+    try:
+        resp = requests.get("https://www.v2ex.com/index.xml", headers={"User-Agent": get_random_ua()}, timeout=15)
+        if resp.status_code == 200:
+            feed = feedparser.parse(resp.text)
+            v2ex_html = "銆怴2EX 鐑棬銆?"
+            for i, entry in enumerate(feed.entries[:10]):
+                v2ex_html += f'<div class="mb-3 border-b border-white/5 pb-2 last:border-0">'
+                v2ex_html += f'<a href="{entry.get("link")}" target="_blank" class="text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {entry.get("title", "").strip()}</a></div>'
+
+            tech_blocks.append({
+                "time": time_str, "raw_time": ts, "content": v2ex_html, "url": "", "is_important": False, "category": "tech"
+            })
+            print(f"鉁?[绉戞妧寮曟搸] V2EX 鑱氬悎鎴愬姛")
+    except Exception as e:
+        print(f"鉂?[绉戞妧寮曟搸] V2EX 澶辫触: {e}")
+
+    return tech_blocks
+
+def fetch_tech_news():
+    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][tech] fetching trend blocks...")
+    tech_blocks = []
+    now_bj = get_beijing_time()
+    ts = int(now_bj.timestamp())
+    time_str = now_bj.strftime('%H:%M')
+
+    try:
+        items = fetch_github_trends()
+        tech_block = {
+            "time": time_str,
+            "raw_time": ts,
+            "content": build_github_html(items),
+            "url": "",
+            "is_important": False,
+            "category": "tech",
+            "source": "github",
+            "format": "html"
+        }
+        tech_blocks.append(tech_block)
+        atomic_save_json(GITHUB_CACHE_PATH, tech_block)
+        print("[tech] GitHub block updated")
+    except Exception as e:
+        cached_github = atomic_load_json(GITHUB_CACHE_PATH, default={})
+        if cached_github:
+            tech_blocks.append(cached_github)
+            print(f"[tech] GitHub request failed, using cached block: {e}")
+        else:
+            print(f"[tech] GitHub request failed: {e}")
+
+    try:
+        resp = requests.get("https://hnrss.org/frontpage?points=50", headers={"User-Agent": get_random_ua()}, timeout=15)
+        if resp.status_code == 200:
+            feed = feedparser.parse(resp.text)
+            hn_html = "HN Trends"
+            for i, entry in enumerate(feed.entries[:10]):
+                title_en_raw = entry.get("title", "").strip()
+                title_en = escape_text(title_en_raw)
+                title_zh = escape_text(translate_en_to_zh(title_en_raw))
+                entry_url = escape_text(sanitize_url(entry.get("link")))
+                hn_html += f'<div class="group mb-3 border-b border-white/5 pb-2 last:border-0">'
+                hn_html += f'<a href="{entry_url}" target="_blank" rel="noopener noreferrer" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {title_en}</a>'
+                hn_html += f'<div class="overflow-hidden max-h-0 opacity-0 group-hover:max-h-20 group-hover:opacity-100 transition-all duration-500 ease-in-out text-white/50 text-xs mt-1">ZH: {title_zh}</div></div>'
+
+            tech_blocks.append({
+                "time": time_str,
+                "raw_time": ts,
+                "content": hn_html,
+                "url": "",
+                "is_important": False,
+                "category": "tech",
+                "source": "hn",
+                "format": "html"
+            })
+            print("[tech] HN block updated")
+    except Exception as e:
+        print(f"[tech] HN request failed: {e}")
+
+    try:
+        resp = requests.get("https://www.v2ex.com/index.xml", headers={"User-Agent": get_random_ua()}, timeout=15)
+        if resp.status_code == 200:
+            feed = feedparser.parse(resp.text)
+            v2ex_html = "V2EX Trends"
+            for i, entry in enumerate(feed.entries[:10]):
+                entry_title = escape_text(entry.get("title", "").strip())
+                entry_url = escape_text(sanitize_url(entry.get("link")))
+                v2ex_html += f'<div class="mb-3 border-b border-white/5 pb-2 last:border-0">'
+                v2ex_html += f'<a href="{entry_url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {entry_title}</a></div>'
+
+            tech_blocks.append({
+                "time": time_str,
+                "raw_time": ts,
+                "content": v2ex_html,
+                "url": "",
+                "is_important": False,
+                "category": "tech",
+                "source": "v2ex",
+                "format": "html"
+            })
+            print("[tech] V2EX block updated")
+    except Exception as e:
+        print(f"[tech] V2EX request failed: {e}")
+
+    return tech_blocks
+
 global_rss_news = []
 global_tech_news = []
 
