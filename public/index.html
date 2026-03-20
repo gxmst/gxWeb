@@ -9,10 +9,22 @@
     <!-- 引入 Tailwind CSS 引擎 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        :root {
+            --accent-rgb: 125, 211, 252;
+            --accent-strong-rgb: 56, 189, 248;
+            --panel-tint: rgba(var(--accent-rgb), 0.10);
+            --panel-border: rgba(var(--accent-rgb), 0.18);
+            --panel-glow: rgba(var(--accent-rgb), 0.14);
+        }
+
         body {
             font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
             text-rendering: optimizeLegibility;
             -webkit-font-smoothing: antialiased;
+            background:
+                radial-gradient(circle at 18% 20%, rgba(var(--accent-rgb), 0.14), transparent 34%),
+                radial-gradient(circle at 78% 16%, rgba(255, 255, 255, 0.08), transparent 28%),
+                linear-gradient(180deg, rgba(2, 6, 23, 0.52) 0%, rgba(2, 6, 23, 0.76) 100%);
         }
 
         .numeric {
@@ -22,11 +34,11 @@
 
         /* 核心：毛玻璃质感 */
         .glass {
-            background: rgba(255, 255, 255, 0.1);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.08));
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.16);
         }
 
         /* 隐藏滚动条但保留滚动功能 */
@@ -89,7 +101,142 @@
         }
 
         .news-item-hover:hover {
-            background: rgba(255, 255, 255, 0.05);
+            background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.10), rgba(255, 255, 255, 0.03));
+        }
+
+        .hero-shell {
+            width: min(100%, 920px);
+            padding: 2rem 2rem 1.75rem;
+            border-radius: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
+                linear-gradient(135deg, rgba(var(--accent-rgb), 0.08), transparent 40%);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.20),
+                0 30px 80px rgba(2, 6, 23, 0.42),
+                0 0 0 1px rgba(var(--accent-rgb), 0.06);
+            backdrop-filter: blur(28px) saturate(145%);
+            -webkit-backdrop-filter: blur(28px) saturate(145%);
+        }
+
+        .panel-sheen {
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04)),
+                linear-gradient(160deg, rgba(var(--accent-rgb), 0.08), transparent 38%);
+            border-color: rgba(255, 255, 255, 0.14);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.18),
+                0 26px 50px rgba(2, 6, 23, 0.48),
+                0 0 0 1px rgba(var(--accent-rgb), 0.05);
+        }
+
+        .dock-shell {
+            width: 100%;
+            max-width: 52rem;
+            padding: 1rem 1.25rem;
+            border-radius: 1.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 22px 40px rgba(2, 6, 23, 0.32);
+        }
+
+        .dock-link {
+            min-width: 4.8rem;
+        }
+
+        .dock-link > div:first-child {
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.16),
+                0 10px 30px rgba(2, 6, 23, 0.24),
+                0 0 0 1px rgba(var(--accent-rgb), 0.04);
+        }
+
+        .intel-item {
+            position: relative;
+            border-left-width: 3px;
+            border-radius: 1rem;
+            padding: 0.85rem 0.9rem 0.95rem 1rem;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        }
+
+        .intel-item::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.08), transparent 42%);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+
+        .intel-item:hover::before {
+            opacity: 1;
+        }
+
+        .source-chip {
+            margin-left: 0.55rem;
+            padding: 0.16rem 0.45rem;
+            border-radius: 999px;
+            font-size: 9px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.78);
+            background: rgba(var(--accent-rgb), 0.12);
+            border: 1px solid rgba(var(--accent-rgb), 0.24);
+        }
+
+        .ticker-shell {
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+                linear-gradient(90deg, rgba(var(--accent-rgb), 0.08), transparent 40%);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.18),
+                0 -12px 40px rgba(2, 6, 23, 0.28);
+        }
+
+        .panel-kicker {
+            padding: 0.28rem 0.72rem;
+            border-radius: 999px;
+            border: 1px solid rgba(var(--accent-rgb), 0.22);
+            background: rgba(var(--accent-rgb), 0.10);
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 10px;
+            letter-spacing: 0.24em;
+            text-transform: uppercase;
+        }
+
+        .filter-strip {
+            background:
+                linear-gradient(180deg, rgba(2, 6, 23, 0.28), rgba(15, 23, 42, 0.18)),
+                linear-gradient(90deg, rgba(var(--accent-rgb), 0.05), transparent 30%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        }
+
+        .filter-pill {
+            color: rgba(255, 255, 255, 0.52);
+            letter-spacing: 0.08em;
+        }
+
+        .filter-pill:hover {
+            color: rgba(255, 255, 255, 0.88);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .filter-pill-active {
+            color: white;
+            font-weight: 700;
+            border: 1px solid rgba(var(--accent-rgb), 0.22);
+            background:
+                linear-gradient(180deg, rgba(var(--accent-rgb), 0.22), rgba(var(--accent-rgb), 0.10)),
+                rgba(255, 255, 255, 0.06);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.16),
+                0 8px 20px rgba(2, 6, 23, 0.24);
+            transform: translateY(-1px);
         }
 
         /* 科技聚合块样式适配 */
@@ -135,6 +282,12 @@
             text-decoration-color: rgba(186, 230, 253, 0.9);
             background: linear-gradient(180deg, rgba(8, 47, 73, 0.22), rgba(8, 47, 73, 0.08));
         }
+
+        .weather-overlay {
+            transition: background 1000ms ease, backdrop-filter 1000ms ease, opacity 1000ms ease;
+            backdrop-filter: blur(2px) saturate(110%);
+            -webkit-backdrop-filter: blur(2px) saturate(110%);
+        }
     </style>
 </head>
 
@@ -159,7 +312,7 @@
         </div>
 
         <!-- 动态天气滤镜层 -->
-        <div id="weatherOverlay" class="absolute inset-0 bg-black/40 transition-colors duration-1000 z-20"></div>
+        <div id="weatherOverlay" class="absolute inset-0 weather-overlay z-20"></div>
         <!-- 物理粒子画布 -->
         <canvas id="weatherCanvas" class="absolute inset-0 z-30 pointer-events-none"></canvas>
     </div>
@@ -183,11 +336,13 @@
 
     <!-- 主体内容区 (左侧) -->
     <main
-        class="relative z-10 flex flex-col items-center justify-center p-8 pb-20 w-full min-h-[80vh] md:flex-1 md:min-h-0">
+        class="relative z-10 flex flex-col items-center justify-center p-6 pb-20 w-full min-h-[80vh] md:flex-1 md:min-h-0 md:px-8">
+        <div class="hero-shell flex flex-col items-center">
         <!-- 时间与天气 -->
-        <div class="flex flex-col items-center mb-10">
+        <div class="flex flex-col items-center mb-8">
+            <div class="mb-3 px-3 py-1 rounded-full border border-white/12 bg-white/6 text-[10px] uppercase tracking-[0.28em] text-white/60">Ambient Desk</div>
             <div id="clock"
-                class="text-7xl font-semibold tracking-tight numeric drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]">00:00
+                class="text-7xl md:text-8xl font-semibold tracking-tight numeric drop-shadow-[0_4px_18px_rgba(0,0,0,0.55)]">00:00
             </div>
             <div
                 class="flex items-center gap-3 text-white/90 text-sm mt-4 tracking-wider drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] font-medium">
@@ -199,7 +354,7 @@
 
         <!-- 融合搜索框 (内嵌引擎选择) -->
         <div id="search-bar"
-            class="w-full max-w-2xl bg-white/5 backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border border-white/20 rounded-full flex items-center p-1.5 pr-4 mb-12 transition-all duration-300 hover:scale-[1.01] focus-within:scale-[1.05] focus-within:ring-4 focus-within:ring-white/20 focus-within:bg-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_20px_50px_rgba(0,0,0,0.4)] overflow-hidden">
+            class="w-full max-w-2xl bg-white/6 backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border border-white/16 rounded-[1.75rem] flex items-center p-2 pr-4 mb-6 transition-all duration-300 hover:scale-[1.01] focus-within:scale-[1.03] focus-within:ring-4 focus-within:ring-white/16 focus-within:bg-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.28),0_20px_50px_rgba(0,0,0,0.4)] overflow-hidden">
             <svg class="w-5 h-5 text-white/50 ml-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
@@ -222,9 +377,9 @@
         </div>
 
         <!-- 快捷导航 Dock (去包装悬浮态) -->
-        <div class="flex gap-10 px-4 py-4 w-full max-w-fit overflow-x-auto no-scrollbar">
+        <div class="dock-shell flex gap-10 px-4 py-4 w-full max-w-4xl overflow-x-auto no-scrollbar justify-center">
             <a href="https://bilibili.com" target="_blank" rel="noopener noreferrer"
-                class="flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0">
+                class="dock-link flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0">
                 <div
                     class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:bg-[#FB7299] group-hover:text-white group-hover:border-transparent group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(251,114,153,0.4)] transition-all duration-300 shadow-lg">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
@@ -236,7 +391,7 @@
                     class="text-xs text-white/90 font-medium drop-shadow-md group-hover:text-white transition-colors">Bilibili</span>
             </a>
             <a href="https://x.com" target="_blank" rel="noopener noreferrer"
-                class="flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0">
+                class="dock-link flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0">
                 <div
                     class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:bg-black group-hover:text-white group-hover:border-transparent group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(255,255,255,0.2)] transition-all duration-300 shadow-lg">
                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -248,7 +403,7 @@
                     class="text-xs text-white/90 font-medium drop-shadow-md group-hover:text-white transition-colors">Twitter</span>
             </a>
             <a href="https://github.com" target="_blank" rel="noopener noreferrer"
-                class="flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0">
+                class="dock-link flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0">
                 <div
                     class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:bg-[#333333] group-hover:text-white group-hover:border-transparent group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(255,255,255,0.2)] transition-all duration-300 shadow-lg">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
@@ -260,7 +415,7 @@
                     class="text-xs text-white/90 font-medium drop-shadow-md group-hover:text-white transition-colors">GitHub</span>
             </a>
             <a href="https://douyin.com" target="_blank" rel="noopener noreferrer"
-                class="flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0">
+                class="dock-link flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0">
                 <div
                     class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:bg-[#FE2C55] group-hover:text-white group-hover:border-transparent group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(254,44,85,0.4)] transition-all duration-300 font-bold shadow-lg">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
@@ -272,7 +427,7 @@
                     class="text-xs text-white/90 font-medium drop-shadow-md group-hover:text-white transition-colors">抖音</span>
             </a>
             <a href="https://discord.com" target="_blank" rel="noopener noreferrer"
-                class="flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0">
+                class="dock-link flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0">
                 <div
                     class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:bg-[#5865F2] group-hover:text-white group-hover:border-transparent group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(88,101,242,0.4)] transition-all duration-300 font-bold shadow-lg">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
@@ -284,6 +439,7 @@
                     class="text-xs text-white/90 font-medium drop-shadow-md group-hover:text-white transition-colors">Discord</span>
             </a>
         </div>
+        </div>
     </main>
 
     <!-- 右侧：金融快讯面板 -->
@@ -294,7 +450,7 @@
         </div>
 
         <div id="news-panel"
-            class="bg-white/5 backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border border-white/20 flex-1 rounded-3xl p-6 flex flex-col overflow-hidden relative shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_25px_50px_rgba(0,0,0,0.5)]">
+            class="panel-sheen bg-white/5 backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border border-white/20 flex-1 rounded-[2rem] p-6 flex flex-col overflow-hidden relative">
             <!-- 标题栏 -->
             <div class="flex items-center justify-between mb-4 border-b border-white/10 pb-4">
                 <div class="flex items-center gap-3">
@@ -336,7 +492,7 @@
 
             <!-- 滚动列表区 (增加 pb-24 防止被底部行情条挡住) -->
             <div id="newsList"
-                class="flex-1 overflow-y-auto no-scrollbar flex flex-col pb-24 transition-opacity duration-300">
+                class="news-stream flex-1 overflow-y-auto no-scrollbar flex flex-col pb-24 transition-opacity duration-300">
                 <!-- 由 JS 填充 -->
             </div>
 
@@ -353,7 +509,7 @@
 
     <!-- 底部：实时行情条 (静态双行滑动布局) -->
     <footer id="bottom-ticker"
-        class="fixed bottom-0 left-0 w-full h-[48px] z-50 bg-white/5 bg-gradient-to-t from-black/50 to-transparent backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border-t border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] group/ticker">
+        class="ticker-shell fixed bottom-0 left-0 w-full h-[54px] z-50 bg-white/5 bg-gradient-to-t from-black/50 to-transparent backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border-t border-white/20 group/ticker">
 
         <!-- 修复后的翻页按钮：左 -->
         <button onclick="scrollTicker(-500)"
@@ -387,6 +543,19 @@
         let activeBgLayer = 1;
         let isSwitchingBg = false;
         const vSuffix = new Date().toLocaleDateString('zh-CN');
+        const ambientPalettes = [
+            { accent: '125, 211, 252', strong: '56, 189, 248' },
+            { accent: '244, 114, 182', strong: '236, 72, 153' },
+            { accent: '251, 191, 36', strong: '245, 158, 11' },
+            { accent: '52, 211, 153', strong: '16, 185, 129' },
+            { accent: '196, 181, 253', strong: '168, 85, 247' }
+        ];
+
+        function applyAmbientPalette(index) {
+            const palette = ambientPalettes[index % ambientPalettes.length];
+            document.documentElement.style.setProperty('--accent-rgb', palette.accent);
+            document.documentElement.style.setProperty('--accent-strong-rgb', palette.strong);
+        }
 
         async function initWallpapers() {
             try {
@@ -397,6 +566,7 @@
                     const img1 = document.getElementById('bgImage1');
                     const img2 = document.getElementById('bgImage2');
                     const firstSrc = wallpapersArray[0] + '?v=' + vSuffix;
+                    applyAmbientPalette(0);
                     img1.onload = () => {
                         img1.classList.remove('opacity-0');
                         img1.classList.add('opacity-100');
@@ -470,6 +640,7 @@
             isSwitchingBg = true;
 
             currentBgIndex = (currentBgIndex + 1) % wallpapersArray.length;
+            applyAmbientPalette(currentBgIndex);
             const nextSrc = wallpapersArray[currentBgIndex] + '?v=' + vSuffix;
 
             const img1 = document.getElementById('bgImage1');
@@ -661,19 +832,27 @@
             cancelAnimationFrame(animationId);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             particles = [];
+            overlay.style.backdropFilter = 'blur(2px) saturate(110%)';
+            overlay.style.webkitBackdropFilter = 'blur(2px) saturate(110%)';
 
             if (weatherKeyword.includes('🌧️') || weatherKeyword.includes('雨')) {
-                overlay.className = "absolute inset-0 bg-blue-900/30 transition-colors duration-1000 z-20";
+                overlay.style.background = 'linear-gradient(180deg, rgba(8, 47, 73, 0.30) 0%, rgba(15, 23, 42, 0.42) 100%)';
+                overlay.style.backdropFilter = 'blur(3px) saturate(115%)';
+                overlay.style.webkitBackdropFilter = 'blur(3px) saturate(115%)';
                 for (let i = 0; i < 200; i++) particles.push(new WeatherParticle('rain'));
                 animateWeather();
             } else if (weatherKeyword.includes('☀️') || weatherKeyword.includes('晴')) {
-                overlay.className = "absolute inset-0 bg-amber-200/12 transition-colors duration-1000 z-20";
+                overlay.style.background = 'radial-gradient(circle at 50% 18%, rgba(253, 224, 71, 0.16) 0%, rgba(251, 191, 36, 0.08) 26%, rgba(15, 23, 42, 0.10) 100%)';
+                overlay.style.backdropFilter = 'blur(1px) saturate(108%)';
+                overlay.style.webkitBackdropFilter = 'blur(1px) saturate(108%)';
             } else if (weatherKeyword.includes('❄️') || weatherKeyword.includes('雪')) {
-                overlay.className = "absolute inset-0 bg-slate-800/40 transition-colors duration-1000 z-20";
+                overlay.style.background = 'linear-gradient(180deg, rgba(226, 232, 240, 0.10) 0%, rgba(71, 85, 105, 0.28) 100%)';
+                overlay.style.backdropFilter = 'blur(3px) saturate(105%)';
+                overlay.style.webkitBackdropFilter = 'blur(3px) saturate(105%)';
                 for (let i = 0; i < 250; i++) particles.push(new WeatherParticle('snow'));
                 animateWeather();
             } else {
-                overlay.className = "absolute inset-0 bg-black/30 transition-colors duration-1000 z-20";
+                overlay.style.background = 'linear-gradient(180deg, rgba(51, 65, 85, 0.18) 0%, rgba(15, 23, 42, 0.34) 100%)';
             }
         }
 
@@ -719,11 +898,11 @@
                 if (container.children.length === 0) {
                     let html = '';
                     items.forEach(item => {
-                        html += `
-                        <div class="flex flex-col items-center justify-center min-w-max gap-0.5" data-symbol="${item.name}">
-                            <span class="text-[10px] text-white/60 tracking-wider drop-shadow-md">${item.name}</span>
+                    html += `
+                        <div class="flex flex-col items-center justify-center min-w-max gap-1 px-3 py-1.5 rounded-2xl border border-white/10 bg-white/6 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]" data-symbol="${item.name}">
+                            <span class="text-[10px] text-white/55 tracking-[0.22em] uppercase drop-shadow-md">${item.name}</span>
                             <div class="flex items-baseline gap-1.5">
-                                <span class="text-xs font-bold text-white drop-shadow-md numeric price-val">--</span>
+                                <span class="text-sm font-bold text-white drop-shadow-md numeric price-val">--</span>
                                 <span class="text-[10px] font-semibold drop-shadow-md numeric change-val">--</span>
                             </div>
                         </div>`;
@@ -817,9 +996,9 @@
                 const btn = document.getElementById('tab-' + t);
                 if (btn) {
                     if (t === filter) {
-                        btn.className = 'flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 bg-white/20 text-white shadow-lg shrink-0 min-w-[60px] scale-[1.02] border border-white/20';
+                        btn.className = 'filter-pill filter-pill-active flex-1 py-1.5 text-xs rounded-lg transition-all duration-300 shrink-0 min-w-[60px]';
                     } else {
-                        btn.className = 'flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]';
+                        btn.className = 'filter-pill flex-1 py-1.5 text-xs rounded-lg transition-all duration-300 shrink-0 min-w-[60px]';
                     }
                 }
             });
@@ -844,20 +1023,30 @@
             const displayText = news.display_content || news.content || '';
             const safeUrl = sanitizeHttpUrl(news.url);
             const isHtmlBlock = news.format === 'html';
-            const importantClass = news.is_important ? ' bg-red-500/10 border-red-500/20' : ' border-white/20';
+            const sourceLabel = (news.source || news.category || 'feed').toString().slice(0, 18);
+            const accentClass = news.category === 'tech'
+                ? 'border-cyan-300/40'
+                : news.category === 'foreign'
+                    ? 'border-emerald-300/35'
+                    : 'border-white/20';
+            const importantClass = news.is_important ? ' bg-red-500/10 border-red-500/20' : ` ${accentClass}`;
 
-            item.className = `border-l-2 ${importantClass} pl-3 border-b border-white/5 pb-3 mb-3 last:border-b-0 last:mb-0 last:pb-0 news-item-hover [&_a]:text-blue-400 [&_a]:underline [&_a]:hover:text-blue-300` + (isNew ? ' animate-slide-down' : '');
+            item.className = `intel-item border-l-2 ${importantClass} border-b border-white/5 pb-3 mb-3 last:border-b-0 last:mb-0 last:pb-0 news-item-hover [&_a]:text-blue-400 [&_a]:underline [&_a]:hover:text-blue-300` + (isNew ? ' animate-slide-down' : '');
 
-            header.className = 'text-[11px] text-white/40 font-mono mb-0.5 flex items-center';
+            header.className = 'text-[11px] text-white/40 font-mono mb-1 flex items-center tracking-[0.16em] uppercase';
             header.append(document.createTextNode(news.time || ''));
+            const sourceChip = document.createElement('span');
+            sourceChip.className = 'source-chip';
+            sourceChip.textContent = sourceLabel;
+            header.appendChild(sourceChip);
             if (news.is_important) {
                 const badge = document.createElement('span');
-                badge.className = 'ml-2 px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[9px] font-bold rounded border border-red-500/30 animate-pulse';
+                badge.className = 'ml-2 px-1.5 py-0.5 bg-red-500/20 text-red-300 text-[9px] font-bold rounded border border-red-500/30 animate-pulse';
                 badge.textContent = 'IMPORTANT';
                 header.appendChild(badge);
             }
 
-            body.className = `${fs} leading-loose text-white/90 drop-shadow-sm tech-content`;
+            body.className = `${fs} leading-[1.85] text-white/92 drop-shadow-sm tech-content`;
             if (isHtmlBlock) {
                 body.innerHTML = news.content || '';
             } else if (safeUrl) {
