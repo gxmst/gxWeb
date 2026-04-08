@@ -353,7 +353,7 @@
 
     <!-- 底部：实时行情条 (静态双行滑动布局) -->
     <footer id="bottom-ticker"
-        class="fixed bottom-0 left-0 w-full h-[48px] z-50 bg-white/5 bg-gradient-to-t from-black/50 to-transparent backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border-t border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] group/ticker">
+        class="fixed bottom-0 left-0 w-full h-[58px] z-50 bg-white/5 bg-gradient-to-t from-black/60 to-transparent backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border-t border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] group/ticker">
 
         <!-- 修复后的翻页按钮：左 -->
         <button onclick="scrollTicker(-500)"
@@ -365,8 +365,8 @@
 
         <!-- 真正的横向滚动容器 -->
         <div id="tickerScroll"
-            class="flex items-center gap-12 px-14 py-1.5 w-full h-full overflow-x-auto no-scrollbar scroll-smooth">
-            <div id="tickerContent" class="flex items-center gap-14 min-w-max">
+            class="flex items-center gap-8 px-14 py-1.5 w-full h-full overflow-x-auto no-scrollbar scroll-smooth">
+            <div id="tickerContent" class="flex items-center gap-8 min-w-max">
                 <!-- 由 JS 填充双行排版 -->
             </div>
         </div>
@@ -720,8 +720,11 @@
                     let html = '';
                     items.forEach(item => {
                         html += `
-                        <div class="flex flex-col items-center justify-center min-w-max gap-0.5" data-symbol="${item.name}">
-                            <span class="text-[10px] text-white/60 tracking-wider drop-shadow-md">${item.name}</span>
+                        <div class="flex flex-col items-start justify-center min-w-max gap-0.5 px-1.5" data-symbol="${item.symbol}">
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-[9px] text-white/40 tracking-[0.18em] uppercase drop-shadow-md category-val">${item.category || ''}</span>
+                                <span class="text-[10px] text-white/72 tracking-wide drop-shadow-md name-val">${item.name}</span>
+                            </div>
                             <div class="flex items-baseline gap-1.5">
                                 <span class="text-xs font-bold text-white drop-shadow-md numeric price-val">--</span>
                                 <span class="text-[10px] font-semibold drop-shadow-md numeric change-val">--</span>
@@ -732,8 +735,12 @@
                 }
 
                 items.forEach(item => {
-                    const el = container.querySelector(`[data-symbol="${item.name}"]`);
+                    const el = container.querySelector(`[data-symbol="${item.symbol}"]`);
                     if (el) {
+                        const nameEl = el.querySelector('.name-val');
+                        const categoryEl = el.querySelector('.category-val');
+                        if (nameEl) nameEl.innerText = item.name;
+                        if (categoryEl) categoryEl.innerText = item.category || '';
                         el.querySelector('.price-val').innerText = item.price;
                         const cEl = el.querySelector('.change-val');
                         cEl.innerText = item.change;

@@ -25,6 +25,31 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Edge/121.0.0.0"
 ]
 
+YAHOO_TICKERS = [
+    {"symbol": "000001.SS", "name": "上证综指", "category": "亚太", "decimals": 2},
+    {"symbol": "^DJI", "name": "道琼斯", "category": "美股", "decimals": 2},
+    {"symbol": "^IXIC", "name": "纳斯达克", "category": "美股", "decimals": 2},
+    {"symbol": "NVDA", "name": "英伟达", "category": "美股", "decimals": 2},
+    {"symbol": "GC=F", "name": "COMEX黄金", "category": "商品", "decimals": 2},
+    {"symbol": "SI=F", "name": "COMEX白银", "category": "商品", "decimals": 2},
+    {"symbol": "HG=F", "name": "COMEX铜", "category": "商品", "decimals": 3},
+    {"symbol": "CL=F", "name": "WTI原油", "category": "商品", "decimals": 2},
+    {"symbol": "USDCNY=X", "name": "美元/人民币", "category": "外汇", "decimals": 4},
+    {"symbol": "USDJPY=X", "name": "美元/日元", "category": "外汇", "decimals": 3},
+    {"symbol": "^N225", "name": "日经225", "category": "亚太", "decimals": 2},
+    {"symbol": "^HSI", "name": "恒生指数", "category": "亚太", "decimals": 2},
+    {"symbol": "^KS200", "name": "KOSPI 200", "category": "亚太", "decimals": 2},
+    {"symbol": "^GSPC", "name": "标普500", "category": "美股", "decimals": 2},
+    {"symbol": "^FTSE", "name": "富时100", "category": "欧洲", "decimals": 2},
+    {"symbol": "^GDAXI", "name": "DAX 40", "category": "欧洲", "decimals": 2},
+    {"symbol": "^FCHI", "name": "CAC 40", "category": "欧洲", "decimals": 2},
+    {"symbol": "^STOXX50E", "name": "Euro Stoxx 50", "category": "欧洲", "decimals": 2},
+    {"symbol": "^TWII", "name": "台湾加权", "category": "亚太", "decimals": 2},
+    {"symbol": "^BSESN", "name": "印度Sensex", "category": "亚太", "decimals": 2},
+    {"symbol": "^AXJO", "name": "澳洲200", "category": "亚太", "decimals": 2},
+    {"symbol": "^KS11", "name": "韩国综合", "category": "亚太", "decimals": 2},
+]
+
 def get_random_ua():
     return random.choice(USER_AGENTS)
 
@@ -46,6 +71,54 @@ def build_http_session():
 
 HTTP_SESSION = build_http_session()
 GITHUB_CACHE_PATH = "./public/github-tech-cache-v2.json"
+
+def format_market_price(price, decimals):
+    return format(price, f".{decimals}f")
+
+def get_last_valid_close(result):
+    indicators = result.get("indicators", {})
+    quotes = indicators.get("quote", [])
+    if not quotes:
+        return None
+
+    closes = quotes[0].get("close", [])
+    for value in reversed(closes[:-1]):
+        if value is not None:
+            return value
+    for value in reversed(closes):
+        if value is not None:
+            return value
+    return None
+
+def fetch_yahoo_chart_snapshot(config):
+    symbol = config["symbol"]
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{requests.utils.quote(symbol, safe='')}?interval=1d&range=5d"
+    headers = {"User-Agent": get_random_ua()}
+    response = requests.get(url, headers=headers, timeout=15)
+    payload = response.json()
+    result_list = (payload.get("chart") or {}).get("result") or []
+    if not result_list:
+        error_info = (payload.get("chart") or {}).get("error") or {}
+        raise ValueError(f"{symbol} 无结果: {error_info}")
+
+    result = result_list[0]
+    meta = result.get("meta", {})
+    price = meta.get("regularMarketPrice")
+    previous_close = meta.get("previousClose") or meta.get("chartPreviousClose") or get_last_valid_close(result)
+    if price is None:
+        raise ValueError(f"{symbol} 缺少当前价格")
+    if previous_close in (None, 0):
+        raise ValueError(f"{symbol} 缺少昨收价格")
+
+    change_pct = ((float(price) - float(previous_close)) / float(previous_close)) * 100
+    return {
+        "name": config["name"],
+        "price": format_market_price(float(price), config["decimals"]),
+        "symbol": symbol,
+        "change": f"{change_pct:+.2f}%",
+        "category": config["category"],
+        "source": "Yahoo"
+    }
 
 def atomic_save_json(path, data):
     tmp_path = f"{path}.tmp"
@@ -391,58 +464,25 @@ def fetch_weather():
         with open("./public/weather.txt", "w", encoding="utf-8") as f: f.write(f"{emoji} {temp}°C")
     except Exception as e: print(f"[天气引擎] 失败: {e}")
 
-# ================= 引擎 5：行情条 (新浪财经) =================
+# ================= 引擎 5：行情条 (Yahoo Finance) =================
 def fetch_ticker():
-    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][行情引擎] 开始抓取精准行情...")
-    # 移除 UDI，加入英伟达、白银、铜、外汇、日经、恒指
-    url = "https://hq.sinajs.cn/list=s_sh000001,gb_dji,gb_ixic,gb_nvda,hf_GC,hf_SI,hf_HG,hf_CL,fx_susdcny,fx_susdjpy,int_nikkei,int_hangseng"
-    headers = {"Referer": "https://finance.sina.com.cn/", "User-Agent": get_random_ua()}
+    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][行情引擎] 开始同步统一行情源...")
     ticker_list = []
-    try:
-        resp = requests.get(url, headers=headers, timeout=10)
-        content = resp.content.decode('gbk')
-        lines = content.strip().split('\n')
-        mapping = {
-            "s_sh000001": "上证", "gb_dji": "道琼斯", "gb_ixic": "纳斯达克", "gb_nvda": "英伟达",
-            "hf_GC": "黄金", "hf_SI": "白银", "hf_HG": "伦铜", "hf_CL": "原油",
-            "fx_susdcny": "美元/人民币", "fx_susdjpy": "美元/日元", "int_nikkei": "日经225", "int_hangseng": "恒生指数"
-        }
-        for line in lines:
-            try:
-                if '=' not in line: continue
-                var_part, data_part = line.split('=')
-                data = data_part.replace('"', '').replace(';', '').split(',')
-                symbol = next((k for k in mapping.keys() if k in var_part), None)
-                if not symbol: continue
-                
-                name = mapping[symbol]
-                price, change_pct = "停盘", 0.0
-                try:
-                    if symbol.startswith(('s_', 'int_')): # 指数
-                        price = format(float(data[1]), ".2f")
-                        change_pct = float(data[3])
-                    elif symbol.startswith('gb_'): # 美股
-                        price = format(float(data[1]), ".2f")
-                        change_pct = float(data[2])
-                    elif symbol.startswith('hf_'): # 期货: [0]当前价, [7]昨收
-                        price = format(float(data[0]), ".2f")
-                        yest = float(data[7])
-                        change_pct = (float(data[0]) - yest) / yest * 100 if yest != 0 else 0.0
-                    elif symbol.startswith('fx_'): # 外汇: [1]当前价, [3]昨收
-                        p_val = float(data[1])
-                        price = format(p_val, ".4f")
-                        yest = float(data[3])
-                        change_pct = (p_val - yest) / yest * 100 if yest != 0 else 0.0
-                except Exception:
-                    price, change_pct = "停盘", 0.0
-                
-                change_str = ("+" if change_pct >= 0 else "") + format(change_pct, ".2f") + "%"
-                ticker_list.append({"name": name, "price": price, "symbol": symbol, "change": change_str})
-            except Exception as e: continue
-        if ticker_list:
-            atomic_save_json("./public/ticker.json", ticker_list)
-            print(f"✅ [行情引擎] 已同步 {len(ticker_list)} 条行情。")
-    except Exception as e: print(f"❌ [行情引擎] 失败: {e}")
+    failed_symbols = []
+
+    for config in YAHOO_TICKERS:
+        try:
+            ticker_list.append(fetch_yahoo_chart_snapshot(config))
+            time.sleep(0.2)
+        except Exception as e:
+            failed_symbols.append(f"{config['symbol']}({config['name']})")
+            print(f"⚠️ [行情引擎] {config['name']} 抓取失败: {e}")
+
+    if ticker_list:
+        atomic_save_json("./public/ticker.json", ticker_list)
+        print(f"✅ [行情引擎] 已同步 {len(ticker_list)} 条行情。")
+    if failed_symbols:
+        print(f"⚠️ [行情引擎] 以下标的本轮未成功: {', '.join(failed_symbols)}")
 
 # ================= 主循环控制 =================
 def fetch_tech_news_legacy_2():
