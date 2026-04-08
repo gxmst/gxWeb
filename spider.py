@@ -7,6 +7,7 @@ import requests
 import feedparser
 import calendar
 import random
+from json import JSONDecodeError
 from datetime import datetime, timedelta, timezone
 from PIL import Image
 import io
@@ -90,12 +91,63 @@ def get_last_valid_close(result):
             return value
     return None
 
+def parse_json_response(response, context):
+    try:
+        return response.json()
+    except JSONDecodeError as e:
+        snippet = response.text[:160].replace("\n", " ").replace("\r", " ")
+        raise ValueError(f"{context} 返回非 JSON 内容，status={response.status_code}, body={snippet}") from e
+
+def build_ticker_entry(config, price, previous_close):
+    if price is None:
+        raise ValueError(f"{config['symbol']} 缺少当前价格")
+    if previous_close in (None, 0):
+        raise ValueError(f"{config['symbol']} 缺少昨收价格")
+
+    change_pct = ((float(price) - float(previous_close)) / float(previous_close)) * 100
+    return {
+        "name": config["name"],
+        "price": format_market_price(float(price), config["decimals"]),
+        "symbol": config["symbol"],
+        "change": f"{change_pct:+.2f}%",
+        "category": config["category"],
+        "source": "Yahoo"
+    }
+
+def fetch_yahoo_spark_snapshots(configs):
+    if not configs:
+        return {}
+
+    symbols = ",".join(config["symbol"] for config in configs)
+    url = f"https://query1.finance.yahoo.com/v7/finance/spark?symbols={requests.utils.quote(symbols, safe='=,^,')}&range=5d&interval=1d"
+    headers = {"User-Agent": get_random_ua()}
+    response = HTTP_SESSION.get(url, headers=headers, timeout=20)
+    response.raise_for_status()
+    payload = parse_json_response(response, "Yahoo spark")
+    result_map = ((payload.get("spark") or {}).get("result")) or []
+
+    snapshots = {}
+    for item in result_map:
+        symbol = item.get("symbol")
+        response_items = item.get("response") or []
+        if not symbol or not response_items:
+            continue
+
+        result = response_items[0]
+        meta = result.get("meta", {})
+        price = meta.get("regularMarketPrice")
+        previous_close = meta.get("previousClose") or meta.get("chartPreviousClose") or get_last_valid_close(result)
+        snapshots[symbol] = {"price": price, "previous_close": previous_close}
+
+    return snapshots
+
 def fetch_yahoo_chart_snapshot(config):
     symbol = config["symbol"]
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{requests.utils.quote(symbol, safe='')}?interval=1d&range=5d"
     headers = {"User-Agent": get_random_ua()}
-    response = requests.get(url, headers=headers, timeout=15)
-    payload = response.json()
+    response = HTTP_SESSION.get(url, headers=headers, timeout=15)
+    response.raise_for_status()
+    payload = parse_json_response(response, f"Yahoo chart {symbol}")
     result_list = (payload.get("chart") or {}).get("result") or []
     if not result_list:
         error_info = (payload.get("chart") or {}).get("error") or {}
@@ -105,20 +157,7 @@ def fetch_yahoo_chart_snapshot(config):
     meta = result.get("meta", {})
     price = meta.get("regularMarketPrice")
     previous_close = meta.get("previousClose") or meta.get("chartPreviousClose") or get_last_valid_close(result)
-    if price is None:
-        raise ValueError(f"{symbol} 缺少当前价格")
-    if previous_close in (None, 0):
-        raise ValueError(f"{symbol} 缺少昨收价格")
-
-    change_pct = ((float(price) - float(previous_close)) / float(previous_close)) * 100
-    return {
-        "name": config["name"],
-        "price": format_market_price(float(price), config["decimals"]),
-        "symbol": symbol,
-        "change": f"{change_pct:+.2f}%",
-        "category": config["category"],
-        "source": "Yahoo"
-    }
+    return build_ticker_entry(config, price, previous_close)
 
 def atomic_save_json(path, data):
     tmp_path = f"{path}.tmp"
@@ -469,11 +508,21 @@ def fetch_ticker():
     print(f"[{get_beijing_time().strftime('%H:%M:%S')}][行情引擎] 开始同步统一行情源...")
     ticker_list = []
     failed_symbols = []
+    spark_snapshots = {}
+
+    try:
+        spark_snapshots = fetch_yahoo_spark_snapshots(YAHOO_TICKERS)
+    except Exception as e:
+        print(f"⚠️ [行情引擎] Yahoo spark 批量抓取失败，将回退单标的: {e}")
 
     for config in YAHOO_TICKERS:
         try:
-            ticker_list.append(fetch_yahoo_chart_snapshot(config))
-            time.sleep(0.2)
+            snapshot = spark_snapshots.get(config["symbol"])
+            if snapshot:
+                ticker_list.append(build_ticker_entry(config, snapshot.get("price"), snapshot.get("previous_close")))
+            else:
+                ticker_list.append(fetch_yahoo_chart_snapshot(config))
+                time.sleep(0.15)
         except Exception as e:
             failed_symbols.append(f"{config['symbol']}({config['name']})")
             print(f"⚠️ [行情引擎] {config['name']} 抓取失败: {e}")
