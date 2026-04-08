@@ -26,27 +26,27 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Edge/121.0.0.0"
 ]
 
-EASTMONEY_TICKERS = [
-    {"symbol": "1.000001", "name": "上证综指", "category": "亚太", "decimals": 2, "scale": 100},
-    {"symbol": "100.DJIA", "name": "道琼斯", "category": "美股", "decimals": 2, "scale": 100},
-    {"symbol": "100.NDX", "name": "纳斯达克", "category": "美股", "decimals": 2, "scale": 100},
-    {"symbol": "105.NVDA", "name": "英伟达", "category": "美股", "decimals": 2, "scale": 1000},
-    {"symbol": "101.GC00Y", "name": "COMEX黄金", "category": "商品", "decimals": 2, "scale": 10},
-    {"symbol": "101.SI00Y", "name": "COMEX白银", "category": "商品", "decimals": 3, "scale": 1000},
-    {"symbol": "101.HG00Y", "name": "COMEX铜", "category": "商品", "decimals": 4, "scale": 10000},
-    {"symbol": "102.CL00Y", "name": "WTI原油", "category": "商品", "decimals": 2, "scale": 100},
-    {"symbol": "133.USDCNH", "name": "美元/人民币", "category": "外汇", "decimals": 4, "scale": 10000},
-    {"symbol": "119.USDJPY", "name": "美元/日元", "category": "外汇", "decimals": 3, "scale": 10000},
-    {"symbol": "100.N225", "name": "日经225", "category": "亚太", "decimals": 2, "scale": 100},
-    {"symbol": "100.HSI", "name": "恒生指数", "category": "亚太", "decimals": 2, "scale": 100},
-    {"symbol": "100.KS11", "name": "韩国综合", "category": "亚太", "decimals": 2, "scale": 100},
-    {"symbol": "100.SPX", "name": "标普500", "category": "美股", "decimals": 2, "scale": 100},
-    {"symbol": "100.FTSE", "name": "富时100", "category": "欧洲", "decimals": 2, "scale": 100},
-    {"symbol": "100.GDAXI", "name": "DAX 40", "category": "欧洲", "decimals": 2, "scale": 100},
-    {"symbol": "100.FCHI", "name": "CAC 40", "category": "欧洲", "decimals": 2, "scale": 100},
-    {"symbol": "100.TWII", "name": "台湾加权", "category": "亚太", "decimals": 2, "scale": 100},
-    {"symbol": "100.SENSEX", "name": "印度Sensex", "category": "亚太", "decimals": 2, "scale": 100},
-    {"symbol": "100.AS51", "name": "澳洲200", "category": "亚太", "decimals": 2, "scale": 100},
+MARKET_TICKERS = [
+    {"symbol": "1.000001", "name": "上证综指", "category": "亚太", "decimals": 2, "scale": 100, "source": "EastMoney"},
+    {"symbol": "100.DJIA", "name": "道琼斯", "category": "美股", "decimals": 2, "scale": 100, "source": "EastMoney"},
+    {"symbol": "^IXIC", "name": "纳斯达克", "category": "美股", "decimals": 2, "source": "Yahoo"},
+    {"symbol": "105.NVDA", "name": "英伟达", "category": "美股", "decimals": 2, "scale": 1000, "source": "EastMoney"},
+    {"symbol": "101.GC00Y", "name": "COMEX黄金", "category": "商品", "decimals": 2, "scale": 10, "source": "EastMoney"},
+    {"symbol": "101.SI00Y", "name": "COMEX白银", "category": "商品", "decimals": 3, "scale": 1000, "source": "EastMoney"},
+    {"symbol": "101.HG00Y", "name": "COMEX铜", "category": "商品", "decimals": 4, "scale": 10000, "source": "EastMoney"},
+    {"symbol": "102.CL00Y", "name": "WTI原油", "category": "商品", "decimals": 2, "scale": 100, "source": "EastMoney"},
+    {"symbol": "USDCNY=X", "name": "美元/人民币", "category": "外汇", "decimals": 4, "source": "Yahoo"},
+    {"symbol": "119.USDJPY", "name": "美元/日元", "category": "外汇", "decimals": 3, "scale": 10000, "source": "EastMoney"},
+    {"symbol": "100.N225", "name": "日经225", "category": "亚太", "decimals": 2, "scale": 100, "source": "EastMoney"},
+    {"symbol": "100.HSI", "name": "恒生指数", "category": "亚太", "decimals": 2, "scale": 100, "source": "EastMoney"},
+    {"symbol": "100.KOSPI200", "name": "KOSPI 200", "category": "亚太", "decimals": 2, "scale": 100, "source": "EastMoney"},
+    {"symbol": "100.SPX", "name": "标普500", "category": "美股", "decimals": 2, "scale": 100, "source": "EastMoney"},
+    {"symbol": "100.FTSE", "name": "富时100", "category": "欧洲", "decimals": 2, "scale": 100, "source": "EastMoney"},
+    {"symbol": "100.GDAXI", "name": "DAX 40", "category": "欧洲", "decimals": 2, "scale": 100, "source": "EastMoney"},
+    {"symbol": "100.FCHI", "name": "CAC 40", "category": "欧洲", "decimals": 2, "scale": 100, "source": "EastMoney"},
+    {"symbol": "100.TWII", "name": "台湾加权", "category": "亚太", "decimals": 2, "scale": 100, "source": "EastMoney"},
+    {"symbol": "100.SENSEX", "name": "印度Sensex", "category": "亚太", "decimals": 2, "scale": 100, "source": "EastMoney"},
+    {"symbol": "100.AS51", "name": "澳洲200", "category": "亚太", "decimals": 2, "scale": 100, "source": "EastMoney"},
 ]
 
 def get_random_ua():
@@ -501,50 +501,64 @@ def fetch_weather():
         with open("./public/weather.txt", "w", encoding="utf-8") as f: f.write(f"{emoji} {temp}°C")
     except Exception as e: print(f"[天气引擎] 失败: {e}")
 
-# ================= 引擎 5：行情条 (EastMoney) =================
+# ================= 引擎 5：行情条 (混合数据源) =================
 def fetch_ticker():
-    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][行情引擎] 开始同步统一行情源(东方财富)...")
+    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][行情引擎] 开始同步统一行情源...")
     ticker_list = []
     failed_symbols = []
 
-    secids = ",".join([c["symbol"] for c in EASTMONEY_TICKERS])
-    url = f"https://push2.eastmoney.com/api/qt/ulist.np/get?secids={secids}&fields=f2,f3,f12,f14,f18"
-    
-    try:
-        headers = {"User-Agent": get_random_ua()}
-        resp = HTTP_SESSION.get(url, headers=headers, timeout=15)
-        resp.raise_for_status()
-        data = parse_json_response(resp, "EastMoney Ticker")
-        diff = data.get("data", {}).get("diff", [])
-        
-        result_map = {item.get('f12'): item for item in diff if item.get('f12')}
-        
-        for config in EASTMONEY_TICKERS:
-            symbol_id = config["symbol"].split(".")[-1]
-            item = result_map.get(symbol_id)
-            if not item:
-                failed_symbols.append(config["name"])
-                continue
+    em_configs = [c for c in MARKET_TICKERS if c.get("source", "EastMoney") == "EastMoney"]
+    yahoo_configs = [c for c in MARKET_TICKERS if c.get("source") == "Yahoo"]
+
+    # 1. 抓取东方财富 (批量)
+    if em_configs:
+        secids = ",".join([c["symbol"] for c in em_configs])
+        url = f"https://push2.eastmoney.com/api/qt/ulist.np/get?secids={secids}&fields=f2,f3,f12,f14,f18"
+        try:
+            headers = {"User-Agent": get_random_ua()}
+            resp = HTTP_SESSION.get(url, headers=headers, timeout=15)
+            resp.raise_for_status()
+            data = parse_json_response(resp, "EastMoney Ticker")
+            diff = data.get("data", {}).get("diff", [])
+            
+            result_map = {item.get('f12'): item for item in diff if item.get('f12')}
+            
+            for config in em_configs:
+                symbol_id = config["symbol"].split(".")[-1]
+                item = result_map.get(symbol_id)
+                if not item:
+                    failed_symbols.append(config["name"])
+                    continue
+                    
+                scale = config.get("scale", 100)
+                price = item.get("f2")
+                previous_close = item.get("f18")
                 
-            scale = config.get("scale", 100)
-            price = item.get("f2")
-            previous_close = item.get("f18")
-            
-            if not price or not previous_close:
-                failed_symbols.append(config["name"])
-                continue
+                if not price or not previous_close:
+                    failed_symbols.append(config["name"])
+                    continue
+                    
+                try:
+                    price_val = float(price) / scale
+                    previous_close_val = float(previous_close) / scale
+                except ValueError:
+                    failed_symbols.append(config["name"])
+                    continue
                 
-            try:
-                price_val = float(price) / scale
-                previous_close_val = float(previous_close) / scale
-            except ValueError:
+                ticker_list.append(build_ticker_entry(config, price_val, previous_close_val))
+        except Exception as e:
+            print(f"⚠️ [行情引擎] 东方财富批量抓取失败: {e}")
+            for config in em_configs:
                 failed_symbols.append(config["name"])
-                continue
-            
-            ticker_list.append(build_ticker_entry(config, price_val, previous_close_val))
-            
-    except Exception as e:
-        print(f"⚠️ [行情引擎] 批量抓取失败: {e}")
+
+    # 2. 抓取 Yahoo (单条后备)
+    for config in yahoo_configs:
+        try:
+            ticker_list.append(fetch_yahoo_chart_snapshot(config))
+            time.sleep(0.15)
+        except Exception as e:
+            failed_symbols.append(f"{config['symbol']}({config['name']})")
+            print(f"⚠️ [行情引擎] {config['name']} (Yahoo) 抓取失败: {e}")
 
     if ticker_list:
         atomic_save_json("./public/ticker.json", ticker_list)
