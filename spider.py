@@ -29,13 +29,13 @@ USER_AGENTS = [
 MARKET_TICKERS = [
     {"symbol": "1.000001", "name": "上证综指", "category": "亚太", "decimals": 2, "scale": 100, "source": "EastMoney"},
     {"symbol": "100.DJIA", "name": "道琼斯", "category": "美股", "decimals": 2, "scale": 100, "source": "EastMoney"},
-    {"symbol": "^IXIC", "name": "纳斯达克", "category": "美股", "decimals": 2, "source": "Yahoo"},
+    {"symbol": "gb_ixic", "name": "纳斯达克", "category": "美股", "decimals": 2, "source": "Sina"},
     {"symbol": "105.NVDA", "name": "英伟达", "category": "美股", "decimals": 2, "scale": 1000, "source": "EastMoney"},
     {"symbol": "101.GC00Y", "name": "COMEX黄金", "category": "商品", "decimals": 2, "scale": 10, "source": "EastMoney"},
     {"symbol": "101.SI00Y", "name": "COMEX白银", "category": "商品", "decimals": 3, "scale": 1000, "source": "EastMoney"},
     {"symbol": "101.HG00Y", "name": "COMEX铜", "category": "商品", "decimals": 4, "scale": 10000, "source": "EastMoney"},
     {"symbol": "102.CL00Y", "name": "WTI原油", "category": "商品", "decimals": 2, "scale": 100, "source": "EastMoney"},
-    {"symbol": "USDCNY=X", "name": "美元/人民币", "category": "外汇", "decimals": 4, "source": "Yahoo"},
+    {"symbol": "fx_susdcny", "name": "美元/人民币", "category": "外汇", "decimals": 4, "source": "Sina"},
     {"symbol": "119.USDJPY", "name": "美元/日元", "category": "外汇", "decimals": 3, "scale": 10000, "source": "EastMoney"},
     {"symbol": "100.N225", "name": "日经225", "category": "亚太", "decimals": 2, "scale": 100, "source": "EastMoney"},
     {"symbol": "100.HSI", "name": "恒生指数", "category": "亚太", "decimals": 2, "scale": 100, "source": "EastMoney"},
@@ -508,7 +508,7 @@ def fetch_ticker():
     failed_symbols = []
 
     em_configs = [c for c in MARKET_TICKERS if c.get("source", "EastMoney") == "EastMoney"]
-    yahoo_configs = [c for c in MARKET_TICKERS if c.get("source") == "Yahoo"]
+    sina_configs = [c for c in MARKET_TICKERS if c.get("source") == "Sina"]
 
     # 1. 抓取东方财富 (批量)
     if em_configs:
@@ -551,14 +551,43 @@ def fetch_ticker():
             for config in em_configs:
                 failed_symbols.append(config["name"])
 
-    # 2. 抓取 Yahoo (单条后备)
-    for config in yahoo_configs:
+    # 2. 抓取 Sina (批量后备)
+    if sina_configs:
         try:
-            ticker_list.append(fetch_yahoo_chart_snapshot(config))
-            time.sleep(0.15)
+            symbols = ",".join([c["symbol"] for c in sina_configs])
+            url = f"http://hq.sinajs.cn/list={symbols}"
+            headers = {"Referer": "http://finance.sina.com.cn/"}
+            resp = HTTP_SESSION.get(url, headers=headers, timeout=10)
+            resp.raise_for_status()
+            
+            sina_results = {}
+            for line in resp.text.splitlines():
+                if not line or "=" not in line: continue
+                key = line.split("=")[0].split("_str_")[-1]
+                data_str = line.split("=")[1].strip('";')
+                if not data_str: continue
+                data = data_str.split(",")
+                if len(data) < 4: continue
+                
+                if key.startswith("gb_") and len(data) > 26:
+                    sina_results[key] = {"price": data[1], "previous_close": data[26]}
+                elif key.startswith("fx_") and len(data) > 3:
+                    sina_results[key] = {"price": data[1], "previous_close": data[3]}
+                else:
+                    # Generic fallback
+                    sina_results[key] = {"price": data[1], "previous_close": data[3]}
+                    
+            for config in sina_configs:
+                sym = config["symbol"]
+                res = sina_results.get(sym)
+                if res and float(res["price"]) > 0:
+                    ticker_list.append(build_ticker_entry(config, float(res["price"]), float(res["previous_close"])))
+                else:
+                    failed_symbols.append(config["name"])
         except Exception as e:
-            failed_symbols.append(f"{config['symbol']}({config['name']})")
-            print(f"⚠️ [行情引擎] {config['name']} (Yahoo) 抓取失败: {e}")
+            for config in sina_configs:
+                failed_symbols.append(config["name"])
+            print(f"⚠️ [行情引擎] Sina 批量抓取失败: {e}")
 
     if ticker_list:
         atomic_save_json("./public/ticker.json", ticker_list)
