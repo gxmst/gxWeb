@@ -26,29 +26,27 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Edge/121.0.0.0"
 ]
 
-YAHOO_TICKERS = [
-    {"symbol": "000001.SS", "name": "上证综指", "category": "亚太", "decimals": 2},
-    {"symbol": "^DJI", "name": "道琼斯", "category": "美股", "decimals": 2},
-    {"symbol": "^IXIC", "name": "纳斯达克", "category": "美股", "decimals": 2},
-    {"symbol": "NVDA", "name": "英伟达", "category": "美股", "decimals": 2},
-    {"symbol": "GC=F", "name": "COMEX黄金", "category": "商品", "decimals": 2},
-    {"symbol": "SI=F", "name": "COMEX白银", "category": "商品", "decimals": 2},
-    {"symbol": "HG=F", "name": "COMEX铜", "category": "商品", "decimals": 3},
-    {"symbol": "CL=F", "name": "WTI原油", "category": "商品", "decimals": 2},
-    {"symbol": "USDCNY=X", "name": "美元/人民币", "category": "外汇", "decimals": 4},
-    {"symbol": "USDJPY=X", "name": "美元/日元", "category": "外汇", "decimals": 3},
-    {"symbol": "^N225", "name": "日经225", "category": "亚太", "decimals": 2},
-    {"symbol": "^HSI", "name": "恒生指数", "category": "亚太", "decimals": 2},
-    {"symbol": "^KS200", "name": "KOSPI 200", "category": "亚太", "decimals": 2},
-    {"symbol": "^GSPC", "name": "标普500", "category": "美股", "decimals": 2},
-    {"symbol": "^FTSE", "name": "富时100", "category": "欧洲", "decimals": 2},
-    {"symbol": "^GDAXI", "name": "DAX 40", "category": "欧洲", "decimals": 2},
-    {"symbol": "^FCHI", "name": "CAC 40", "category": "欧洲", "decimals": 2},
-    {"symbol": "^STOXX50E", "name": "Euro Stoxx 50", "category": "欧洲", "decimals": 2},
-    {"symbol": "^TWII", "name": "台湾加权", "category": "亚太", "decimals": 2},
-    {"symbol": "^BSESN", "name": "印度Sensex", "category": "亚太", "decimals": 2},
-    {"symbol": "^AXJO", "name": "澳洲200", "category": "亚太", "decimals": 2},
-    {"symbol": "^KS11", "name": "韩国综合", "category": "亚太", "decimals": 2},
+EASTMONEY_TICKERS = [
+    {"symbol": "1.000001", "name": "上证综指", "category": "亚太", "decimals": 2, "scale": 100},
+    {"symbol": "100.DJIA", "name": "道琼斯", "category": "美股", "decimals": 2, "scale": 100},
+    {"symbol": "100.NDX", "name": "纳斯达克", "category": "美股", "decimals": 2, "scale": 100},
+    {"symbol": "105.NVDA", "name": "英伟达", "category": "美股", "decimals": 2, "scale": 1000},
+    {"symbol": "101.GC00Y", "name": "COMEX黄金", "category": "商品", "decimals": 2, "scale": 10},
+    {"symbol": "101.SI00Y", "name": "COMEX白银", "category": "商品", "decimals": 3, "scale": 1000},
+    {"symbol": "101.HG00Y", "name": "COMEX铜", "category": "商品", "decimals": 4, "scale": 10000},
+    {"symbol": "102.CL00Y", "name": "WTI原油", "category": "商品", "decimals": 2, "scale": 100},
+    {"symbol": "133.USDCNH", "name": "美元/人民币", "category": "外汇", "decimals": 4, "scale": 10000},
+    {"symbol": "119.USDJPY", "name": "美元/日元", "category": "外汇", "decimals": 3, "scale": 10000},
+    {"symbol": "100.N225", "name": "日经225", "category": "亚太", "decimals": 2, "scale": 100},
+    {"symbol": "100.HSI", "name": "恒生指数", "category": "亚太", "decimals": 2, "scale": 100},
+    {"symbol": "100.KS11", "name": "韩国综合", "category": "亚太", "decimals": 2, "scale": 100},
+    {"symbol": "100.SPX", "name": "标普500", "category": "美股", "decimals": 2, "scale": 100},
+    {"symbol": "100.FTSE", "name": "富时100", "category": "欧洲", "decimals": 2, "scale": 100},
+    {"symbol": "100.GDAXI", "name": "DAX 40", "category": "欧洲", "decimals": 2, "scale": 100},
+    {"symbol": "100.FCHI", "name": "CAC 40", "category": "欧洲", "decimals": 2, "scale": 100},
+    {"symbol": "100.TWII", "name": "台湾加权", "category": "亚太", "decimals": 2, "scale": 100},
+    {"symbol": "100.SENSEX", "name": "印度Sensex", "category": "亚太", "decimals": 2, "scale": 100},
+    {"symbol": "100.AS51", "name": "澳洲200", "category": "亚太", "decimals": 2, "scale": 100},
 ]
 
 def get_random_ua():
@@ -503,29 +501,50 @@ def fetch_weather():
         with open("./public/weather.txt", "w", encoding="utf-8") as f: f.write(f"{emoji} {temp}°C")
     except Exception as e: print(f"[天气引擎] 失败: {e}")
 
-# ================= 引擎 5：行情条 (Yahoo Finance) =================
+# ================= 引擎 5：行情条 (EastMoney) =================
 def fetch_ticker():
-    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][行情引擎] 开始同步统一行情源...")
+    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][行情引擎] 开始同步统一行情源(东方财富)...")
     ticker_list = []
     failed_symbols = []
-    spark_snapshots = {}
 
+    secids = ",".join([c["symbol"] for c in EASTMONEY_TICKERS])
+    url = f"https://push2.eastmoney.com/api/qt/ulist.np/get?secids={secids}&fields=f2,f3,f12,f14,f18"
+    
     try:
-        spark_snapshots = fetch_yahoo_spark_snapshots(YAHOO_TICKERS)
+        headers = {"User-Agent": get_random_ua()}
+        resp = HTTP_SESSION.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        data = parse_json_response(resp, "EastMoney Ticker")
+        diff = data.get("data", {}).get("diff", [])
+        
+        result_map = {item.get('f12'): item for item in diff if item.get('f12')}
+        
+        for config in EASTMONEY_TICKERS:
+            symbol_id = config["symbol"].split(".")[-1]
+            item = result_map.get(symbol_id)
+            if not item:
+                failed_symbols.append(config["name"])
+                continue
+                
+            scale = config.get("scale", 100)
+            price = item.get("f2")
+            previous_close = item.get("f18")
+            
+            if not price or not previous_close:
+                failed_symbols.append(config["name"])
+                continue
+                
+            try:
+                price_val = float(price) / scale
+                previous_close_val = float(previous_close) / scale
+            except ValueError:
+                failed_symbols.append(config["name"])
+                continue
+            
+            ticker_list.append(build_ticker_entry(config, price_val, previous_close_val))
+            
     except Exception as e:
-        print(f"⚠️ [行情引擎] Yahoo spark 批量抓取失败，将回退单标的: {e}")
-
-    for config in YAHOO_TICKERS:
-        try:
-            snapshot = spark_snapshots.get(config["symbol"])
-            if snapshot:
-                ticker_list.append(build_ticker_entry(config, snapshot.get("price"), snapshot.get("previous_close")))
-            else:
-                ticker_list.append(fetch_yahoo_chart_snapshot(config))
-                time.sleep(0.15)
-        except Exception as e:
-            failed_symbols.append(f"{config['symbol']}({config['name']})")
-            print(f"⚠️ [行情引擎] {config['name']} 抓取失败: {e}")
+        print(f"⚠️ [行情引擎] 批量抓取失败: {e}")
 
     if ticker_list:
         atomic_save_json("./public/ticker.json", ticker_list)
