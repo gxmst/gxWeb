@@ -27,26 +27,26 @@ USER_AGENTS = [
 ]
 
 MARKET_TICKERS = [
-    {"symbol": "shcomp", "name": "上证综指", "category": "亚太", "decimals": 2, "providers": ["twelvedata", "sina"], "symbols": {"twelvedata": "SHCOMP", "sina": "s_sh000001"}},
-    {"symbol": "dji", "name": "道琼斯", "category": "美股", "decimals": 2, "providers": ["twelvedata", "sina"], "symbols": {"twelvedata": "DJI", "sina": "gb_dji"}},
-    {"symbol": "ixic", "name": "纳斯达克", "category": "美股", "decimals": 2, "providers": ["twelvedata", "sina"], "symbols": {"twelvedata": "IXIC", "sina": "gb_ixic"}},
-    {"symbol": "nvda", "name": "英伟达", "category": "美股", "decimals": 2, "providers": ["twelvedata", "sina"], "symbols": {"twelvedata": "NVDA", "sina": "gb_nvda"}},
-    {"symbol": "gc00y", "name": "COMEX黄金", "category": "商品", "decimals": 2, "providers": ["twelvedata", "sina"], "symbols": {"twelvedata": "GC00Y", "sina": "hf_GC"}},
-    {"symbol": "si00y", "name": "COMEX白银", "category": "商品", "decimals": 3, "providers": ["twelvedata"], "symbols": {"twelvedata": "SI00Y"}},
-    {"symbol": "hg00y", "name": "COMEX铜", "category": "商品", "decimals": 4, "providers": ["twelvedata"], "symbols": {"twelvedata": "HG00Y"}},
-    {"symbol": "cl00y", "name": "WTI原油", "category": "商品", "decimals": 2, "providers": ["twelvedata"], "symbols": {"twelvedata": "CL00Y"}},
-    {"symbol": "usdcny", "name": "美元/人民币", "category": "外汇", "decimals": 4, "providers": ["twelvedata", "sina"], "symbols": {"twelvedata": "USD/CNY", "sina": "fx_susdcny"}},
-    {"symbol": "usdjpy", "name": "美元/日元", "category": "外汇", "decimals": 3, "providers": ["twelvedata", "sina"], "symbols": {"twelvedata": "USD/JPY", "sina": "fx_susdjpy"}},
-    {"symbol": "n225", "name": "日经225", "category": "亚太", "decimals": 2, "providers": ["twelvedata"], "symbols": {"twelvedata": "N225"}},
-    {"symbol": "hsi", "name": "恒生指数", "category": "亚太", "decimals": 2, "providers": ["twelvedata", "sina"], "symbols": {"twelvedata": "HSI", "sina": "rt_hkHSI"}},
-    {"symbol": "kospi200", "name": "KOSPI 200", "category": "亚太", "decimals": 2, "providers": ["twelvedata"], "symbols": {"twelvedata": "KOSPI200"}},
-    {"symbol": "spx", "name": "标普500", "category": "美股", "decimals": 2, "providers": ["twelvedata", "sina"], "symbols": {"twelvedata": "SPX", "sina": "gb_inx"}},
-    {"symbol": "ftse", "name": "富时100", "category": "欧洲", "decimals": 2, "providers": ["twelvedata"], "symbols": {"twelvedata": "FTSE"}},
-    {"symbol": "gdaxi", "name": "DAX 40", "category": "欧洲", "decimals": 2, "providers": ["twelvedata"], "symbols": {"twelvedata": "GDAXI"}},
-    {"symbol": "fchi", "name": "CAC 40", "category": "欧洲", "decimals": 2, "providers": ["twelvedata"], "symbols": {"twelvedata": "FCHI"}},
-    {"symbol": "twii", "name": "台湾加权", "category": "亚太", "decimals": 2, "providers": ["twelvedata"], "symbols": {"twelvedata": "TWII"}},
-    {"symbol": "sensex", "name": "印度Sensex", "category": "亚太", "decimals": 2, "providers": ["twelvedata"], "symbols": {"twelvedata": "SENSEX"}},
-    {"symbol": "as51", "name": "澳洲200", "category": "亚太", "decimals": 2, "providers": ["twelvedata"], "symbols": {"twelvedata": "AS51"}},
+    {"symbol": "shcomp", "name": "上证综指", "category": "亚太", "decimals": 2, "sina": "s_sh000001"},
+    {"symbol": "dji", "name": "道琼斯", "category": "美股", "decimals": 2, "sina": "gb_dji"},
+    {"symbol": "ixic", "name": "纳斯达克", "category": "美股", "decimals": 2, "sina": "gb_ixic"},
+    {"symbol": "nvda", "name": "英伟达", "category": "美股", "decimals": 2, "sina": "gb_nvda"},
+    {"symbol": "gc00y", "name": "COMEX黄金", "category": "商品", "decimals": 2, "sina": "hf_GC"},
+    {"symbol": "si00y", "name": "COMEX白银", "category": "商品", "decimals": 3, "sina": "hf_SI"},
+    {"symbol": "hg00y", "name": "COMEX铜", "category": "商品", "decimals": 4, "sina": "hf_HG"},
+    {"symbol": "cl00y", "name": "WTI原油", "category": "商品", "decimals": 2, "sina": "hf_CL"},
+    {"symbol": "usdcny", "name": "美元/人民币", "category": "外汇", "decimals": 4, "sina": "fx_susdcny"},
+    {"symbol": "usdjpy", "name": "美元/日元", "category": "外汇", "decimals": 3, "sina": "fx_susdjpy"},
+    {"symbol": "n225", "name": "日经225", "category": "亚太", "decimals": 2, "sina": "b_NIKKEI225"},
+    {"symbol": "hsi", "name": "恒生指数", "category": "亚太", "decimals": 2, "sina": "rt_hkHSI"},
+    {"symbol": "kospi200", "name": "KOSPI 200", "category": "亚太", "decimals": 2, "sina": "b_KS200F"},
+    {"symbol": "spx", "name": "标普500", "category": "美股", "decimals": 2, "sina": "gb_inx"},
+    {"symbol": "ftse", "name": "富时100", "category": "欧洲", "decimals": 2, "sina": "b_FTSE"},
+    {"symbol": "gdaxi", "name": "DAX 40", "category": "欧洲", "decimals": 2, "sina": "b_DAX"},
+    {"symbol": "fchi", "name": "CAC 40", "category": "欧洲", "decimals": 2, "sina": "b_CAC"},
+    {"symbol": "twii", "name": "台湾加权", "category": "亚太", "decimals": 2, "sina": "b_TWSE"},
+    {"symbol": "sensex", "name": "印度Sensex", "category": "亚太", "decimals": 2, "sina": "b_SENSEX"},
+    {"symbol": "as51", "name": "澳洲200", "category": "亚太", "decimals": 2, "sina": "b_AS51"},
 ]
 
 def get_random_ua():
@@ -94,7 +94,7 @@ def build_ticker_entry(config, price, previous_close, source=None):
         "symbol": config["symbol"],
         "change": f"{change_pct:+.2f}%",
         "category": config["category"],
-        "source": source or config.get("providers", ["Unknown"])[0]
+        "source": source or "Sina"
     }
 
 def atomic_save_json(path, data):
@@ -441,112 +441,33 @@ def fetch_weather():
         with open("./public/weather.txt", "w", encoding="utf-8") as f: f.write(f"{emoji} {temp}°C")
     except Exception as e: print(f"[天气引擎] 失败: {e}")
 
-# ================= 引擎 5：行情条 (多源 Provider Chain) =================
+# ================= 引擎 5：行情条 (Sina) =================
 TICKER_FILE = "./public/ticker.json"
 TICKER_STATUS_FILE = "./public/ticker-status.json"
 TICKER_RETRY_MAX = 3
 TICKER_RETRY_BACKOFF = [1, 2, 4]
-TWELVEDATA_API_KEY = os.environ.get("TWELVEDATA_API_KEY", "").strip()
-TWELVEDATA_INTERVAL = 2700
 
 
-def _fetch_twelvedata_quotes(configs):
+def _fetch_sina_all(configs):
     result_map = {}
     if not configs:
         return result_map
-    if not TWELVEDATA_API_KEY:
-        print("  ⚠️ [行情引擎] TWELVEDATA_API_KEY 未设置，跳过 Twelve Data")
-        return result_map
 
-    symbol_to_config = {}
+    sina_entries = []
     for cfg in configs:
-        td_sym = cfg["symbols"].get("twelvedata")
-        if td_sym:
-            symbol_to_config[td_sym] = cfg
-
-    all_symbols = list(symbol_to_config.keys())
-    batch_size = 8
-    batches = [all_symbols[i:i + batch_size] for i in range(0, len(all_symbols), batch_size)]
-
-    for batch_idx, batch_syms in enumerate(batches):
-        symbols_str = ",".join(batch_syms)
-        url = f"https://api.twelvedata.com/quote?symbol={symbols_str}&apikey={TWELVEDATA_API_KEY}"
-
-        for attempt in range(TICKER_RETRY_MAX):
-            try:
-                resp = HTTP_SESSION.get(url, headers={"User-Agent": get_random_ua()}, timeout=20)
-                if resp.status_code in (429, 500, 502, 503, 504):
-                    raise requests.HTTPError(f"HTTP {resp.status_code}", response=resp)
-                resp.raise_for_status()
-                data = parse_json_response(resp, "Twelve Data batch")
-
-                results_list = []
-                if "symbol" in data:
-                    results_list = [data]
-                elif "code" in data and data.get("code") != 0:
-                    raise ValueError(f"Twelve Data API error: {data.get('message', 'unknown')}")
-                else:
-                    for key, val in data.items():
-                        if isinstance(val, dict) and "symbol" in val:
-                            results_list.append(val)
-
-                for item in results_list:
-                    sym = item.get("symbol", "")
-                    cfg = symbol_to_config.get(sym)
-                    if not cfg:
-                        continue
-                    price = item.get("close") or item.get("price")
-                    pct = item.get("percent_change")
-                    prev = item.get("previous_close")
-                    if price and pct is not None and prev:
-                        try:
-                            p = float(price)
-                            pc = float(prev)
-                            if p > 0 and pc > 0:
-                                result_map[cfg["symbol"]] = build_ticker_entry(cfg, p, pc, source="TwelveData")
-                        except (ValueError, TypeError):
-                            pass
-                break
-
-            except (requests.HTTPError, requests.Timeout, requests.ConnectionError) as e:
-                resp_obj = getattr(e, 'response', None)
-                sc = resp_obj.status_code if resp_obj is not None else "timeout"
-                wait = TICKER_RETRY_BACKOFF[attempt] if attempt < len(TICKER_RETRY_BACKOFF) else TICKER_RETRY_BACKOFF[-1]
-                print(f"  ⚠️ [行情引擎] Twelve Data 批次 {batch_idx+1} HTTP {sc}，第 {attempt+1} 次重试，等待 {wait}s...")
-                time.sleep(wait)
-            except (ValueError, JSONDecodeError) as e:
-                wait = TICKER_RETRY_BACKOFF[attempt] if attempt < len(TICKER_RETRY_BACKOFF) else TICKER_RETRY_BACKOFF[-1]
-                print(f"  ⚠️ [行情引擎] Twelve Data 批次 {batch_idx+1} 解析错误: {e}，第 {attempt+1} 次重试，等待 {wait}s...")
-                time.sleep(wait)
-            except Exception as e:
-                print(f"  ❌ [行情引擎] Twelve Data 批次 {batch_idx+1} 未知错误: {type(e).__name__}: {e}")
-                break
-
-        if batch_idx < len(batches) - 1:
-            time.sleep(1.0)
-
-    return result_map
-
-
-def _fetch_sina_for_configs(configs):
-    result_map = {}
-    if not configs:
-        return result_map
-    sina_configs = []
-    for cfg in configs:
-        sina_sym = cfg["symbols"].get("sina")
+        sina_sym = cfg.get("sina")
         if sina_sym:
-            sina_configs.append({"symbol": sina_sym, "canonical": cfg["symbol"], "name": cfg["name"],
-                                 "category": cfg["category"], "decimals": cfg["decimals"]})
+            sina_entries.append({"symbol": sina_sym, "canonical": cfg["symbol"], "name": cfg["name"],
+                                "category": cfg["category"], "decimals": cfg["decimals"]})
 
-    if not sina_configs:
+    if not sina_entries:
         return result_map
 
     try:
-        symbols = ",".join([c["symbol"] for c in sina_configs])
+        symbols = ",".join([c["symbol"] for c in sina_entries])
         url = f"http://hq.sinajs.cn/list={symbols}"
         headers = {"Referer": "http://finance.sina.com.cn/", "User-Agent": get_random_ua()}
-        resp = HTTP_SESSION.get(url, headers=headers, timeout=10)
+        resp = HTTP_SESSION.get(url, headers=headers, timeout=15)
         resp.raise_for_status()
 
         sina_raw = {}
@@ -562,14 +483,14 @@ def _fetch_sina_for_configs(configs):
                 continue
             sina_raw[key] = data
 
-        for sc in sina_configs:
-            raw = sina_raw.get(sc["symbol"])
+        for entry in sina_entries:
+            raw = sina_raw.get(entry["symbol"])
             if not raw:
                 continue
             try:
                 p = None
                 pc = None
-                sym = sc["symbol"]
+                sym = entry["symbol"]
 
                 if sym.startswith("gb_") and len(raw) > 26:
                     p = float(raw[1])
@@ -589,14 +510,10 @@ def _fetch_sina_for_configs(configs):
                     pc = p - change_val
                 elif sym.startswith("b_"):
                     continue
-                else:
-                    if len(raw) > 3:
-                        p = float(raw[1])
-                        pc = float(raw[3])
 
                 if p and pc and p > 0 and pc > 0:
-                    cfg_full = {"symbol": sc["canonical"], "name": sc["name"], "category": sc["category"], "decimals": sc["decimals"]}
-                    result_map[sc["canonical"]] = build_ticker_entry(cfg_full, p, pc, source="Sina")
+                    cfg_full = {"symbol": entry["canonical"], "name": entry["name"], "category": entry["category"], "decimals": entry["decimals"]}
+                    result_map[entry["canonical"]] = build_ticker_entry(cfg_full, p, pc, source="Sina")
             except (ValueError, TypeError, IndexError):
                 pass
 
@@ -606,13 +523,12 @@ def _fetch_sina_for_configs(configs):
     return result_map
 
 
-def fetch_ticker(try_td=True):
+def fetch_ticker():
     ts_str = get_beijing_time().strftime('%H:%M:%S')
-    print(f"[{ts_str}][行情引擎] 开始同步行情 (多源模式)...")
+    print(f"[{ts_str}][行情引擎] 开始同步行情...")
 
     total_count = len(MARKET_TICKERS)
     result_map = {}
-    provider_stats = {"TwelveData": 0, "Sina": 0}
     stale_used = []
 
     old_ticker_map = {}
@@ -626,31 +542,13 @@ def fetch_ticker(try_td=True):
         except Exception:
             pass
 
-    # 1. Twelve Data 主源 (按间隔调用，节省 credit)
-    if try_td and TWELVEDATA_API_KEY:
-        td_configs = [c for c in MARKET_TICKERS if "twelvedata" in c.get("providers", [])]
-        print(f"  [行情引擎] Twelve Data: {len(td_configs)} 标的")
-        td_results = _fetch_twelvedata_quotes(td_configs)
-        for sym, entry in td_results.items():
-            if sym not in result_map:
-                result_map[sym] = entry
-                provider_stats["TwelveData"] += 1
-    elif not TWELVEDATA_API_KEY:
-        pass
-    else:
-        print(f"  [行情引擎] Twelve Data: 跳过（间隔 {TWELVEDATA_INTERVAL}s 未到）")
+    # 1. Sina 抓取
+    sina_results = _fetch_sina_all(MARKET_TICKERS)
+    for sym, entry in sina_results.items():
+        result_map[sym] = entry
+    sina_count = len(sina_results)
 
-    # 2. Sina 补齐：Twelve Data 没拿到的、且有 sina provider 的标的
-    td_failed = [c for c in MARKET_TICKERS if c["symbol"] not in result_map and "sina" in c.get("providers", [])]
-    if td_failed:
-        print(f"  [行情引擎] Sina 补齐: {len(td_failed)} 标的")
-        sina_results = _fetch_sina_for_configs(td_failed)
-        for sym, entry in sina_results.items():
-            if sym not in result_map:
-                result_map[sym] = entry
-                provider_stats["Sina"] += 1
-
-    # 3. 逐标的沿用旧值
+    # 2. 逐标的沿用旧值
     for config in MARKET_TICKERS:
         sym = config["symbol"]
         if sym not in result_map and sym in old_ticker_map:
@@ -658,14 +556,12 @@ def fetch_ticker(try_td=True):
             stale_used.append(config["name"])
 
     unique_count = len(result_map)
-    threshold = max(10, int(total_count * 0.7))
-    primary_count = provider_stats["TwelveData"]
-    fallback_count = provider_stats["Sina"]
+    threshold = max(10, int(total_count * 0.5))
 
-    # 4. 状态判定与写入
+    # 3. 状态判定与写入
     if unique_count >= threshold:
         atomic_save_json(TICKER_FILE, list(result_map.values()))
-        if fallback_count > 0 or len(stale_used) > 0:
+        if len(stale_used) > 0:
             status = "degraded"
         else:
             status = "ok"
@@ -678,21 +574,21 @@ def fetch_ticker(try_td=True):
             status = "failed"
             print(f"  ⚠️ [行情引擎] 本轮仅 {unique_count} 条且无历史文件，跳过写入")
 
-    # 5. 写入状态文件
+    # 4. 写入状态文件
     status_payload = {
         "updated_at": int(get_beijing_time().timestamp()),
         "status": status,
-        "primary_provider": "twelvedata",
-        "primary_success_count": primary_count,
-        "fallback_success_count": fallback_count,
+        "primary_provider": "sina",
+        "primary_success_count": sina_count,
+        "fallback_success_count": 0,
         "stale_used_count": len(stale_used),
         "final_count": unique_count,
         "total_count": total_count
     }
     atomic_save_json(TICKER_STATUS_FILE, status_payload)
 
-    # 6. 日志汇总
-    print(f"  📊 [行情引擎] 总标的: {total_count} | TwelveData: {primary_count} | Sina: {fallback_count} | 沿用旧值: {len(stale_used)} | 最终: {unique_count} | 状态: {status}")
+    # 5. 日志汇总
+    print(f"  📊 [行情引擎] 总标的: {total_count} | Sina: {sina_count} | 沿用旧值: {len(stale_used)} | 最终: {unique_count} | 状态: {status}")
     if stale_used:
         print(f"  ℹ️ [行情引擎] 沿用旧值: {', '.join(stale_used)}")
 
@@ -857,7 +753,6 @@ def main():
     last_rss_time = 0
     last_weather_time = 0
     last_tech_time = 0
-    last_td_time = 0
     
     while True:
         try:
@@ -878,11 +773,8 @@ def main():
             # 3. 扫描壁纸列表 (每 60 秒)
             update_wallpaper_list()
                 
-            # 4. 行情逻辑 (每 60 秒 Sina + 每 45 分钟 Twelve Data)
-            try_td = (now_ts - last_td_time >= TWELVEDATA_INTERVAL)
-            fetch_ticker(try_td=try_td)
-            if try_td:
-                last_td_time = now_ts
+            # 4. 行情逻辑 (每 60 秒)
+            fetch_ticker()
             
             # 5. RSS 逻辑 (每 15 分钟)
             if now_ts - last_rss_time >= 1800 or not global_rss_news:
