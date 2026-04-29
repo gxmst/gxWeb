@@ -927,6 +927,28 @@
                     }
                 }
 
+                try {
+                    const tsResp = await fetch('./ticker-status.json?t=' + Date.now());
+                    const ts = await tsResp.json();
+                    if (ts && ts.status) {
+                        if (ts.status === 'failed') {
+                            statusText.innerText = '行情失败';
+                            statusText.className = 'text-[10px] font-bold text-red-400';
+                            statusPing.className = 'hidden';
+                            statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-red-500';
+                            statusDot.parentElement.parentElement.title = '行情源失败，当前显示上次成功数据';
+                        } else if (ts.status === 'degraded') {
+                            statusText.innerText = '降级';
+                            statusText.className = 'text-[10px] font-bold text-amber-400';
+                            statusPing.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75';
+                            statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500';
+                            statusDot.parentElement.parentElement.title = '行情源降级，部分使用备用源';
+                        } else {
+                            statusDot.parentElement.parentElement.title = '行情源正常';
+                        }
+                    }
+                } catch { /* ticker-status 不可用时保持原状 */ }
+
                 const newsList = (data.news_list || []).map(item => {
                     const normalized = { ...item };
                     if (!normalized.category) {
