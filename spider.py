@@ -74,21 +74,6 @@ GITHUB_CACHE_PATH = "./public/github-tech-cache-v2.json"
 def format_market_price(price, decimals):
     return format(price, f".{decimals}f")
 
-def get_last_valid_close(result):
-    indicators = result.get("indicators", {})
-    quotes = indicators.get("quote", [])
-    if not quotes:
-        return None
-
-    closes = quotes[0].get("close", [])
-    for value in reversed(closes[:-1]):
-        if value is not None:
-            return value
-    for value in reversed(closes):
-        if value is not None:
-            return value
-    return None
-
 def parse_json_response(response, context):
     try:
         return response.json()
@@ -109,53 +94,8 @@ def build_ticker_entry(config, price, previous_close):
         "symbol": config["symbol"],
         "change": f"{change_pct:+.2f}%",
         "category": config["category"],
-        "source": "Yahoo"
+        "source": config.get("source", "Unknown")
     }
-
-def fetch_yahoo_spark_snapshots(configs):
-    if not configs:
-        return {}
-
-    symbols = ",".join(config["symbol"] for config in configs)
-    url = f"https://query1.finance.yahoo.com/v7/finance/spark?symbols={requests.utils.quote(symbols, safe='=,^,')}&range=5d&interval=1d"
-    headers = {"User-Agent": get_random_ua()}
-    response = HTTP_SESSION.get(url, headers=headers, timeout=20)
-    response.raise_for_status()
-    payload = parse_json_response(response, "Yahoo spark")
-    result_map = ((payload.get("spark") or {}).get("result")) or []
-
-    snapshots = {}
-    for item in result_map:
-        symbol = item.get("symbol")
-        response_items = item.get("response") or []
-        if not symbol or not response_items:
-            continue
-
-        result = response_items[0]
-        meta = result.get("meta", {})
-        price = meta.get("regularMarketPrice")
-        previous_close = meta.get("previousClose") or meta.get("chartPreviousClose") or get_last_valid_close(result)
-        snapshots[symbol] = {"price": price, "previous_close": previous_close}
-
-    return snapshots
-
-def fetch_yahoo_chart_snapshot(config):
-    symbol = config["symbol"]
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{requests.utils.quote(symbol, safe='')}?interval=1d&range=5d"
-    headers = {"User-Agent": get_random_ua()}
-    response = HTTP_SESSION.get(url, headers=headers, timeout=15)
-    response.raise_for_status()
-    payload = parse_json_response(response, f"Yahoo chart {symbol}")
-    result_list = (payload.get("chart") or {}).get("result") or []
-    if not result_list:
-        error_info = (payload.get("chart") or {}).get("error") or {}
-        raise ValueError(f"{symbol} 无结果: {error_info}")
-
-    result = result_list[0]
-    meta = result.get("meta", {})
-    price = meta.get("regularMarketPrice")
-    previous_close = meta.get("previousClose") or meta.get("chartPreviousClose") or get_last_valid_close(result)
-    return build_ticker_entry(config, price, previous_close)
 
 def atomic_save_json(path, data):
     tmp_path = f"{path}.tmp"
@@ -502,98 +442,247 @@ def fetch_weather():
     except Exception as e: print(f"[天气引擎] 失败: {e}")
 
 # ================= 引擎 5：行情条 (混合数据源) =================
-def fetch_ticker():
-    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][行情引擎] 开始同步统一行情源...")
-    ticker_list = []
-    failed_symbols = []
+TICKER_BATCH_SIZE = 5
+TICKER_BATCH_SLEEP = (0.6, 1.2)
+TICKER_RETRY_MAX = 3
+TICKER_RETRY_BACKOFF = [1, 2, 4]
+TICKER_FILE = "./public/ticker.json"
 
+SINA_FALLBACK_CONFIGS = [
+    {"symbol": "s_sh000001", "canonical_symbol": "1.000001", "name": "上证综指", "category": "亚太", "decimals": 2, "source": "Sina"},
+    {"symbol": "gb_dji", "canonical_symbol": "100.DJIA", "name": "道琼斯", "category": "美股", "decimals": 2, "source": "Sina"},
+    {"symbol": "gb_nvda", "canonical_symbol": "105.NVDA", "name": "英伟达", "category": "美股", "decimals": 2, "source": "Sina"},
+    {"symbol": "b_NIKKEI225", "canonical_symbol": "100.N225", "name": "日经225", "category": "亚太", "decimals": 2, "source": "Sina"},
+    {"symbol": "rt_hkHSI", "canonical_symbol": "100.HSI", "name": "恒生指数", "category": "亚太", "decimals": 2, "source": "Sina"},
+    {"symbol": "gb_inx", "canonical_symbol": "100.SPX", "name": "标普500", "category": "美股", "decimals": 2, "source": "Sina"},
+    {"symbol": "fx_susdjpy", "canonical_symbol": "119.USDJPY", "name": "美元/日元", "category": "外汇", "decimals": 3, "source": "Sina"},
+    {"symbol": "hf_GC", "canonical_symbol": "101.GC00Y", "name": "COMEX黄金", "category": "商品", "decimals": 2, "source": "Sina"},
+]
+
+
+def _fetch_eastmoney_batch(batch_configs):
+    secids = ",".join([c["symbol"] for c in batch_configs])
+    url = f"https://push2.eastmoney.com/api/qt/ulist.np/get?secids={secids}&fields=f2,f3,f12,f14,f18"
+    headers = {"User-Agent": get_random_ua(), "Connection": "close"}
+    resp = HTTP_SESSION.get(url, headers=headers, timeout=15)
+    if resp.status_code in (502, 503, 504):
+        raise requests.HTTPError(f"HTTP {resp.status_code}", response=resp)
+    resp.raise_for_status()
+    data = parse_json_response(resp, "EastMoney batch")
+    diff = data.get("data", {}).get("diff")
+    if diff is None:
+        raise ValueError("EastMoney 返回 data.diff 为 null")
+    return diff
+
+
+def _fetch_eastmoney_batch_with_retry(batch_configs, batch_idx):
+    for attempt in range(TICKER_RETRY_MAX):
+        try:
+            diff = _fetch_eastmoney_batch(batch_configs)
+            return diff
+        except (requests.HTTPError, requests.Timeout, requests.ConnectionError) as e:
+            resp_obj = getattr(e, 'response', None)
+            status_code = resp_obj.status_code if resp_obj is not None else "timeout"
+            wait = TICKER_RETRY_BACKOFF[attempt] if attempt < len(TICKER_RETRY_BACKOFF) else TICKER_RETRY_BACKOFF[-1]
+            print(f"  ⚠️ [行情引擎] 批次 {batch_idx} HTTP 错误 ({status_code})，第 {attempt+1} 次重试，等待 {wait}s...")
+            time.sleep(wait)
+        except (ValueError, JSONDecodeError) as e:
+            wait = TICKER_RETRY_BACKOFF[attempt] if attempt < len(TICKER_RETRY_BACKOFF) else TICKER_RETRY_BACKOFF[-1]
+            print(f"  ⚠️ [行情引擎] 批次 {batch_idx} JSON 解析错误: {e}，第 {attempt+1} 次重试，等待 {wait}s...")
+            time.sleep(wait)
+        except Exception as e:
+            print(f"  ❌ [行情引擎] 批次 {batch_idx} 未知错误: {type(e).__name__}: {e}")
+            return None
+    print(f"  ❌ [行情引擎] 批次 {batch_idx} 达到最大重试次数，放弃")
+    return None
+
+
+def _fetch_sina_tickers(configs):
+    results = []
+    failed = []
+    if not configs:
+        return results, failed
+    try:
+        symbols = ",".join([c["symbol"] for c in configs])
+        url = f"http://hq.sinajs.cn/list={symbols}"
+        headers = {"Referer": "http://finance.sina.com.cn/", "User-Agent": get_random_ua()}
+        resp = HTTP_SESSION.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+
+        sina_results = {}
+        for line in resp.text.splitlines():
+            if not line or "=" not in line:
+                continue
+            key = line.split("=")[0].split("_str_")[-1]
+            data_str = line.split("=")[1].strip('";')
+            if not data_str:
+                continue
+            data = data_str.split(",")
+            if len(data) < 4:
+                continue
+            if key.startswith("gb_") and len(data) > 26:
+                sina_results[key] = {"price": data[1], "previous_close": data[26]}
+            elif key.startswith("fx_") and len(data) > 3:
+                sina_results[key] = {"price": data[1], "previous_close": data[3]}
+            elif key.startswith("hf_") and len(data) > 8:
+                sina_results[key] = {"price": data[0], "previous_close": data[7]}
+            elif key.startswith("rt_hk") and len(data) > 6:
+                sina_results[key] = {"price": data[6], "previous_close": data[3]}
+            elif key.startswith("s_") and len(data) > 3:
+                try:
+                    price_val = float(data[1])
+                    change_val = float(data[2])
+                    sina_results[key] = {"price": data[1], "previous_close": str(price_val - change_val)}
+                except (ValueError, TypeError):
+                    sina_results[key] = {"price": data[1], "previous_close": data[1]}
+            elif key.startswith("b_") and len(data) > 1:
+                sina_results[key] = {"price": data[1], "previous_close": None}
+            else:
+                sina_results[key] = {"price": data[1], "previous_close": data[3] if len(data) > 3 else data[1]}
+
+        for config in configs:
+            sym = config["symbol"]
+            res = sina_results.get(sym)
+            if res:
+                try:
+                    p = float(res["price"])
+                    pc = float(res["previous_close"])
+                    if p > 0 and pc > 0:
+                        results.append(build_ticker_entry(config, p, pc))
+                        continue
+                except (ValueError, TypeError):
+                    pass
+            failed.append(config["name"])
+    except Exception as e:
+        print(f"  ⚠️ [行情引擎] Sina 批量抓取异常: {type(e).__name__}: {e}")
+        for config in configs:
+            failed.append(config["name"])
+    return results, failed
+
+
+def _try_sina_fallback(em_failed_names, completed_symbols):
+    fallback_needed = []
+    sina_to_canonical = {}
+    for cfg in SINA_FALLBACK_CONFIGS:
+        if cfg["name"] in em_failed_names and cfg["canonical_symbol"] not in completed_symbols:
+            fallback_needed.append(cfg)
+            sina_to_canonical[cfg["symbol"]] = cfg["canonical_symbol"]
+    if not fallback_needed:
+        return [], []
+    print(f"  ℹ️ [行情引擎] 备用源(Sina) 尝试补齐 {len(fallback_needed)} 个核心标的: {', '.join(c['name'] for c in fallback_needed)}")
+    results, _ = _fetch_sina_tickers(fallback_needed)
+    for item in results:
+        canonical = sina_to_canonical.get(item["symbol"])
+        if canonical:
+            item["symbol"] = canonical
+    fallback_names = [r["name"] for r in results]
+    return results, fallback_names
+
+
+def fetch_ticker():
+    ts_str = get_beijing_time().strftime('%H:%M:%S')
+    print(f"[{ts_str}][行情引擎] 开始同步行情...")
+
+    total_count = len(MARKET_TICKERS)
     em_configs = [c for c in MARKET_TICKERS if c.get("source", "EastMoney") == "EastMoney"]
     sina_configs = [c for c in MARKET_TICKERS if c.get("source") == "Sina"]
 
-    # 1. 抓取东方财富 (批量)
-    if em_configs:
-        secids = ",".join([c["symbol"] for c in em_configs])
-        url = f"https://push2.eastmoney.com/api/qt/ulist.np/get?secids={secids}&fields=f2,f3,f12,f14,f18"
+    result_map = {}
+    fallback_used_names = []
+
+    # 0. 加载旧文件，用于逐标的回退
+    old_ticker_map = {}
+    if os.path.exists(TICKER_FILE):
         try:
-            headers = {"User-Agent": get_random_ua()}
-            resp = HTTP_SESSION.get(url, headers=headers, timeout=15)
-            resp.raise_for_status()
-            data = parse_json_response(resp, "EastMoney Ticker")
-            diff = data.get("data", {}).get("diff", [])
-            
-            result_map = {item.get('f12'): item for item in diff if item.get('f12')}
-            
-            for config in em_configs:
+            with open(TICKER_FILE, "r", encoding="utf-8") as f:
+                for item in json.load(f):
+                    sym = item.get("symbol")
+                    if sym:
+                        old_ticker_map[sym] = item
+        except Exception:
+            pass
+
+    # 1. 东方财富分批抓取
+    em_success_names = set()
+    em_failed_names = []
+    if em_configs:
+        batches = [em_configs[i:i + TICKER_BATCH_SIZE] for i in range(0, len(em_configs), TICKER_BATCH_SIZE)]
+        print(f"  [行情引擎] 东方财富: {len(em_configs)} 标的，分 {len(batches)} 批请求")
+        for idx, batch in enumerate(batches):
+            diff = _fetch_eastmoney_batch_with_retry(batch, idx + 1)
+            batch_map = {}
+            if diff is not None:
+                batch_map = {item.get('f12'): item for item in diff if item.get('f12')}
+
+            for config in batch:
                 symbol_id = config["symbol"].split(".")[-1]
-                item = result_map.get(symbol_id)
+                item = batch_map.get(symbol_id)
                 if not item:
-                    failed_symbols.append(config["name"])
+                    em_failed_names.append(config["name"])
                     continue
-                    
                 scale = config.get("scale", 100)
                 price = item.get("f2")
                 previous_close = item.get("f18")
-                
                 if not price or not previous_close:
-                    failed_symbols.append(config["name"])
+                    em_failed_names.append(config["name"])
                     continue
-                    
                 try:
                     price_val = float(price) / scale
                     previous_close_val = float(previous_close) / scale
-                except ValueError:
-                    failed_symbols.append(config["name"])
+                except (ValueError, TypeError):
+                    em_failed_names.append(config["name"])
                     continue
-                
-                ticker_list.append(build_ticker_entry(config, price_val, previous_close_val))
-        except Exception as e:
-            print(f"⚠️ [行情引擎] 东方财富批量抓取失败: {e}")
-            for config in em_configs:
-                failed_symbols.append(config["name"])
+                result_map[config["symbol"]] = build_ticker_entry(config, price_val, previous_close_val)
+                em_success_names.add(config["name"])
 
-    # 2. 抓取 Sina (批量后备)
+            if idx < len(batches) - 1:
+                time.sleep(random.uniform(*TICKER_BATCH_SLEEP))
+
+    # 2. Sina 常规标的
     if sina_configs:
-        try:
-            symbols = ",".join([c["symbol"] for c in sina_configs])
-            url = f"http://hq.sinajs.cn/list={symbols}"
-            headers = {"Referer": "http://finance.sina.com.cn/"}
-            resp = HTTP_SESSION.get(url, headers=headers, timeout=10)
-            resp.raise_for_status()
-            
-            sina_results = {}
-            for line in resp.text.splitlines():
-                if not line or "=" not in line: continue
-                key = line.split("=")[0].split("_str_")[-1]
-                data_str = line.split("=")[1].strip('";')
-                if not data_str: continue
-                data = data_str.split(",")
-                if len(data) < 4: continue
-                
-                if key.startswith("gb_") and len(data) > 26:
-                    sina_results[key] = {"price": data[1], "previous_close": data[26]}
-                elif key.startswith("fx_") and len(data) > 3:
-                    sina_results[key] = {"price": data[1], "previous_close": data[3]}
-                else:
-                    # Generic fallback
-                    sina_results[key] = {"price": data[1], "previous_close": data[3]}
-                    
-            for config in sina_configs:
-                sym = config["symbol"]
-                res = sina_results.get(sym)
-                if res and float(res["price"]) > 0:
-                    ticker_list.append(build_ticker_entry(config, float(res["price"]), float(res["previous_close"])))
-                else:
-                    failed_symbols.append(config["name"])
-        except Exception as e:
-            for config in sina_configs:
-                failed_symbols.append(config["name"])
-            print(f"⚠️ [行情引擎] Sina 批量抓取失败: {e}")
+        sina_fetched, sina_failed = _fetch_sina_tickers(sina_configs)
+        for item in sina_fetched:
+            result_map[item["symbol"]] = item
 
-    if ticker_list:
-        atomic_save_json("./public/ticker.json", ticker_list)
-        print(f"✅ [行情引擎] 已同步 {len(ticker_list)} 条行情。")
-    if failed_symbols:
-        print(f"⚠️ [行情引擎] 以下标的本轮未成功: {', '.join(failed_symbols)}")
+    em_success_count = len(em_success_names)
+
+    # 3. 备用源补齐：东方财富失败的核心标的
+    threshold = max(10, int(total_count * 0.7))
+    if em_success_count < threshold:
+        print(f"  ⚠️ [行情引擎] 东方财富成功 {em_success_count} 个，低于阈值 {threshold}，启动备用源...")
+        fallback_results, fallback_used_names = _try_sina_fallback(em_failed_names, set(result_map.keys()))
+        for item in fallback_results:
+            if item["symbol"] not in result_map:
+                result_map[item["symbol"]] = item
+
+    # 4. 逐标的回退：主源+备用源都没拿到的，沿用旧文件数据
+    stale_used = []
+    for config in MARKET_TICKERS:
+        sym = config["symbol"]
+        if sym not in result_map and sym in old_ticker_map:
+            result_map[sym] = old_ticker_map[sym]
+            stale_used.append(config["name"])
+
+    final_list = list(result_map.values())
+    final_count = len(final_list)
+    unique_count = len(result_map)
+
+    # 5. 阈值检查：基于唯一标的数
+    if unique_count >= threshold:
+        atomic_save_json(TICKER_FILE, final_list)
+        print(f"  ✅ [行情引擎] 本轮写入 {unique_count} 条 (阈值 {threshold})")
+    else:
+        if os.path.exists(TICKER_FILE):
+            print(f"  ⚠️ [行情引擎] 本轮仅 {unique_count} 条 (阈值 {threshold})，保留上次成功数据")
+        else:
+            print(f"  ⚠️ [行情引擎] 本轮仅 {unique_count} 条且无历史文件，跳过写入")
+
+    # 6. 日志汇总
+    print(f"  📊 [行情引擎] 总标的: {total_count} | 主源成功: {em_success_count} | 备用补齐: {len(fallback_used_names)} | 沿用旧值: {len(stale_used)} | 最终: {unique_count}")
+    if fallback_used_names:
+        print(f"  ℹ️ [行情引擎] 备用源补齐: {', '.join(fallback_used_names)}")
+    if stale_used:
+        print(f"  ℹ️ [行情引擎] 沿用旧值: {', '.join(stale_used)}")
 
 # ================= 主循环控制 =================
 def fetch_tech_news_legacy_2():
