@@ -740,7 +740,7 @@
 
         // ================== 3. 底部行情双行排版 ==================
 
-        const SPARKLINE_SYMBOLS = new Set(['dji', 'ixic', 'nvda', 'spx', 'gc00y', 'cl00y', 'hsi', 'shcomp']);
+        const SPARKLINE_MIN_POINTS = 3;
 
         function buildSparklineSVG(history, isUp) {
             if (!history || history.length < 2) return '';
@@ -769,7 +769,7 @@
                 if (container.children.length === 0) {
                     let html = '';
                     items.forEach(item => {
-                        const showSparkline = SPARKLINE_SYMBOLS.has(item.symbol) && item.price_history && item.price_history.length >= 2;
+                        const showSparkline = item.price_history && item.price_history.length >= SPARKLINE_MIN_POINTS;
                         const sparklineHtml = showSparkline ? `<span class="sparkline-container inline-flex items-center" data-symbol="${item.symbol}"></span>` : '';
                         html += `
                         <div class="flex flex-col justify-center min-w-max px-1.5 gap-0" data-symbol="${item.symbol}">
@@ -797,7 +797,7 @@
                         const isUp = !item.change.startsWith('-');
                         cEl.className = `text-[9px] font-semibold drop-shadow-md numeric change-val whitespace-nowrap ${isUp ? 'text-rose-400' : 'text-emerald-400'}`;
                         const sparkContainer = el.querySelector('.sparkline-container');
-                        if (sparkContainer && item.price_history && item.price_history.length >= 2) {
+                        if (sparkContainer && item.price_history && item.price_history.length >= SPARKLINE_MIN_POINTS) {
                             sparkContainer.innerHTML = buildSparklineSVG(item.price_history, isUp);
                         }
                     }
