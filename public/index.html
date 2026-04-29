@@ -539,18 +539,9 @@
 
         const canvas = document.getElementById('weatherCanvas');
         const ctx = canvas.getContext('2d');
-        let activeParticles = [];
-        let accumulatedParticles = [];
+        let particles = [];
         let animationId = null;
         let uiBounds = [];
-        let boundsFrameCount = 0;
-        let windX = 0;
-        let windTarget = 0;
-        let windChangeTimer = 0;
-
-        const RAIN_COUNT = 180;
-        const SNOW_ACTIVE_COUNT = 120;
-        const SNOW_MAX_ACCUMULATED = 300;
 
         function resizeCanvas() {
             canvas.width = window.innerWidth;
@@ -563,191 +554,122 @@
             const panel = document.getElementById('news-panel');
             const ticker = document.getElementById('bottom-ticker');
             uiBounds = [];
-            if (bar) { const r = bar.getBoundingClientRect(); uiBounds.push({ ...r, radius: 22 }); }
-            if (panel) { const r = panel.getBoundingClientRect(); uiBounds.push({ ...r, radius: 24 }); }
-            if (ticker) { const r = ticker.getBoundingClientRect(); uiBounds.push({ ...r, radius: 0 }); }
+            if (bar) uiBounds.push(bar.getBoundingClientRect());
+            if (panel) uiBounds.push(panel.getBoundingClientRect());
+            if (ticker) uiBounds.push(ticker.getBoundingClientRect());
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
-
-        function hitRoundedTop(x, y, bound) {
-            const r = bound.radius || 0;
-            if (x < bound.left || x > bound.right) return false;
-            if (y < bound.top - 4 || y > bound.top + 14) return false;
-            if (r === 0) return true;
-            const inLeft = x < bound.left + r;
-            const inRight = x > bound.right - r;
-            if (!inLeft && !inRight) return true;
-            const cx = inLeft ? bound.left + r : bound.right - r;
-            const cy = bound.top + r;
-            const dx = x - cx;
-            const dy = y - cy;
-            return (dx * dx + dy * dy) <= (r + 4) * (r + 4) && y <= cy;
-        }
 
         class WeatherParticle {
             constructor(type) { this.type = type; this.reset(); }
             reset() {
                 this.x = Math.random() * canvas.width;
-                this.y = Math.random() * (canvas.height + 200) - canvas.height;
-                this.speed = 0;
-                this.opacity = 0;
-                this.state = 'falling';
+                this.y = Math.random() * (canvas.height + 100) - canvas.height;
+                this.isLanded = false;
+                this.landedTime = 0;
+                this.isSplashing = false;
+                this.splashRadius = 0;
+                this.splashAlpha = 1;
+                this.isPuddled = false;
+                this.puddleAlpha = 0;
+                this.puddleWidth = 0;
 
                 if (this.type === 'rain') {
-                    this.speed = 12 + Math.random() * 5;
-                    this.len = 16 + Math.random() * 12;
-                    this.opacity = 0.25 + Math.random() * 0.25;
-                    this.lineWidth = 0.8 + Math.random() * 0.6;
-                    this.angle = 0.06 + Math.random() * 0.08;
-                    this.windDrift = (Math.random() - 0.5) * 0.15;
+                    this.speed = 15 + Math.random() * 8;
+                    this.len = 10 + Math.random() * 10;
+                    this.opacity = 0.15 + Math.random() * 0.2;
+                    this.lineWidth = 0.5 + Math.random() * 0.5;
                 } else {
-                    this.speed = 0.5 + Math.random() * 1.5;
-                    this.radius = 1.5 + Math.random() * 3;
-                    this.opacity = 0.5 + Math.random() * 0.4;
-                    this.swingAmp = 0.5 + Math.random() * 2;
-                    this.swingFreq = 0.01 + Math.random() * 0.02;
-                    this.swingPhase = Math.random() * Math.PI * 2;
+                    this.speed = 0.6 + Math.random() * 1.8;
+                    this.radius = Math.random() * 3 + 1;
+                    this.opacity = 0.4 + Math.random() * 0.4;
+                    this.swing = Math.random() * 2;
+                    this.swingStep = Math.random() * 100;
                 }
             }
             update() {
-                if (this.state === 'streaming') return this.updateStream();
-                if (this.state === 'splashing') return this.updateSplash();
-                if (this.state === 'pooling') return this.updatePool();
-                if (this.state === 'accumulated') return this.updateAccumulated();
+                if (this.isPuddled) {
+                    this.puddleAlpha -= 0.003;
+                    if (this.puddleAlpha <= 0) this.reset();
+                    return;
+                }
+
+                if (this.isLanded) {
+                    this.landedTime++;
+                    if (this.landedTime > 600 + Math.random() * 400) {
+                        this.opacity -= 0.005;
+                        if (this.opacity <= 0) this.reset();
+                    }
+                    return;
+                }
+
+                if (this.isSplashing) {
+                    this.splashRadius += 1.2;
+                    this.splashAlpha -= 0.08;
+                    if (this.splashAlpha <= 0) {
+                        this.isSplashing = false;
+                        this.isPuddled = true;
+                        this.puddleAlpha = 0.2;
+                        this.puddleWidth = Math.random() * 10 + 5;
+                    }
+                    return;
+                }
 
                 this.y += this.speed;
-                if (this.type === 'rain') {
-                    this.x += this.windDrift + this.angle * this.speed * 0.5;
-                } else {
-                    this.x += Math.sin(this.swingPhase) * this.swingAmp;
-                    this.x += windX * 0.3;
-                    this.swingPhase += this.swingFreq;
+                if (this.type === 'snow') {
+                    this.x += Math.sin(this.swingStep) * this.swing;
+                    this.swingStep += 0.02;
                 }
 
                 for (const bound of uiBounds) {
-                    if (hitRoundedTop(this.x, this.y, bound)) {
-                        if (this.type === 'rain') {
-                            this.state = 'splashing';
-                            this.splashRadius = 1;
-                            this.splashAlpha = 0.6;
+                    if (this.x > bound.left + 20 && this.x < bound.right - 20 && this.y > bound.top && this.y < bound.top + 15) {
+                        if (this.type === 'snow') {
+                            this.isLanded = true;
                             this.y = bound.top;
                         } else {
-                            this.state = 'accumulated';
-                            this.y = bound.top;
-                            this.meltTimer = 600 + Math.random() * 500;
+                            this.isSplashing = true;
+                            this.splashRadius = 1;
+                            this.splashAlpha = 0.6;
                         }
-                        return true;
+                        return;
                     }
                 }
 
-                if (this.y > canvas.height + 50) { this.reset(); return true; }
-                return true;
+                if (this.y > canvas.height + 50) this.reset();
             }
-
-            updateStream() {
-                this.streamY += this.streamSpeed;
-                this.streamWobble += this.streamWobbleSpeed;
-                this.x += Math.sin(this.streamWobble) * 0.2;
-                this.streamOpacity -= 0.003;
-
-                if (this.streamY > canvas.height + 20 || this.streamOpacity <= 0) {
-                    this.reset();
-                }
-                return true;
-            }
-
-            updateSplash() {
-                this.splashRadius += 1.5;
-                this.splashAlpha -= 0.07;
-                if (this.splashAlpha <= 0) {
-                    // 溅水结束 → 积水在表面
-                    this.state = 'pooling';
-                    this.poolTime = 0;
-                    this.poolDuration = 20 + Math.random() * 25;
-                    this.poolOpacity = 0.35;
-                    this.poolWidth = 3 + Math.random() * 4;
-                    for (let i = 0; i < 3; i++) {
-                        accumulatedParticles.push({
-                            type: 'microdrop',
-                            x: this.x + (Math.random() - 0.5) * 10,
-                            y: this.y,
-                            vx: (Math.random() - 0.5) * 3,
-                            vy: -(1 + Math.random() * 3),
-                            radius: 0.5 + Math.random() * 1,
-                            opacity: 0.5,
-                            gravity: 0.15
-                        });
-                    }
-                }
-                return true;
-            }
-
-            updatePool() {
-                this.poolTime++;
-                this.poolOpacity -= 0.003;
-                if (this.poolTime >= this.poolDuration || this.poolOpacity <= 0) {
-                    // 积水结束 → 沿面板流下
-                    this.state = 'streaming';
-                    this.streamY = this.y;
-                    this.streamSpeed = 1.5 + Math.random() * 2;
-                    this.streamOpacity = 0.25 + Math.random() * 0.15;
-                    this.streamWidth = 0.6 + Math.random() * 0.5;
-                    this.streamWobble = 0;
-                    this.streamWobbleSpeed = 0.03 + Math.random() * 0.05;
-                }
-                return true;
-            }
-
-            updateAccumulated() {
-                if (this.type === 'snow') {
-                    this.meltTimer--;
-                    if (this.meltTimer <= 0) {
-                        this.opacity -= 0.004;
-                        if (this.opacity <= 0) return false;
-                    }
-                }
-                return true;
-            }
-
             draw() {
-                ctx.beginPath();
-                if (this.state === 'streaming') {
-                    ctx.strokeStyle = `rgba(140, 170, 210, ${this.streamOpacity * 0.7})`;
-                    ctx.lineWidth = this.streamWidth;
-                    ctx.moveTo(this.x, this.streamY - 10);
-                    ctx.lineTo(this.x, this.streamY);
-                    ctx.stroke();
-                    return;
-                }
-                if (this.state === 'pooling') {
-                    ctx.fillStyle = `rgba(140, 170, 210, ${this.poolOpacity * 0.8})`;
-                    ctx.ellipse(this.x, this.y, this.poolWidth, 1, 0, 0, Math.PI * 2);
+                if (this.isLanded) {
+                    ctx.beginPath();
+                    ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
+                    ctx.ellipse(this.x, this.y, this.radius * 2, this.radius * 0.6, 0, 0, Math.PI * 2);
                     ctx.fill();
                     return;
                 }
-                if (this.state === 'splashing') {
-                    ctx.strokeStyle = `rgba(140, 170, 210, ${this.splashAlpha * 0.7})`;
-                    ctx.lineWidth = 1.2;
-                    const r = Math.min(this.splashRadius, 10);
-                    ctx.ellipse(this.x, this.y, r, r * 0.25, 0, 0, Math.PI * 2);
+
+                if (this.isSplashing) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${this.splashAlpha})`;
+                    ctx.lineWidth = 1.5;
+                    const r = Math.min(this.splashRadius, 12);
+                    ctx.ellipse(this.x, this.y, r, r * 0.3, 0, 0, Math.PI * 2);
                     ctx.stroke();
                     return;
                 }
-                if (this.state === 'accumulated') {
-                    if (this.type === 'snow') {
-                        ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
-                        ctx.ellipse(this.x, this.y, this.radius * 2.2, this.radius * 0.5, 0, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
+
+                if (this.isPuddled) {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${this.puddleAlpha})`;
+                    ctx.beginPath();
+                    ctx.ellipse(this.x, this.y, this.puddleWidth, 1, 0, 0, Math.PI * 2);
+                    ctx.fill();
                     return;
                 }
+
+                ctx.beginPath();
                 if (this.type === 'rain') {
-                    const dx = this.angle * this.len;
-                    ctx.strokeStyle = `rgba(140, 170, 210, ${this.opacity})`;
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${this.opacity})`;
                     ctx.lineWidth = this.lineWidth;
-                    ctx.moveTo(this.x, this.y);
-                    ctx.lineTo(this.x + dx, this.y + this.len);
+                    ctx.moveTo(this.x, this.y); ctx.lineTo(this.x, this.y + this.len);
                     ctx.stroke();
                 } else {
                     ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
@@ -757,110 +679,28 @@
             }
         }
 
-        function drawAccumulated() {
-            for (let i = accumulatedParticles.length - 1; i >= 0; i--) {
-                const p = accumulatedParticles[i];
-                ctx.beginPath();
-                if (p.type === 'puddle') {
-                    p.opacity -= p.decay;
-                    if (p.opacity <= 0) { accumulatedParticles.splice(i, 1); continue; }
-                    ctx.fillStyle = `rgba(120, 150, 190, ${p.opacity * 0.7})`;
-                    ctx.ellipse(p.x, p.y, p.width, 1, 0, 0, Math.PI * 2);
-                    ctx.fill();
-                } else if (p.type === 'microdrop') {
-                    p.x += p.vx;
-                    p.y += p.vy;
-                    p.vy += p.gravity;
-                    p.opacity -= 0.02;
-                    if (p.opacity <= 0 || p.y > canvas.height) { accumulatedParticles.splice(i, 1); continue; }
-                    ctx.fillStyle = `rgba(140, 170, 210, ${p.opacity * 0.6})`;
-                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-                    ctx.fill();
-                } else if (p.type === 'drip') {
-                    p.y += p.vy;
-                    p.life--;
-                    p.opacity -= 0.008;
-                    if (p.life <= 0 || p.opacity <= 0 || p.y > canvas.height) { accumulatedParticles.splice(i, 1); continue; }
-                    ctx.fillStyle = `rgba(120, 150, 190, ${p.opacity * 0.7})`;
-                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            }
-        }
-
         function animateWeather() {
-            boundsFrameCount++;
-            if (boundsFrameCount % 8 === 0) updateUIBounds();
-
-            windChangeTimer++;
-            if (windChangeTimer > 200) {
-                windTarget = (Math.random() - 0.5) * 1.5;
-                windChangeTimer = 0;
-            }
-            windX += (windTarget - windX) * 0.01;
-
+            updateUIBounds();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            for (let i = activeParticles.length - 1; i >= 0; i--) {
-                if (!activeParticles[i].update()) {
-                    activeParticles.splice(i, 1);
-                } else {
-                    activeParticles[i].draw();
-                }
-            }
-
-            drawAccumulated();
-
+            particles.forEach(p => { p.update(); p.draw(); });
             animationId = requestAnimationFrame(animateWeather);
         }
-
-        let currentWeatherType = '';
-
-        function spawnParticles(type, count) {
-            for (let i = 0; i < count; i++) {
-                activeParticles.push(new WeatherParticle(type));
-            }
-        }
-
-        function maintainParticles() {
-            const rainActive = activeParticles.filter(p => p.type === 'rain' && p.state === 'falling').length;
-            const snowActive = activeParticles.filter(p => p.type === 'snow' && p.state === 'falling').length;
-
-            if (currentWeatherType === 'rain' && rainActive < RAIN_COUNT) {
-                spawnParticles('rain', RAIN_COUNT - rainActive);
-            }
-            if (currentWeatherType === 'snow' && snowActive < SNOW_ACTIVE_COUNT) {
-                spawnParticles('snow', SNOW_ACTIVE_COUNT - snowActive);
-            }
-
-            const snowAccum = activeParticles.filter(p => p.state === 'accumulated').length;
-            if (snowAccum > SNOW_MAX_ACCUMULATED) {
-                activeParticles = activeParticles.filter(p => p.state !== 'accumulated' || p.opacity > 0.1);
-            }
-        }
-        setInterval(maintainParticles, 500);
 
         function applyEnvironmentFilter(weatherKeyword) {
             const overlay = document.getElementById('weatherOverlay');
             cancelAnimationFrame(animationId);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            activeParticles = [];
-            accumulatedParticles = [];
-            windX = 0;
-            windTarget = 0;
-            currentWeatherType = '';
+            particles = [];
 
             if (weatherKeyword.includes('🌧️') || weatherKeyword.includes('雨')) {
                 overlay.className = "absolute inset-0 bg-blue-900/30 transition-colors duration-1000 z-20";
-                currentWeatherType = 'rain';
-                spawnParticles('rain', RAIN_COUNT);
+                for (let i = 0; i < 200; i++) particles.push(new WeatherParticle('rain'));
                 animateWeather();
             } else if (weatherKeyword.includes('☀️') || weatherKeyword.includes('晴')) {
                 overlay.className = "absolute inset-0 bg-amber-200/12 transition-colors duration-1000 z-20";
             } else if (weatherKeyword.includes('❄️') || weatherKeyword.includes('雪')) {
                 overlay.className = "absolute inset-0 bg-slate-800/40 transition-colors duration-1000 z-20";
-                currentWeatherType = 'snow';
-                spawnParticles('snow', SNOW_ACTIVE_COUNT);
+                for (let i = 0; i < 250; i++) particles.push(new WeatherParticle('snow'));
                 animateWeather();
             } else {
                 overlay.className = "absolute inset-0 bg-black/30 transition-colors duration-1000 z-20";
