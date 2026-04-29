@@ -447,6 +447,7 @@ TICKER_STATUS_FILE = "./public/ticker-status.json"
 TICKER_RETRY_MAX = 3
 TICKER_RETRY_BACKOFF = [1, 2, 4]
 TWELVEDATA_API_KEY = os.environ.get("TWELVEDATA_API_KEY", "").strip()
+TWELVEDATA_INTERVAL = 2700
 
 
 def _fetch_twelvedata_quotes(configs):
@@ -605,7 +606,7 @@ def _fetch_sina_for_configs(configs):
     return result_map
 
 
-def fetch_ticker():
+def fetch_ticker(try_td=True):
     ts_str = get_beijing_time().strftime('%H:%M:%S')
     print(f"[{ts_str}][行情引擎] 开始同步行情 (多源模式)...")
 
@@ -625,8 +626,8 @@ def fetch_ticker():
         except Exception:
             pass
 
-    # 1. Twelve Data 主源
-    if TWELVEDATA_API_KEY:
+    # 1. Twelve Data 主源 (按间隔调用，节省 credit)
+    if try_td and TWELVEDATA_API_KEY:
         td_configs = [c for c in MARKET_TICKERS if "twelvedata" in c.get("providers", [])]
         print(f"  [行情引擎] Twelve Data: {len(td_configs)} 标的")
         td_results = _fetch_twelvedata_quotes(td_configs)
@@ -634,8 +635,10 @@ def fetch_ticker():
             if sym not in result_map:
                 result_map[sym] = entry
                 provider_stats["TwelveData"] += 1
+    elif not TWELVEDATA_API_KEY:
+        pass
     else:
-        print("  ⚠️ [行情引擎] TWELVEDATA_API_KEY 未配置，跳过 Twelve Data 主源")
+        print(f"  [行情引擎] Twelve Data: 跳过（间隔 {TWELVEDATA_INTERVAL}s 未到）")
 
     # 2. Sina 补齐：Twelve Data 没拿到的、且有 sina provider 的标的
     td_failed = [c for c in MARKET_TICKERS if c["symbol"] not in result_map and "sina" in c.get("providers", [])]
@@ -854,6 +857,7 @@ def main():
     last_rss_time = 0
     last_weather_time = 0
     last_tech_time = 0
+    last_td_time = 0
     
     while True:
         try:
@@ -874,8 +878,11 @@ def main():
             # 3. 扫描壁纸列表 (每 60 秒)
             update_wallpaper_list()
                 
-            # 4. 行情逻辑 (每 60 秒)
-            fetch_ticker()
+            # 4. 行情逻辑 (每 60 秒 Sina + 每 45 分钟 Twelve Data)
+            try_td = (now_ts - last_td_time >= TWELVEDATA_INTERVAL)
+            fetch_ticker(try_td=try_td)
+            if try_td:
+                last_td_time = now_ts
             
             # 5. RSS 逻辑 (每 15 分钟)
             if now_ts - last_rss_time >= 1800 or not global_rss_news:
