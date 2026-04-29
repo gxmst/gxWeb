@@ -584,8 +584,7 @@
                     this.len = 14 + Math.random() * 10;
                     this.opacity = 0.3 + Math.random() * 0.35;
                     this.lineWidth = 1.0 + Math.random() * 1.0;
-                    this.angle = 0;
-                    this.trail = [];
+                    this.windDrift = (Math.random() - 0.5) * 0.3;
                 } else {
                     this.speed = 0.5 + Math.random() * 1.5;
                     this.radius = 1.5 + Math.random() * 3;
@@ -598,15 +597,15 @@
             update() {
                 if (this.state === 'streaming') return this.updateStream();
                 if (this.state === 'splashing') return this.updateSplash();
+                if (this.state === 'pooling') return this.updatePool();
                 if (this.state === 'accumulated') return this.updateAccumulated();
 
                 this.y += this.speed;
                 if (this.type === 'rain') {
-                    this.x += windX * this.speed * 0.4;
-                    this.angle = windX * 0.3;
+                    this.x += this.windDrift;
                 } else {
                     this.x += Math.sin(this.swingPhase) * this.swingAmp;
-                    this.x += windX * 0.8;
+                    this.x += windX * 0.3;
                     this.swingPhase += this.swingFreq;
                 }
 
@@ -614,7 +613,10 @@
                     if (this.x > bound.left + 15 && this.x < bound.right - 15 &&
                         this.y > bound.top - 2 && this.y < bound.top + 12) {
                         if (this.type === 'rain') {
-                            this.startStream(bound);
+                            this.state = 'splashing';
+                            this.splashRadius = 1;
+                            this.splashAlpha = 0.6;
+                            this.y = bound.top;
                         } else {
                             this.state = 'accumulated';
                             this.y = bound.top;
@@ -628,58 +630,28 @@
                 return true;
             }
 
-            startStream(bound) {
-                this.state = 'streaming';
-                this.panelBound = bound;
-                this.streamY = bound.top;
-                this.streamSpeed = 2 + Math.random() * 3;
-                this.streamOpacity = this.opacity * 0.6;
-                this.streamWidth = 0.8 + Math.random() * 0.6;
-                this.wobble = 0;
-                this.wobbleSpeed = 0.05 + Math.random() * 0.08;
-                this.dripTimer = 0;
-            }
-
             updateStream() {
                 this.streamY += this.streamSpeed;
-                this.wobble += this.wobbleSpeed;
-                this.x += Math.sin(this.wobble) * 0.3;
-                this.streamOpacity -= 0.004;
+                this.streamWobble += this.streamWobbleSpeed;
+                this.x += Math.sin(this.streamWobble) * 0.2;
+                this.streamOpacity -= 0.003;
 
-                if (this.streamY > this.panelBound.bottom - 10 || this.streamOpacity <= 0) {
-                    if (Math.random() < 0.3) {
-                        this.spawnDrip();
-                    }
+                if (this.streamY > canvas.height + 20 || this.streamOpacity <= 0) {
                     this.reset();
-                    return true;
                 }
                 return true;
-            }
-
-            spawnDrip() {
-                accumulatedParticles.push({
-                    type: 'drip',
-                    x: this.x,
-                    y: this.streamY,
-                    radius: 1.5 + Math.random() * 1.5,
-                    opacity: 0.4,
-                    vy: 3 + Math.random() * 2,
-                    life: 40 + Math.random() * 30
-                });
             }
 
             updateSplash() {
                 this.splashRadius += 1.5;
                 this.splashAlpha -= 0.07;
                 if (this.splashAlpha <= 0) {
-                    accumulatedParticles.push({
-                        type: 'puddle',
-                        x: this.x,
-                        y: this.y,
-                        width: 4 + Math.random() * 8,
-                        opacity: 0.15,
-                        decay: 0.002
-                    });
+                    // 溅水结束 → 积水在表面
+                    this.state = 'pooling';
+                    this.poolTime = 0;
+                    this.poolDuration = 20 + Math.random() * 25;
+                    this.poolOpacity = 0.35;
+                    this.poolWidth = 3 + Math.random() * 4;
                     for (let i = 0; i < 3; i++) {
                         accumulatedParticles.push({
                             type: 'microdrop',
@@ -692,7 +664,22 @@
                             gravity: 0.15
                         });
                     }
-                    this.reset();
+                }
+                return true;
+            }
+
+            updatePool() {
+                this.poolTime++;
+                this.poolOpacity -= 0.003;
+                if (this.poolTime >= this.poolDuration || this.poolOpacity <= 0) {
+                    // 积水结束 → 沿面板流下
+                    this.state = 'streaming';
+                    this.streamY = this.y;
+                    this.streamSpeed = 1.5 + Math.random() * 2;
+                    this.streamOpacity = 0.25 + Math.random() * 0.15;
+                    this.streamWidth = 0.6 + Math.random() * 0.5;
+                    this.streamWobble = 0;
+                    this.streamWobbleSpeed = 0.03 + Math.random() * 0.05;
                 }
                 return true;
             }
@@ -713,9 +700,15 @@
                 if (this.state === 'streaming') {
                     ctx.strokeStyle = `rgba(180, 210, 240, ${this.streamOpacity})`;
                     ctx.lineWidth = this.streamWidth;
-                    ctx.moveTo(this.x, this.streamY - 8);
+                    ctx.moveTo(this.x, this.streamY - 10);
                     ctx.lineTo(this.x, this.streamY);
                     ctx.stroke();
+                    return;
+                }
+                if (this.state === 'pooling') {
+                    ctx.fillStyle = `rgba(180, 210, 240, ${this.poolOpacity})`;
+                    ctx.ellipse(this.x, this.y, this.poolWidth, 1.2, 0, 0, Math.PI * 2);
+                    ctx.fill();
                     return;
                 }
                 if (this.state === 'splashing') {
@@ -785,11 +778,11 @@
             if (boundsFrameCount % 8 === 0) updateUIBounds();
 
             windChangeTimer++;
-            if (windChangeTimer > 120) {
-                windTarget = (Math.random() - 0.5) * 4;
+            if (windChangeTimer > 200) {
+                windTarget = (Math.random() - 0.5) * 1.5;
                 windChangeTimer = 0;
             }
-            windX += (windTarget - windX) * 0.02;
+            windX += (windTarget - windX) * 0.01;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
