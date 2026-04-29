@@ -539,9 +539,18 @@
 
         const canvas = document.getElementById('weatherCanvas');
         const ctx = canvas.getContext('2d');
-        let particles = [];
+        let activeParticles = [];
+        let accumulatedParticles = [];
         let animationId = null;
         let uiBounds = [];
+        let boundsFrameCount = 0;
+        let windX = 0;
+        let windTarget = 0;
+        let windChangeTimer = 0;
+
+        const RAIN_COUNT = 180;
+        const SNOW_ACTIVE_COUNT = 120;
+        const SNOW_MAX_ACCUMULATED = 300;
 
         function resizeCanvas() {
             canvas.width = window.innerWidth;
@@ -565,115 +574,172 @@
             constructor(type) { this.type = type; this.reset(); }
             reset() {
                 this.x = Math.random() * canvas.width;
-                this.y = Math.random() * (canvas.height + 100) - canvas.height;
-                this.isLanded = false;
-                this.landedTime = 0;
-                this.isSplashing = false;
-                this.splashRadius = 0;
-                this.splashAlpha = 1;
-                this.isPuddled = false;
-                this.puddleAlpha = 0;
-                this.puddleWidth = 0;
+                this.y = Math.random() * (canvas.height + 200) - canvas.height;
+                this.speed = 0;
+                this.opacity = 0;
+                this.state = 'falling';
 
                 if (this.type === 'rain') {
-                    this.speed = 15 + Math.random() * 8;
-                    this.len = 10 + Math.random() * 10;
-                    this.opacity = 0.15 + Math.random() * 0.2;
-                    this.lineWidth = 0.5 + Math.random() * 0.5;
+                    this.speed = 14 + Math.random() * 6;
+                    this.len = 14 + Math.random() * 10;
+                    this.opacity = 0.3 + Math.random() * 0.35;
+                    this.lineWidth = 1.0 + Math.random() * 1.0;
+                    this.angle = 0;
+                    this.trail = [];
                 } else {
-                    this.speed = 0.6 + Math.random() * 1.8;
-                    this.radius = Math.random() * 3 + 1;
-                    this.opacity = 0.4 + Math.random() * 0.4;
-                    this.swing = Math.random() * 2;
-                    this.swingStep = Math.random() * 100;
+                    this.speed = 0.5 + Math.random() * 1.5;
+                    this.radius = 1.5 + Math.random() * 3;
+                    this.opacity = 0.5 + Math.random() * 0.4;
+                    this.swingAmp = 0.5 + Math.random() * 2;
+                    this.swingFreq = 0.01 + Math.random() * 0.02;
+                    this.swingPhase = Math.random() * Math.PI * 2;
                 }
             }
             update() {
-                // 积水蒸发逻辑
-                if (this.isPuddled) {
-                    this.puddleAlpha -= 0.003;
-                    if (this.puddleAlpha <= 0) this.reset();
-                    return;
-                }
-
-                // 积雪逻辑
-                if (this.isLanded) {
-                    this.landedTime++;
-                    if (this.landedTime > 600 + Math.random() * 400) { // 停留约 10-16 秒
-                        this.opacity -= 0.005; // 融化速度略微提升
-                        if (this.opacity <= 0) this.reset();
-                    }
-                    return;
-                }
-
-                // 雨滴飞溅逻辑 (微型快速水花)
-                if (this.isSplashing) {
-                    this.splashRadius += 1.2;
-                    this.splashAlpha -= 0.08; // 约 12 帧消失
-                    if (this.splashAlpha <= 0) {
-                        this.isSplashing = false;
-                        this.isPuddled = true;
-                        this.puddleAlpha = 0.2;
-                        this.puddleWidth = Math.random() * 10 + 5;
-                    }
-                    return;
-                }
+                if (this.state === 'streaming') return this.updateStream();
+                if (this.state === 'splashing') return this.updateSplash();
+                if (this.state === 'accumulated') return this.updateAccumulated();
 
                 this.y += this.speed;
-                if (this.type === 'snow') {
-                    this.x += Math.sin(this.swingStep) * this.swing;
-                    this.swingStep += 0.02;
+                if (this.type === 'rain') {
+                    this.x += windX * this.speed * 0.4;
+                    this.angle = windX * 0.3;
+                } else {
+                    this.x += Math.sin(this.swingPhase) * this.swingAmp;
+                    this.x += windX * 0.8;
+                    this.swingPhase += this.swingFreq;
                 }
 
-                // 物理碰撞检测 (向内收缩 20px 以适配圆角，实时 uiBounds 在 animateWeather 中更新)
                 for (const bound of uiBounds) {
-                    if (this.x > bound.left + 20 && this.x < bound.right - 20 && this.y > bound.top && this.y < bound.top + 15) {
-                        if (this.type === 'snow') {
-                            this.isLanded = true;
-                            this.y = bound.top;
+                    if (this.x > bound.left + 15 && this.x < bound.right - 15 &&
+                        this.y > bound.top - 2 && this.y < bound.top + 12) {
+                        if (this.type === 'rain') {
+                            this.startStream(bound);
                         } else {
-                            this.isSplashing = true;
-                            this.splashRadius = 1;
-                            this.splashAlpha = 0.6;
+                            this.state = 'accumulated';
+                            this.y = bound.top;
+                            this.meltTimer = 600 + Math.random() * 500;
                         }
-                        return;
+                        return true;
                     }
                 }
 
-                if (this.y > canvas.height + 50) this.reset();
+                if (this.y > canvas.height + 50) { this.reset(); return true; }
+                return true;
             }
+
+            startStream(bound) {
+                this.state = 'streaming';
+                this.panelBound = bound;
+                this.streamY = bound.top;
+                this.streamSpeed = 2 + Math.random() * 3;
+                this.streamOpacity = this.opacity * 0.6;
+                this.streamWidth = 0.8 + Math.random() * 0.6;
+                this.wobble = 0;
+                this.wobbleSpeed = 0.05 + Math.random() * 0.08;
+                this.dripTimer = 0;
+            }
+
+            updateStream() {
+                this.streamY += this.streamSpeed;
+                this.wobble += this.wobbleSpeed;
+                this.x += Math.sin(this.wobble) * 0.3;
+                this.streamOpacity -= 0.004;
+
+                if (this.streamY > this.panelBound.bottom - 10 || this.streamOpacity <= 0) {
+                    if (Math.random() < 0.3) {
+                        this.spawnDrip();
+                    }
+                    this.reset();
+                    return true;
+                }
+                return true;
+            }
+
+            spawnDrip() {
+                accumulatedParticles.push({
+                    type: 'drip',
+                    x: this.x,
+                    y: this.streamY,
+                    radius: 1.5 + Math.random() * 1.5,
+                    opacity: 0.4,
+                    vy: 3 + Math.random() * 2,
+                    life: 40 + Math.random() * 30
+                });
+            }
+
+            updateSplash() {
+                this.splashRadius += 1.5;
+                this.splashAlpha -= 0.07;
+                if (this.splashAlpha <= 0) {
+                    accumulatedParticles.push({
+                        type: 'puddle',
+                        x: this.x,
+                        y: this.y,
+                        width: 4 + Math.random() * 8,
+                        opacity: 0.15,
+                        decay: 0.002
+                    });
+                    for (let i = 0; i < 3; i++) {
+                        accumulatedParticles.push({
+                            type: 'microdrop',
+                            x: this.x + (Math.random() - 0.5) * 10,
+                            y: this.y,
+                            vx: (Math.random() - 0.5) * 3,
+                            vy: -(1 + Math.random() * 3),
+                            radius: 0.5 + Math.random() * 1,
+                            opacity: 0.5,
+                            gravity: 0.15
+                        });
+                    }
+                    this.reset();
+                }
+                return true;
+            }
+
+            updateAccumulated() {
+                if (this.type === 'snow') {
+                    this.meltTimer--;
+                    if (this.meltTimer <= 0) {
+                        this.opacity -= 0.004;
+                        if (this.opacity <= 0) return false;
+                    }
+                }
+                return true;
+            }
+
             draw() {
-                if (this.isLanded) {
-                    ctx.beginPath();
-                    ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
-                    ctx.ellipse(this.x, this.y, this.radius * 2, this.radius * 0.6, 0, 0, Math.PI * 2);
-                    ctx.fill();
+                ctx.beginPath();
+                if (this.state === 'streaming') {
+                    ctx.strokeStyle = `rgba(180, 210, 240, ${this.streamOpacity})`;
+                    ctx.lineWidth = this.streamWidth;
+                    ctx.moveTo(this.x, this.streamY - 8);
+                    ctx.lineTo(this.x, this.streamY);
+                    ctx.stroke();
                     return;
                 }
-
-                if (this.isSplashing) {
-                    ctx.beginPath();
+                if (this.state === 'splashing') {
                     ctx.strokeStyle = `rgba(255, 255, 255, ${this.splashAlpha})`;
                     ctx.lineWidth = 1.5;
-                    const r = Math.min(this.splashRadius, 12); // 限制水花大小
+                    const r = Math.min(this.splashRadius, 14);
                     ctx.ellipse(this.x, this.y, r, r * 0.3, 0, 0, Math.PI * 2);
                     ctx.stroke();
                     return;
                 }
-
-                if (this.isPuddled) {
-                    ctx.fillStyle = `rgba(255, 255, 255, ${this.puddleAlpha})`;
-                    ctx.beginPath();
-                    ctx.ellipse(this.x, this.y, this.puddleWidth, 1, 0, 0, Math.PI * 2);
-                    ctx.fill();
+                if (this.state === 'accumulated') {
+                    if (this.type === 'snow') {
+                        ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
+                        ctx.ellipse(this.x, this.y, this.radius * 2.2, this.radius * 0.5, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
                     return;
                 }
-
-                ctx.beginPath();
                 if (this.type === 'rain') {
-                    ctx.strokeStyle = `rgba(255, 255, 255, ${this.opacity})`;
+                    const dx = this.angle * this.len;
+                    ctx.strokeStyle = `rgba(200, 220, 255, ${this.opacity})`;
                     ctx.lineWidth = this.lineWidth;
-                    ctx.moveTo(this.x, this.y); ctx.lineTo(this.x, this.y + this.len);
+                    ctx.moveTo(this.x, this.y);
+                    ctx.lineTo(this.x + dx, this.y + this.len);
                     ctx.stroke();
                 } else {
                     ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
@@ -683,28 +749,110 @@
             }
         }
 
+        function drawAccumulated() {
+            for (let i = accumulatedParticles.length - 1; i >= 0; i--) {
+                const p = accumulatedParticles[i];
+                ctx.beginPath();
+                if (p.type === 'puddle') {
+                    p.opacity -= p.decay;
+                    if (p.opacity <= 0) { accumulatedParticles.splice(i, 1); continue; }
+                    ctx.fillStyle = `rgba(180, 210, 240, ${p.opacity})`;
+                    ctx.ellipse(p.x, p.y, p.width, 1, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (p.type === 'microdrop') {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += p.gravity;
+                    p.opacity -= 0.02;
+                    if (p.opacity <= 0 || p.y > canvas.height) { accumulatedParticles.splice(i, 1); continue; }
+                    ctx.fillStyle = `rgba(200, 225, 255, ${p.opacity})`;
+                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (p.type === 'drip') {
+                    p.y += p.vy;
+                    p.life--;
+                    p.opacity -= 0.008;
+                    if (p.life <= 0 || p.opacity <= 0 || p.y > canvas.height) { accumulatedParticles.splice(i, 1); continue; }
+                    ctx.fillStyle = `rgba(180, 210, 240, ${p.opacity})`;
+                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
         function animateWeather() {
-            updateUIBounds(); // 实时更新 UI 坐标，适配面板拖拽
+            boundsFrameCount++;
+            if (boundsFrameCount % 8 === 0) updateUIBounds();
+
+            windChangeTimer++;
+            if (windChangeTimer > 120) {
+                windTarget = (Math.random() - 0.5) * 4;
+                windChangeTimer = 0;
+            }
+            windX += (windTarget - windX) * 0.02;
+
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            particles.forEach(p => { p.update(); p.draw(); });
+
+            for (let i = activeParticles.length - 1; i >= 0; i--) {
+                if (!activeParticles[i].update()) {
+                    activeParticles.splice(i, 1);
+                } else {
+                    activeParticles[i].draw();
+                }
+            }
+
+            drawAccumulated();
+
             animationId = requestAnimationFrame(animateWeather);
         }
+
+        let currentWeatherType = '';
+
+        function spawnParticles(type, count) {
+            for (let i = 0; i < count; i++) {
+                activeParticles.push(new WeatherParticle(type));
+            }
+        }
+
+        function maintainParticles() {
+            const rainActive = activeParticles.filter(p => p.type === 'rain' && p.state === 'falling').length;
+            const snowActive = activeParticles.filter(p => p.type === 'snow' && p.state === 'falling').length;
+
+            if (currentWeatherType === 'rain' && rainActive < RAIN_COUNT) {
+                spawnParticles('rain', RAIN_COUNT - rainActive);
+            }
+            if (currentWeatherType === 'snow' && snowActive < SNOW_ACTIVE_COUNT) {
+                spawnParticles('snow', SNOW_ACTIVE_COUNT - snowActive);
+            }
+
+            const snowAccum = activeParticles.filter(p => p.state === 'accumulated').length;
+            if (snowAccum > SNOW_MAX_ACCUMULATED) {
+                activeParticles = activeParticles.filter(p => p.state !== 'accumulated' || p.opacity > 0.1);
+            }
+        }
+        setInterval(maintainParticles, 500);
 
         function applyEnvironmentFilter(weatherKeyword) {
             const overlay = document.getElementById('weatherOverlay');
             cancelAnimationFrame(animationId);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            particles = [];
+            activeParticles = [];
+            accumulatedParticles = [];
+            windX = 0;
+            windTarget = 0;
+            currentWeatherType = '';
 
             if (weatherKeyword.includes('🌧️') || weatherKeyword.includes('雨')) {
                 overlay.className = "absolute inset-0 bg-blue-900/30 transition-colors duration-1000 z-20";
-                for (let i = 0; i < 200; i++) particles.push(new WeatherParticle('rain'));
+                currentWeatherType = 'rain';
+                spawnParticles('rain', RAIN_COUNT);
                 animateWeather();
             } else if (weatherKeyword.includes('☀️') || weatherKeyword.includes('晴')) {
                 overlay.className = "absolute inset-0 bg-amber-200/12 transition-colors duration-1000 z-20";
             } else if (weatherKeyword.includes('❄️') || weatherKeyword.includes('雪')) {
                 overlay.className = "absolute inset-0 bg-slate-800/40 transition-colors duration-1000 z-20";
-                for (let i = 0; i < 250; i++) particles.push(new WeatherParticle('snow'));
+                currentWeatherType = 'snow';
+                spawnParticles('snow', SNOW_ACTIVE_COUNT);
                 animateWeather();
             } else {
                 overlay.className = "absolute inset-0 bg-black/30 transition-colors duration-1000 z-20";
