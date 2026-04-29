@@ -28,19 +28,19 @@ USER_AGENTS = [
 
 MARKET_TICKERS = [
     {"symbol": "1.000001", "name": "上证综指", "category": "亚太", "decimals": 2, "scale": 100, "source": "EastMoney"},
-    {"symbol": "100.DJIA", "name": "道琼斯", "category": "美股", "decimals": 2, "scale": 100, "source": "EastMoney"},
+    {"symbol": "gb_dji", "name": "道琼斯", "category": "美股", "decimals": 2, "source": "Sina"},
     {"symbol": "gb_ixic", "name": "纳斯达克", "category": "美股", "decimals": 2, "source": "Sina"},
-    {"symbol": "105.NVDA", "name": "英伟达", "category": "美股", "decimals": 2, "scale": 1000, "source": "EastMoney"},
-    {"symbol": "101.GC00Y", "name": "COMEX黄金", "category": "商品", "decimals": 2, "scale": 10, "source": "EastMoney"},
+    {"symbol": "gb_nvda", "name": "英伟达", "category": "美股", "decimals": 2, "source": "Sina"},
+    {"symbol": "hf_GC", "name": "COMEX黄金", "category": "商品", "decimals": 2, "source": "Sina"},
     {"symbol": "101.SI00Y", "name": "COMEX白银", "category": "商品", "decimals": 3, "scale": 1000, "source": "EastMoney"},
     {"symbol": "101.HG00Y", "name": "COMEX铜", "category": "商品", "decimals": 4, "scale": 10000, "source": "EastMoney"},
     {"symbol": "102.CL00Y", "name": "WTI原油", "category": "商品", "decimals": 2, "scale": 100, "source": "EastMoney"},
     {"symbol": "fx_susdcny", "name": "美元/人民币", "category": "外汇", "decimals": 4, "source": "Sina"},
-    {"symbol": "119.USDJPY", "name": "美元/日元", "category": "外汇", "decimals": 3, "scale": 10000, "source": "EastMoney"},
+    {"symbol": "fx_susdjpy", "name": "美元/日元", "category": "外汇", "decimals": 3, "source": "Sina"},
     {"symbol": "100.N225", "name": "日经225", "category": "亚太", "decimals": 2, "scale": 100, "source": "EastMoney"},
-    {"symbol": "100.HSI", "name": "恒生指数", "category": "亚太", "decimals": 2, "scale": 100, "source": "EastMoney"},
+    {"symbol": "rt_hkHSI", "name": "恒生指数", "category": "亚太", "decimals": 2, "source": "Sina"},
     {"symbol": "100.KOSPI200", "name": "KOSPI 200", "category": "亚太", "decimals": 2, "scale": 100, "source": "EastMoney"},
-    {"symbol": "100.SPX", "name": "标普500", "category": "美股", "decimals": 2, "scale": 100, "source": "EastMoney"},
+    {"symbol": "gb_inx", "name": "标普500", "category": "美股", "decimals": 2, "source": "Sina"},
     {"symbol": "100.FTSE", "name": "富时100", "category": "欧洲", "decimals": 2, "scale": 100, "source": "EastMoney"},
     {"symbol": "100.GDAXI", "name": "DAX 40", "category": "欧洲", "decimals": 2, "scale": 100, "source": "EastMoney"},
     {"symbol": "100.FCHI", "name": "CAC 40", "category": "欧洲", "decimals": 2, "scale": 100, "source": "EastMoney"},
@@ -450,13 +450,6 @@ TICKER_FILE = "./public/ticker.json"
 
 SINA_FALLBACK_CONFIGS = [
     {"symbol": "s_sh000001", "canonical_symbol": "1.000001", "name": "上证综指", "category": "亚太", "decimals": 2, "source": "Sina"},
-    {"symbol": "gb_dji", "canonical_symbol": "100.DJIA", "name": "道琼斯", "category": "美股", "decimals": 2, "source": "Sina"},
-    {"symbol": "gb_nvda", "canonical_symbol": "105.NVDA", "name": "英伟达", "category": "美股", "decimals": 2, "source": "Sina"},
-    {"symbol": "b_NIKKEI225", "canonical_symbol": "100.N225", "name": "日经225", "category": "亚太", "decimals": 2, "source": "Sina"},
-    {"symbol": "rt_hkHSI", "canonical_symbol": "100.HSI", "name": "恒生指数", "category": "亚太", "decimals": 2, "source": "Sina"},
-    {"symbol": "gb_inx", "canonical_symbol": "100.SPX", "name": "标普500", "category": "美股", "decimals": 2, "source": "Sina"},
-    {"symbol": "fx_susdjpy", "canonical_symbol": "119.USDJPY", "name": "美元/日元", "category": "外汇", "decimals": 3, "source": "Sina"},
-    {"symbol": "hf_GC", "canonical_symbol": "101.GC00Y", "name": "COMEX黄金", "category": "商品", "decimals": 2, "source": "Sina"},
 ]
 
 
@@ -647,7 +640,7 @@ def fetch_ticker():
     em_success_count = len(em_success_names)
 
     # 3. 备用源补齐：东方财富失败的核心标的
-    threshold = max(10, int(total_count * 0.7))
+    threshold = max(8, int(total_count * 0.4))
     if em_success_count < threshold:
         print(f"  ⚠️ [行情引擎] 东方财富成功 {em_success_count} 个，低于阈值 {threshold}，启动备用源...")
         fallback_results, fallback_used_names = _try_sina_fallback(em_failed_names, set(result_map.keys()))
