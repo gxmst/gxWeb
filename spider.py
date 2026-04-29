@@ -558,6 +558,24 @@ def fetch_ticker():
     unique_count = len(result_map)
     threshold = max(10, int(total_count * 0.5))
 
+    # 2.5 价格历史追踪 (sparkline 用)
+    price_history_map = {}
+    for sym, item in old_ticker_map.items():
+        ph = item.get("price_history")
+        if ph and isinstance(ph, list):
+            price_history_map[sym] = ph
+
+    for sym, entry in result_map.items():
+        try:
+            current_price = float(entry["price"])
+            old_history = price_history_map.get(sym, [])
+            new_history = old_history + [current_price]
+            if len(new_history) > 20:
+                new_history = new_history[-20:]
+            entry["price_history"] = new_history
+        except (ValueError, KeyError):
+            pass
+
     # 3. 状态判定与写入
     if unique_count >= threshold:
         atomic_save_json(TICKER_FILE, list(result_map.values()))

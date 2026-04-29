@@ -135,6 +135,24 @@
             text-decoration-color: rgba(186, 230, 253, 0.9);
             background: linear-gradient(180deg, rgba(8, 47, 73, 0.22), rgba(8, 47, 73, 0.08));
         }
+
+        /* 骨架屏动画 */
+        @keyframes shimmer {
+            0% { background-position: -400px 0; }
+            100% { background-position: 400px 0; }
+        }
+        .skeleton {
+            background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.04) 75%);
+            background-size: 400px 100%;
+            animation: shimmer 1.8s infinite linear;
+            border-radius: 0.375rem;
+        }
+        .skeleton-line { height: 0.75rem; margin-bottom: 0.5rem; }
+        .skeleton-line-sm { height: 0.5rem; width: 40%; margin-bottom: 0.75rem; }
+
+        /* sparkline */
+        .sparkline-svg { display: block; overflow: visible; }
+        .sparkline-poly { fill: none; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
     </style>
 </head>
 
@@ -337,7 +355,16 @@
             <!-- 滚动列表区 (增加 pb-24 防止被底部行情条挡住) -->
             <div id="newsList"
                 class="flex-1 overflow-y-auto no-scrollbar flex flex-col pb-24 transition-opacity duration-300">
-                <!-- 由 JS 填充 -->
+                <div id="newsSkeleton" class="flex flex-col gap-3 p-1">
+                    <div class="border-l-2 border-white/10 pl-3 pb-3"><div class="skeleton skeleton-line-sm"></div><div class="skeleton skeleton-line" style="width:90%"></div><div class="skeleton skeleton-line" style="width:60%"></div></div>
+                    <div class="border-l-2 border-white/10 pl-3 pb-3"><div class="skeleton skeleton-line-sm"></div><div class="skeleton skeleton-line" style="width:85%"></div><div class="skeleton skeleton-line" style="width:45%"></div></div>
+                    <div class="border-l-2 border-white/10 pl-3 pb-3"><div class="skeleton skeleton-line-sm"></div><div class="skeleton skeleton-line" style="width:95%"></div><div class="skeleton skeleton-line" style="width:70%"></div></div>
+                    <div class="border-l-2 border-white/10 pl-3 pb-3"><div class="skeleton skeleton-line-sm"></div><div class="skeleton skeleton-line" style="width:80%"></div><div class="skeleton skeleton-line" style="width:55%"></div></div>
+                    <div class="border-l-2 border-white/10 pl-3 pb-3"><div class="skeleton skeleton-line-sm"></div><div class="skeleton skeleton-line" style="width:88%"></div><div class="skeleton skeleton-line" style="width:50%"></div></div>
+                    <div class="border-l-2 border-white/10 pl-3 pb-3"><div class="skeleton skeleton-line-sm"></div><div class="skeleton skeleton-line" style="width:75%"></div><div class="skeleton skeleton-line" style="width:65%"></div></div>
+                    <div class="border-l-2 border-white/10 pl-3 pb-3"><div class="skeleton skeleton-line-sm"></div><div class="skeleton skeleton-line" style="width:92%"></div><div class="skeleton skeleton-line" style="width:40%"></div></div>
+                    <div class="border-l-2 border-white/10 pl-3 pb-3"><div class="skeleton skeleton-line-sm"></div><div class="skeleton skeleton-line" style="width:78%"></div><div class="skeleton skeleton-line" style="width:58%"></div></div>
+                </div>
             </div>
 
             <!-- 回到顶部按钮 -->
@@ -367,7 +394,14 @@
         <div id="tickerScroll"
             class="flex items-center gap-8 px-14 py-1.5 w-full h-full overflow-x-auto no-scrollbar scroll-smooth">
             <div id="tickerContent" class="flex items-center gap-8 min-w-max">
-                <!-- 由 JS 填充双行排版 -->
+                <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
+                <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
+                <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
+                <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
+                <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
+                <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
+                <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
+                <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
             </div>
         </div>
 
@@ -706,6 +740,22 @@
 
         // ================== 3. 底部行情双行排版 ==================
 
+        const SPARKLINE_SYMBOLS = new Set(['dji', 'ixic', 'nvda', 'spx', 'gc00y', 'cl00y', 'hsi', 'shcomp']);
+
+        function buildSparklineSVG(history, isUp) {
+            if (!history || history.length < 2) return '';
+            const w = 36, h = 14;
+            const min = Math.min(...history), max = Math.max(...history);
+            const range = max - min || 1;
+            const pts = history.map((v, i) => {
+                const x = (i / (history.length - 1)) * w;
+                const y = h - ((v - min) / range) * (h - 2) - 1;
+                return `${x.toFixed(1)},${y.toFixed(1)}`;
+            }).join(' ');
+            const color = isUp ? '#f87171' : '#34d399';
+            return `<svg class="sparkline-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline class="sparkline-poly" points="${pts}" stroke="${color}" opacity="0.6"/></svg>`;
+        }
+
         async function fetchTickerData() {
             try {
                 const response = await fetch('./ticker.json?t=' + Date.now());
@@ -719,6 +769,8 @@
                 if (container.children.length === 0) {
                     let html = '';
                     items.forEach(item => {
+                        const showSparkline = SPARKLINE_SYMBOLS.has(item.symbol) && item.price_history && item.price_history.length >= 2;
+                        const sparklineHtml = showSparkline ? `<div class="sparkline-container" data-symbol="${item.symbol}"></div>` : '';
                         html += `
                         <div class="flex flex-col items-start justify-center min-w-max gap-0.5 px-1.5" data-symbol="${item.symbol}">
                             <div class="flex items-center gap-1.5">
@@ -728,6 +780,7 @@
                             <div class="flex items-baseline gap-1.5">
                                 <span class="text-xs font-bold text-white drop-shadow-md numeric price-val">--</span>
                                 <span class="text-[10px] font-semibold drop-shadow-md numeric change-val">--</span>
+                                ${sparklineHtml}
                             </div>
                         </div>`;
                     });
@@ -744,7 +797,12 @@
                         el.querySelector('.price-val').innerText = item.price;
                         const cEl = el.querySelector('.change-val');
                         cEl.innerText = item.change;
-                        cEl.className = `text-[10px] font-semibold drop-shadow-md numeric change-val ${item.change.startsWith('-') ? 'text-emerald-400' : 'text-rose-400'}`;
+                        const isUp = !item.change.startsWith('-');
+                        cEl.className = `text-[10px] font-semibold drop-shadow-md numeric change-val ${isUp ? 'text-rose-400' : 'text-emerald-400'}`;
+                        const sparkContainer = el.querySelector('.sparkline-container');
+                        if (sparkContainer && item.price_history && item.price_history.length >= 2) {
+                            sparkContainer.innerHTML = buildSparklineSVG(item.price_history, isUp);
+                        }
                     }
                 });
             } catch { console.error("行情同步异常"); }
@@ -859,20 +917,27 @@
             return true;
         }
 
-        // 切换分类 Tab (0 延时本地秒切)
+        // 切换分类 Tab (View Transitions API)
         function setFilter(filter) {
             currentFilter = filter;
-            ['all', 'news', 'foreign', 'tech'].forEach(t => {
-                const btn = document.getElementById('tab-' + t);
-                if (btn) {
-                    if (t === filter) {
-                        btn.className = 'flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 bg-white/20 text-white shadow-lg shrink-0 min-w-[60px] scale-[1.02] border border-white/20';
-                    } else {
-                        btn.className = 'flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]';
+            const apply = () => {
+                ['all', 'news', 'foreign', 'tech'].forEach(t => {
+                    const btn = document.getElementById('tab-' + t);
+                    if (btn) {
+                        if (t === filter) {
+                            btn.className = 'flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 bg-white/20 text-white shadow-lg shrink-0 min-w-[60px] scale-[1.02] border border-white/20';
+                        } else {
+                            btn.className = 'flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]';
+                        }
                     }
-                }
-            });
-            renderNewsList();
+                });
+                renderNewsList();
+            };
+            if (document.startViewTransition) {
+                document.startViewTransition(apply);
+            } else {
+                apply();
+            }
         }
 
         function sanitizeHttpUrl(url) {
@@ -966,6 +1031,8 @@
                     allNewsData = newsList;
                     lastFirstNewsContent = newsList[0].content;
                     document.getElementById('lastUpdateTime').innerText = `${newsList[0].time}`;
+                    const sk = document.getElementById('newsSkeleton');
+                    if (sk) sk.remove();
                     renderNewsList();
                     return;
                 }
