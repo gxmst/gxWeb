@@ -563,12 +563,27 @@
             const panel = document.getElementById('news-panel');
             const ticker = document.getElementById('bottom-ticker');
             uiBounds = [];
-            if (bar) uiBounds.push(bar.getBoundingClientRect());
-            if (panel) uiBounds.push(panel.getBoundingClientRect());
-            if (ticker) uiBounds.push(ticker.getBoundingClientRect());
+            if (bar) { const r = bar.getBoundingClientRect(); uiBounds.push({ ...r, radius: 9999 }); }
+            if (panel) { const r = panel.getBoundingClientRect(); uiBounds.push({ ...r, radius: 24 }); }
+            if (ticker) { const r = ticker.getBoundingClientRect(); uiBounds.push({ ...r, radius: 0 }); }
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
+
+        function hitRoundedTop(x, y, bound) {
+            const r = bound.radius || 0;
+            if (x < bound.left || x > bound.right) return false;
+            if (y < bound.top - 4 || y > bound.top + 14) return false;
+            if (r === 0) return true;
+            const inLeft = x < bound.left + r;
+            const inRight = x > bound.right - r;
+            if (!inLeft && !inRight) return true;
+            const cx = inLeft ? bound.left + r : bound.right - r;
+            const cy = bound.top + r;
+            const dx = x - cx;
+            const dy = y - cy;
+            return (dx * dx + dy * dy) <= (r + 4) * (r + 4) && y <= cy;
+        }
 
         class WeatherParticle {
             constructor(type) { this.type = type; this.reset(); }
@@ -580,11 +595,12 @@
                 this.state = 'falling';
 
                 if (this.type === 'rain') {
-                    this.speed = 14 + Math.random() * 6;
-                    this.len = 14 + Math.random() * 10;
-                    this.opacity = 0.3 + Math.random() * 0.35;
-                    this.lineWidth = 1.0 + Math.random() * 1.0;
-                    this.windDrift = (Math.random() - 0.5) * 0.3;
+                    this.speed = 12 + Math.random() * 5;
+                    this.len = 16 + Math.random() * 12;
+                    this.opacity = 0.12 + Math.random() * 0.15;
+                    this.lineWidth = 0.6 + Math.random() * 0.5;
+                    this.angle = 0.06 + Math.random() * 0.08;
+                    this.windDrift = (Math.random() - 0.5) * 0.15;
                 } else {
                     this.speed = 0.5 + Math.random() * 1.5;
                     this.radius = 1.5 + Math.random() * 3;
@@ -602,7 +618,7 @@
 
                 this.y += this.speed;
                 if (this.type === 'rain') {
-                    this.x += this.windDrift;
+                    this.x += this.windDrift + this.angle * this.speed * 0.5;
                 } else {
                     this.x += Math.sin(this.swingPhase) * this.swingAmp;
                     this.x += windX * 0.3;
@@ -610,8 +626,7 @@
                 }
 
                 for (const bound of uiBounds) {
-                    if (this.x > bound.left + 15 && this.x < bound.right - 15 &&
-                        this.y > bound.top - 2 && this.y < bound.top + 12) {
+                    if (hitRoundedTop(this.x, this.y, bound)) {
                         if (this.type === 'rain') {
                             this.state = 'splashing';
                             this.splashRadius = 1;
@@ -698,7 +713,7 @@
             draw() {
                 ctx.beginPath();
                 if (this.state === 'streaming') {
-                    ctx.strokeStyle = `rgba(180, 210, 240, ${this.streamOpacity})`;
+                    ctx.strokeStyle = `rgba(140, 170, 210, ${this.streamOpacity * 0.5})`;
                     ctx.lineWidth = this.streamWidth;
                     ctx.moveTo(this.x, this.streamY - 10);
                     ctx.lineTo(this.x, this.streamY);
@@ -706,16 +721,16 @@
                     return;
                 }
                 if (this.state === 'pooling') {
-                    ctx.fillStyle = `rgba(180, 210, 240, ${this.poolOpacity})`;
-                    ctx.ellipse(this.x, this.y, this.poolWidth, 1.2, 0, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(140, 170, 210, ${this.poolOpacity * 0.6})`;
+                    ctx.ellipse(this.x, this.y, this.poolWidth, 1, 0, 0, Math.PI * 2);
                     ctx.fill();
                     return;
                 }
                 if (this.state === 'splashing') {
-                    ctx.strokeStyle = `rgba(255, 255, 255, ${this.splashAlpha})`;
-                    ctx.lineWidth = 1.5;
-                    const r = Math.min(this.splashRadius, 14);
-                    ctx.ellipse(this.x, this.y, r, r * 0.3, 0, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(140, 170, 210, ${this.splashAlpha * 0.5})`;
+                    ctx.lineWidth = 1;
+                    const r = Math.min(this.splashRadius, 10);
+                    ctx.ellipse(this.x, this.y, r, r * 0.25, 0, 0, Math.PI * 2);
                     ctx.stroke();
                     return;
                 }
@@ -729,7 +744,7 @@
                 }
                 if (this.type === 'rain') {
                     const dx = this.angle * this.len;
-                    ctx.strokeStyle = `rgba(200, 220, 255, ${this.opacity})`;
+                    ctx.strokeStyle = `rgba(140, 170, 210, ${this.opacity})`;
                     ctx.lineWidth = this.lineWidth;
                     ctx.moveTo(this.x, this.y);
                     ctx.lineTo(this.x + dx, this.y + this.len);
@@ -749,7 +764,7 @@
                 if (p.type === 'puddle') {
                     p.opacity -= p.decay;
                     if (p.opacity <= 0) { accumulatedParticles.splice(i, 1); continue; }
-                    ctx.fillStyle = `rgba(180, 210, 240, ${p.opacity})`;
+                    ctx.fillStyle = `rgba(120, 150, 190, ${p.opacity * 0.5})`;
                     ctx.ellipse(p.x, p.y, p.width, 1, 0, 0, Math.PI * 2);
                     ctx.fill();
                 } else if (p.type === 'microdrop') {
@@ -758,7 +773,7 @@
                     p.vy += p.gravity;
                     p.opacity -= 0.02;
                     if (p.opacity <= 0 || p.y > canvas.height) { accumulatedParticles.splice(i, 1); continue; }
-                    ctx.fillStyle = `rgba(200, 225, 255, ${p.opacity})`;
+                    ctx.fillStyle = `rgba(140, 170, 210, ${p.opacity * 0.4})`;
                     ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
                     ctx.fill();
                 } else if (p.type === 'drip') {
@@ -766,7 +781,7 @@
                     p.life--;
                     p.opacity -= 0.008;
                     if (p.life <= 0 || p.opacity <= 0 || p.y > canvas.height) { accumulatedParticles.splice(i, 1); continue; }
-                    ctx.fillStyle = `rgba(180, 210, 240, ${p.opacity})`;
+                    ctx.fillStyle = `rgba(120, 150, 190, ${p.opacity * 0.5})`;
                     ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
                     ctx.fill();
                 }
@@ -1020,43 +1035,8 @@
             renderNewsList();
         }
 
-        // 极致排版的单条新闻渲染 (修复间距过大，增加极细分割线)
-        function createNewsElement(news, isNew = false) {
-            let displayText = news.content.replace('【新浪】', '');
-
-            // 允许后端传入 HTML (聚合块)，直接进行关键词高亮
-            let highlightedHtml = displayText
-                .replace(/涨|创历史新高|超预期/g, '<span class="text-red-400 font-bold">$&</span>')
-                .replace(/跌|跳水|不及预期|走弱|大跌/g, '<span class="text-green-400 font-bold">$&</span>');
-
-            // 安全外链渲染 (聚合列表内部自带 a 标签，这里处理单条带 url 的新闻)
-            let contentHtml = news.url ? `<a href="${news.url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 visited:text-purple-300/80 hover:text-blue-300 hover:underline transition-colors underline-offset-4">${highlightedHtml}</a>` : highlightedHtml;
-
-            const fs = currentFontSize === 'sm' ? 'text-sm' : (currentFontSize === 'base' ? 'text-base' : 'text-lg');
-            const item = document.createElement('div');
-
-            // 重要性标记
-            let importantTag = news.is_important ? `<span class="ml-2 px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[9px] font-bold rounded border border-red-500/30 animate-pulse">🔥 重大</span>` : '';
-            let importantClass = news.is_important ? ' bg-red-500/10 border-red-500/20' : ' border-white/20';
-
-            // 黄金间距与聚合列表样式适配
-            item.className = `border-l-2 ${importantClass} pl-3 border-b border-white/5 pb-3 mb-3 last:border-b-0 last:mb-0 last:pb-0 news-item-hover [&_a]:text-blue-400 [&_a]:underline [&_a]:hover:text-blue-300` + (isNew ? ' animate-slide-down' : '');
-
-            item.innerHTML = `<div class="text-[11px] text-white/40 font-mono mb-0.5 flex items-center">${news.time}${importantTag}</div><div class="${fs} leading-loose text-white/90 drop-shadow-sm tech-content">${contentHtml}</div>`;
-            return item;
-        }
-
-        // 分类过滤规则
-        function applyFilter(n) {
-            const c = n.content;
-            if (currentFilter === 'news') return c.includes('【新浪】');
-            if (currentFilter === 'foreign') return ['【华尔街日报】', '【FT中文网】', '【纽约时报】', '【BBC】', '【联合早报】', '【Yahoo】', '【CNBC】', '【FT】'].some(s => c.includes(s));
-            if (currentFilter === 'tech') return ['【V2EX', '【HN', '【GitHub'].some(s => c.includes(s));
-            return true;
-        }
-
-        // 切换分类 Tab (View Transitions API)
-        function setFilter(filter) {
+        // 字体切换 (0 延时本地秒切)
+        function setFontSize(size) {
             currentFilter = filter;
             const apply = () => {
                 ['all', 'news', 'foreign', 'tech'].forEach(t => {
@@ -1177,19 +1157,16 @@
 
                 // 增量同步：发现新数据时，执行平滑插入
                 if (newsList[0].content !== lastFirstNewsContent) {
-                    lastFirstNewsContent = newsList[0].content;
-                    allNewsData = newsList;
-                    document.getElementById('lastUpdateTime').innerText = `${newsList[0].time}`;
-                    renderNewsList();
-                    return;
                     const newItems = [];
                     for (let n of newsList) {
                         if (n.content === lastFirstNewsContent) break;
                         if (applyFilter(n)) newItems.push(n);
                     }
 
+                    allNewsData = newsList;
+                    document.getElementById('lastUpdateTime').innerText = `${newsList[0].time}`;
+
                     if (newItems.length > 0) {
-                        // 记录滚动位置，防止阅读时画面乱跳
                         const currentScroll = listContainer.scrollTop;
                         const oldHeight = listContainer.scrollHeight;
 
@@ -1197,14 +1174,13 @@
                             listContainer.prepend(createNewsElement(n, true));
                         });
 
-                        // 如果用户不在最顶部，补偿滚动高度
                         if (currentScroll > 10) {
                             listContainer.scrollTop = currentScroll + (listContainer.scrollHeight - oldHeight);
                         }
+                    } else {
+                        renderNewsList();
                     }
                     lastFirstNewsContent = newsList[0].content;
-                    allNewsData = newsList;
-                    document.getElementById('lastUpdateTime').innerText = `${newsList[0].time}`;
                 }
             } catch (e) {
                 console.error("快讯同步失败:", e);
