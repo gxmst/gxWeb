@@ -751,6 +751,48 @@
         }
         fetchTickerData(); setInterval(fetchTickerData, 15000);
 
+        async function fetchTickerStatus() {
+            try {
+                const resp = await fetch('./ticker-status.json?t=' + Date.now());
+                const ts = await resp.json();
+                if (!ts || !ts.status) return;
+                const statusText = document.getElementById('statusText');
+                const statusPing = document.getElementById('statusPing');
+                const statusDot = document.getElementById('statusDot');
+
+                const ageMinutes = ts.updated_at ? (Date.now() / 1000 - ts.updated_at) / 60 : 0;
+                if (ageMinutes > 5) {
+                    statusText.innerText = '离线';
+                    statusText.className = 'text-[10px] font-bold text-red-400';
+                    statusPing.className = 'hidden';
+                    statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-red-500';
+                    statusDot.parentElement.parentElement.title = '行情数据超过5分钟未更新';
+                    return;
+                }
+
+                if (ts.status === 'failed') {
+                    statusText.innerText = '行情失败';
+                    statusText.className = 'text-[10px] font-bold text-red-400';
+                    statusPing.className = 'hidden';
+                    statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-red-500';
+                    statusDot.parentElement.parentElement.title = '行情源失败，当前显示上次成功数据';
+                } else if (ts.status === 'degraded') {
+                    statusText.innerText = '降级';
+                    statusText.className = 'text-[10px] font-bold text-amber-400';
+                    statusPing.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75';
+                    statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500';
+                    statusDot.parentElement.parentElement.title = '行情源降级，部分使用备用源';
+                } else {
+                    statusText.innerText = 'LIVE';
+                    statusText.className = 'text-[10px] font-bold text-green-400';
+                    statusPing.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75';
+                    statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-green-500';
+                    statusDot.parentElement.parentElement.title = '行情源正常';
+                }
+            } catch { /* ticker-status 不可用时保持原状 */ }
+        }
+        fetchTickerStatus(); setInterval(fetchTickerStatus, 15000);
+
         // ================== 4. 新闻流与交互渲染 ==================
 
         let allNewsData = [];
@@ -904,50 +946,6 @@
             try {
                 const response = await fetch('./finance-news.json?t=' + Date.now());
                 const data = await response.json();
-
-                // 心跳监测逻辑 (使用后端的 last_updated)
-                const statusText = document.getElementById('statusText');
-                const statusPing = document.getElementById('statusPing');
-                const statusDot = document.getElementById('statusDot');
-
-                if (data && data.last_updated) {
-                    const lastUpdatedMs = data.last_updated * 1000;
-                    const diffMinutes = (Date.now() - lastUpdatedMs) / 60000;
-
-                    if (diffMinutes <= 3) {
-                        statusText.innerText = 'LIVE';
-                        statusText.className = 'text-[10px] font-bold text-green-400';
-                        statusPing.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75';
-                        statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-green-500';
-                    } else {
-                        statusText.innerText = '离线';
-                        statusText.className = 'text-[10px] font-bold text-red-400';
-                        statusPing.className = 'hidden';
-                        statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-red-500';
-                    }
-                }
-
-                try {
-                    const tsResp = await fetch('./ticker-status.json?t=' + Date.now());
-                    const ts = await tsResp.json();
-                    if (ts && ts.status) {
-                        if (ts.status === 'failed') {
-                            statusText.innerText = '行情失败';
-                            statusText.className = 'text-[10px] font-bold text-red-400';
-                            statusPing.className = 'hidden';
-                            statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-red-500';
-                            statusDot.parentElement.parentElement.title = '行情源失败，当前显示上次成功数据';
-                        } else if (ts.status === 'degraded') {
-                            statusText.innerText = '降级';
-                            statusText.className = 'text-[10px] font-bold text-amber-400';
-                            statusPing.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75';
-                            statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500';
-                            statusDot.parentElement.parentElement.title = '行情源降级，部分使用备用源';
-                        } else {
-                            statusDot.parentElement.parentElement.title = '行情源正常';
-                        }
-                    }
-                } catch { /* ticker-status 不可用时保持原状 */ }
 
                 const newsList = (data.news_list || []).map(item => {
                     const normalized = { ...item };

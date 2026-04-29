@@ -662,9 +662,7 @@ def fetch_ticker():
     # 4. 状态判定与写入
     if unique_count >= threshold:
         atomic_save_json(TICKER_FILE, list(result_map.values()))
-        if primary_count >= threshold:
-            status = "ok"
-        elif fallback_count > 0 or len(stale_used) > 0:
+        if fallback_count > 0 or len(stale_used) > 0:
             status = "degraded"
         else:
             status = "ok"
