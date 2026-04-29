@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 
 <head>
@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Vibe Workspace</title>
     <link rel="icon" type="image/png" href="./favicon.png">
-    <!-- 引入 Tailwind CSS 引擎 -->
+    <!-- 寮曞叆 Tailwind CSS 寮曟搸 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -20,7 +20,7 @@
             font-variant-numeric: tabular-nums;
         }
 
-        /* 核心：毛玻璃质感 */
+        /* 鏍稿績锛氭瘺鐜荤拑璐ㄦ劅 */
         .glass {
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(12px);
@@ -29,7 +29,7 @@
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
         }
 
-        /* 隐藏滚动条但保留滚动功能 */
+        /* 闅愯棌婊氬姩鏉′絾淇濈暀婊氬姩鍔熻兘 */
         .no-scrollbar::-webkit-scrollbar {
             display: none;
         }
@@ -39,7 +39,7 @@
             scrollbar-width: none;
         }
 
-        /* 进场动画 */
+        /* 杩涘満鍔ㄧ敾 */
         @keyframes slideDown {
             from {
                 opacity: 0;
@@ -82,7 +82,7 @@
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 10px 20px rgba(0, 0, 0, 0.22);
         }
 
-        /* 新闻项悬停优化 */
+        /* 鏂伴椈椤规偓鍋滀紭鍖?*/
         .news-item-hover {
             transition: background 0.2s ease;
             border-radius: 0.75rem;
@@ -92,7 +92,7 @@
             background: rgba(255, 255, 255, 0.05);
         }
 
-        /* 科技聚合块样式适配 */
+        /* 绉戞妧鑱氬悎鍧楁牱寮忛€傞厤 */
         .tech-content br {
             display: block;
             margin-top: 0.5rem;
@@ -136,7 +136,7 @@
             background: linear-gradient(180deg, rgba(8, 47, 73, 0.22), rgba(8, 47, 73, 0.08));
         }
 
-        /* 骨架屏动画 */
+        /* 楠ㄦ灦灞忓姩鐢?*/
         @keyframes shimmer {
             0% { background-position: -400px 0; }
             100% { background-position: 400px 0; }
@@ -159,7 +159,7 @@
 <body
     class="min-h-screen w-screen text-white font-sans bg-gray-900 flex flex-col md:flex-row md:h-screen md:overflow-hidden overflow-y-auto no-scrollbar">
 
-    <!-- 动态背景 -->
+    <!-- 鍔ㄦ€佽儗鏅?-->
     <div class="fixed inset-0 z-0">
         <img id="bgImage1" translate="no" src=""
             class="absolute inset-0 w-full h-full object-cover pointer-events-none select-none transition-opacity duration-1000 ease-in-out z-[1] opacity-0"
@@ -168,7 +168,7 @@
             class="absolute inset-0 w-full h-full object-cover pointer-events-none select-none transition-opacity duration-1000 ease-in-out z-[2] opacity-0"
             alt="">
 
-        <!-- 自适应氛围光晕 (中性提亮，确保透过玻璃提取壁纸色彩) -->
+        <!-- 鑷€傚簲姘涘洿鍏夋檿 (涓€ф彁浜紝纭繚閫忚繃鐜荤拑鎻愬彇澹佺焊鑹插僵) -->
         <div
             class="absolute top-1/4 -right-20 w-[500px] h-[500px] bg-white/5 rounded-full filter blur-[110px] pointer-events-none animate-pulse z-10">
         </div>
@@ -176,17 +176,17 @@
             class="absolute bottom-1/3 -right-32 w-[450px] h-[450px] bg-slate-300/10 rounded-full filter blur-[100px] pointer-events-none z-10">
         </div>
 
-        <!-- 动态天气滤镜层 -->
+        <!-- 鍔ㄦ€佸ぉ姘旀护闀滃眰 -->
         <div id="weatherOverlay" class="absolute inset-0 bg-black/40 transition-colors duration-1000 z-20"></div>
-        <!-- 物理粒子画布 -->
+        <!-- 鐗╃悊绮掑瓙鐢诲竷 -->
         <canvas id="weatherCanvas" class="absolute inset-0 z-30 pointer-events-none"></canvas>
     </div>
 
-    <!-- 左上角：控制中心 -->
+    <!-- 宸︿笂瑙掞細鎺у埗涓績 -->
     <div class="absolute top-6 left-6 flex gap-4 z-30">
         <button id="wallpaperBtn" onclick="toggleWallpaper()" style="opacity: 0.5; pointer-events: none;"
             class="w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg outline-none focus:outline-none"
-            title="切换壁纸">
+            title="鍒囨崲澹佺焊">
             <svg class="w-5 h-5 text-white/70 group-hover:text-white" fill="none" stroke="currentColor"
                 viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -199,47 +199,47 @@
             title="切换环境滤镜">✨</button>
     </div>
 
-    <!-- 主体内容区 (左侧) -->
+    <!-- 涓讳綋鍐呭鍖?(宸︿晶) -->
     <main
         class="relative z-10 flex flex-col items-center justify-center p-8 pb-20 w-full min-h-[80vh] md:flex-1 md:min-h-0">
-        <!-- 时间与天气 -->
+        <!-- 鏃堕棿涓庡ぉ姘?-->
         <div class="flex flex-col items-center mb-10">
             <div id="clock"
                 class="text-7xl font-semibold tracking-tight numeric drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]">00:00
             </div>
             <div
                 class="flex items-center gap-3 text-white/90 text-sm mt-4 tracking-wider drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] font-medium">
-                <span id="dateInfo">获取日期中...</span>
+                <span id="dateInfo">鑾峰彇鏃ユ湡涓?..</span>
                 <span class="opacity-40">|</span>
-                <span id="weatherInfo">获取天气中...</span>
+                <span id="weatherInfo">鑾峰彇澶╂皵涓?..</span>
             </div>
         </div>
 
-        <!-- 融合搜索框 (内嵌引擎选择) -->
+        <!-- 铻嶅悎鎼滅储妗?(鍐呭祵寮曟搸閫夋嫨) -->
         <div id="search-bar"
             class="w-full max-w-2xl bg-white/5 backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border border-white/20 rounded-full flex items-center p-1.5 pr-4 mb-12 transition-all duration-300 hover:scale-[1.01] focus-within:scale-[1.05] focus-within:ring-4 focus-within:ring-white/20 focus-within:bg-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_20px_50px_rgba(0,0,0,0.4)] overflow-hidden">
             <svg class="w-5 h-5 text-white/50 ml-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
             </svg>
-            <input type="text" id="searchInput" placeholder="在网络上搜索..."
+            <input type="text" id="searchInput" placeholder="鍦ㄧ綉缁滀笂鎼滅储..."
                 class="flex-1 min-w-0 bg-transparent border-none outline-none text-white px-4 text-base placeholder-white/60"
                 onkeypress="handleSearch(event)">
 
-            <!-- 内嵌引擎切换 -->
+            <!-- 鍐呭祵寮曟搸鍒囨崲 -->
             <div class="flex gap-2 pr-1 shrink-0">
                 <button onclick="setSearchEngine('bing')" id="eng-bing"
-                    class="px-3 py-1 rounded-full text-[11px] font-medium transition-all shrink-0">必应</button>
+                    class="px-3 py-1 rounded-full text-[11px] font-medium transition-all shrink-0">蹇呭簲</button>
                 <button onclick="setSearchEngine('baidu')" id="eng-baidu"
-                    class="px-3 py-1 rounded-full text-[11px] font-medium transition-all shrink-0">百度</button>
+                    class="px-3 py-1 rounded-full text-[11px] font-medium transition-all shrink-0">鐧惧害</button>
                 <button onclick="setSearchEngine('google')" id="eng-google"
-                    class="px-3 py-1 rounded-full text-[11px] font-medium transition-all shrink-0">谷歌</button>
+                    class="px-3 py-1 rounded-full text-[11px] font-medium transition-all shrink-0">璋锋瓕</button>
                 <button onclick="setSearchEngine('duck')" id="eng-duck"
                     class="px-3 py-1 rounded-full text-[11px] font-medium transition-all shrink-0">D</button>
             </div>
         </div>
 
-        <!-- 快捷导航 Dock (去包装悬浮态) -->
+        <!-- 蹇嵎瀵艰埅 Dock (鍘诲寘瑁呮偓娴€? -->
         <div class="flex gap-10 px-4 py-4 w-full max-w-fit overflow-x-auto no-scrollbar">
             <a href="https://bilibili.com" target="_blank" rel="noopener noreferrer"
                 class="flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0">
@@ -287,7 +287,7 @@
                     </svg>
                 </div>
                 <span
-                    class="text-xs text-white/90 font-medium drop-shadow-md group-hover:text-white transition-colors">抖音</span>
+                    class="text-xs text-white/90 font-medium drop-shadow-md group-hover:text-white transition-colors">鎶栭煶</span>
             </a>
             <a href="https://discord.com" target="_blank" rel="noopener noreferrer"
                 class="flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0">
@@ -304,30 +304,30 @@
         </div>
     </main>
 
-    <!-- 右侧：金融快讯面板 -->
+    <!-- 鍙充晶锛氶噾铻嶅揩璁潰鏉?-->
     <aside class="relative z-10 w-full p-6 flex flex-col group/aside md:w-[450px] md:h-screen">
-        <!-- 拖拽手柄 -->
+        <!-- 鎷栨嫿鎵嬫焺 -->
         <div id="resizer"
             class="hidden md:block absolute left-0 top-0 w-1.5 h-full cursor-ew-resize z-20 hover:bg-white/30 transition-colors group-hover/aside:bg-white/10">
         </div>
 
         <div id="news-panel"
             class="bg-white/5 backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border border-white/20 flex-1 rounded-3xl p-6 flex flex-col overflow-hidden relative shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_25px_50px_rgba(0,0,0,0.5)]">
-            <!-- 标题栏 -->
+            <!-- 鏍囬鏍?-->
             <div class="flex items-center justify-between mb-4 border-b border-white/10 pb-4">
                 <div class="flex items-center gap-3">
-                    <h2 class="text-lg font-bold tracking-wider text-white/90">7x24 市场快讯</h2>
+                    <h2 class="text-lg font-bold tracking-wider text-white/90">7x24 甯傚満蹇</h2>
                     <div class="flex items-center gap-1 bg-white/5 p-0.5 rounded-md text-[10px] border border-white/5">
                         <button onclick="setFontSize('sm')" id="fs-sm"
-                            class="px-2 py-0.5 rounded transition-all bg-white/20 text-white shadow-sm">小</button>
+                            class="px-2 py-0.5 rounded transition-all bg-white/20 text-white shadow-sm">灏?/button>
                         <button onclick="setFontSize('base')" id="fs-base"
-                            class="px-2 py-0.5 rounded transition-all text-white/50 hover:text-white/90">中</button>
+                            class="px-2 py-0.5 rounded transition-all text-white/50 hover:text-white/90">涓?/button>
                         <button onclick="setFontSize('lg')" id="fs-lg"
-                            class="px-2 py-0.5 rounded transition-all text-white/50 hover:text-white/90">大</button>
+                            class="px-2 py-0.5 rounded transition-all text-white/50 hover:text-white/90">澶?/button>
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
-                    <span id="lastUpdateTime" class="text-[10px] numeric text-white/40">更新中...</span>
+                    <span id="lastUpdateTime" class="text-[10px] numeric text-white/40">鏇存柊涓?..</span>
                     <div id="heartbeatStatus" class="flex items-center gap-1.5">
                         <span id="statusText" class="text-[10px] font-bold text-green-400">LIVE</span>
                         <span class="relative flex h-2 w-2">
@@ -339,20 +339,20 @@
                 </div>
             </div>
 
-            <!-- 选项卡切换 -->
+            <!-- 閫夐」鍗″垏鎹?-->
             <div
                 class="flex p-1 mb-4 bg-black/20 rounded-xl border border-white/5 backdrop-blur-md overflow-x-auto no-scrollbar">
                 <button onclick="setFilter('all')" id="tab-all"
-                    class="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 bg-white/20 text-white shadow-lg shrink-0 min-w-[60px] scale-[1.02] border border-white/20">全部</button>
+                    class="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 bg-white/20 text-white shadow-lg shrink-0 min-w-[60px] scale-[1.02] border border-white/20">鍏ㄩ儴</button>
                 <button onclick="setFilter('news')" id="tab-news"
-                    class="flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]">快讯</button>
+                    class="flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]">蹇</button>
                 <button onclick="setFilter('foreign')" id="tab-foreign"
-                    class="flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]">外媒</button>
+                    class="flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]">澶栧獟</button>
                 <button onclick="setFilter('tech')" id="tab-tech"
-                    class="flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]">科技</button>
+                    class="flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]">绉戞妧</button>
             </div>
 
-            <!-- 滚动列表区 (增加 pb-24 防止被底部行情条挡住) -->
+            <!-- 婊氬姩鍒楄〃鍖?(澧炲姞 pb-24 闃叉琚簳閮ㄨ鎯呮潯鎸′綇) -->
             <div id="newsList"
                 class="flex-1 overflow-y-auto no-scrollbar flex flex-col pb-24 transition-opacity duration-300">
                 <div id="newsSkeleton" class="flex flex-col gap-3 p-1">
@@ -367,7 +367,7 @@
                 </div>
             </div>
 
-            <!-- 回到顶部按钮 -->
+            <!-- 鍥炲埌椤堕儴鎸夐挳 -->
             <div id="backToTop" onclick="scrollToTop()"
                 class="absolute bottom-16 right-6 z-40 w-10 h-10 bg-white/10 backdrop-blur-xl rounded-full flex items-center justify-center cursor-pointer opacity-0 pointer-events-none transition-all duration-300 hover:bg-white/20 active:scale-95 shadow-xl border border-white/20">
                 <svg class="w-5 h-5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -378,11 +378,11 @@
         </div>
     </aside>
 
-    <!-- 底部：实时行情条 (静态双行滑动布局) -->
+    <!-- 搴曢儴锛氬疄鏃惰鎯呮潯 (闈欐€佸弻琛屾粦鍔ㄥ竷灞€) -->
     <footer id="bottom-ticker"
         class="fixed bottom-0 left-0 w-full h-[38px] z-50 bg-white/5 bg-gradient-to-t from-black/60 to-transparent backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border-t border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] group/ticker">
 
-        <!-- 修复后的翻页按钮：左 -->
+        <!-- 淇鍚庣殑缈婚〉鎸夐挳锛氬乏 -->
         <button onclick="scrollTicker(-500)"
             class="absolute left-2 top-1/2 -translate-y-1/2 z-50 w-8 h-8 bg-black/50 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center opacity-0 group-hover/ticker:opacity-100 transition-all hover:bg-white/20 outline-none shadow-lg">
             <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -390,7 +390,7 @@
             </svg>
         </button>
 
-        <!-- 真正的横向滚动容器 -->
+        <!-- 鐪熸鐨勬í鍚戞粴鍔ㄥ鍣?-->
         <div id="tickerScroll"
             class="flex items-center gap-8 px-14 py-1.5 w-full h-full overflow-x-auto no-scrollbar scroll-smooth">
             <div id="tickerContent" class="flex items-center gap-8 min-w-max">
@@ -405,7 +405,7 @@
             </div>
         </div>
 
-        <!-- 修复后的翻页按钮：右 -->
+        <!-- 淇鍚庣殑缈婚〉鎸夐挳锛氬彸 -->
         <button onclick="scrollTicker(500)"
             class="absolute right-2 top-1/2 -translate-y-1/2 z-50 w-8 h-8 bg-black/50 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center opacity-0 group-hover/ticker:opacity-100 transition-all hover:bg-white/20 outline-none shadow-lg">
             <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -415,7 +415,7 @@
     </footer>
 
     <script>
-        // ================== 1. 壁纸收藏夹引擎 (动态加载) ==================
+        // ================== 1. 澹佺焊鏀惰棌澶瑰紩鎿?(鍔ㄦ€佸姞杞? ==================
         let wallpapersArray = [];
         let currentBgIndex = 0;
         let activeBgLayer = 1;
@@ -427,7 +427,7 @@
                 const resp = await fetch('./wallpapers.json?t=' + Date.now());
                 wallpapersArray = await resp.json();
                 if (wallpapersArray && wallpapersArray.length > 0) {
-                    // 初始化第一张并预加载
+                    // 鍒濆鍖栫涓€寮犲苟棰勫姞杞?
                     const img1 = document.getElementById('bgImage1');
                     const img2 = document.getElementById('bgImage2');
                     const firstSrc = wallpapersArray[0] + '?v=' + vSuffix;
@@ -441,20 +441,20 @@
                         const img = new Image();
                         img.src = url + '?v=' + vSuffix;
                     });
-                    // 列表加载成功后激活切换按钮
+                    // 鍒楄〃鍔犺浇鎴愬姛鍚庢縺娲诲垏鎹㈡寜閽?
                     const btn = document.getElementById('wallpaperBtn');
                     btn.style.opacity = '1';
                     btn.style.pointerEvents = 'auto';
                 }
             } catch (e) {
-                console.error("加载壁纸列表失败:", e);
+                console.error("鍔犺浇澹佺焊鍒楄〃澶辫触:", e);
             }
         }
         initWallpapers();
 
-        // ================== 2. 基础 UI 控制 ==================
+        // ================== 2. 鍩虹 UI 鎺у埗 ==================
 
-        // 实时时钟
+        // 瀹炴椂鏃堕挓
         const clockEl = document.getElementById('clock');
         const dateInfoEl = document.getElementById('dateInfo');
 
@@ -462,22 +462,22 @@
             const now = new Date();
             clockEl.innerText = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
             const dateStr = now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-            // 完美处理日期和星期的空格
-            dateInfoEl.innerText = dateStr.replace(/(日)\s*(星期)/, '$1 $2');
+            // 瀹岀編澶勭悊鏃ユ湡鍜屾槦鏈熺殑绌烘牸
+            dateInfoEl.innerText = dateStr;
         }
         setInterval(updateClock, 1000); updateClock();
 
-        // 搜索引擎
+        // 鎼滅储寮曟搸
         let currentEngine = localStorage.getItem('preferredEngine') || 'bing';
         const engines = {
-            bing: { name: '必应', url: 'https://www.bing.com/search?q=', color: '#00809D' },
-            baidu: { name: '百度', url: 'https://www.baidu.com/s?wd=', color: '#2932E1' },
-            google: { name: '谷歌', url: 'https://www.google.com/search?q=', color: '#EA4335' },
+            bing: { name: '蹇呭簲', url: 'https://www.bing.com/search?q=', color: '#00809D' },
+            baidu: { name: '鐧惧害', url: 'https://www.baidu.com/s?wd=', color: '#2932E1' },
+            google: { name: '璋锋瓕', url: 'https://www.google.com/search?q=', color: '#EA4335' },
             duck: { name: 'Duck', url: 'https://duckduckgo.com/?q=', color: '#DE5833' }
         };
         function setSearchEngine(engine) {
             currentEngine = engine; localStorage.setItem('preferredEngine', engine);
-            document.getElementById('searchInput').placeholder = `在 ${engines[engine].name} 上搜索...`;
+            document.getElementById('searchInput').placeholder = `鍦?${engines[engine].name} 涓婃悳绱?..`;
             Object.keys(engines).forEach(key => {
                 const btn = document.getElementById('eng-' + key);
                 if (key === engine) {
@@ -497,7 +497,7 @@
             }
         }
 
-        // 壁纸轮换 (动态适配收藏夹 + 必应 5 图)
+        // 澹佺焊杞崲 (鍔ㄦ€侀€傞厤鏀惰棌澶?+ 蹇呭簲 5 鍥?
         function toggleWallpaper() {
             if (wallpapersArray.length === 0) return;
             if (isSwitchingBg) return;
@@ -529,13 +529,13 @@
             hiddenLayer.src = nextSrc;
         }
 
-        // 行情条翻页逻辑 (AI漏掉的函数，已补全)
+        // 琛屾儏鏉＄炕椤甸€昏緫 (AI婕忔帀鐨勫嚱鏁帮紝宸茶ˉ鍏?
         function scrollTicker(amount) {
             document.getElementById('tickerScroll').scrollBy({ left: amount, behavior: 'smooth' });
         }
 
 
-        // ================== 2. 天气与粒子物理引擎 ==================
+        // ================== 2. 澶╂皵涓庣矑瀛愮墿鐞嗗紩鎿?==================
 
         const canvas = document.getElementById('weatherCanvas');
         const ctx = canvas.getContext('2d');
@@ -688,17 +688,22 @@
 
         function applyEnvironmentFilter(weatherKeyword) {
             const overlay = document.getElementById('weatherOverlay');
+            const text = String(weatherKeyword || '');
+            const isRain = text.includes('雨') || text.includes('🌧');
+            const isSnow = text.includes('雪') || text.includes('❄');
+            const isSunny = text.includes('晴') || text.includes('☀');
+
             cancelAnimationFrame(animationId);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             particles = [];
 
-            if (weatherKeyword.includes('🌧️') || weatherKeyword.includes('雨')) {
+            if (isRain) {
                 overlay.className = "absolute inset-0 bg-blue-900/30 transition-colors duration-1000 z-20";
                 for (let i = 0; i < 200; i++) particles.push(new WeatherParticle('rain'));
                 animateWeather();
-            } else if (weatherKeyword.includes('☀️') || weatherKeyword.includes('晴')) {
+            } else if (isSunny) {
                 overlay.className = "absolute inset-0 bg-amber-200/12 transition-colors duration-1000 z-20";
-            } else if (weatherKeyword.includes('❄️') || weatherKeyword.includes('雪')) {
+            } else if (isSnow) {
                 overlay.className = "absolute inset-0 bg-slate-800/40 transition-colors duration-1000 z-20";
                 for (let i = 0; i < 250; i++) particles.push(new WeatherParticle('snow'));
                 animateWeather();
@@ -708,7 +713,7 @@
         }
 
         let realWeather = '';
-        const filterModes = ['auto', '晴', '雨', '雪'];
+        const filterModes = ['auto', 'sunny', 'rain', 'snow'];
         const filterIcons = ['✨', '☀️', '🌧️', '❄️'];
         let currentFilterIndex = 0;
 
@@ -725,16 +730,16 @@
                 const response = await fetch('./weather.txt?t=' + Date.now());
                 if (!response.ok) throw new Error();
                 const text = await response.text();
-                if (!text.includes('失败')) {
+                if (!text.includes('澶辫触')) {
                     realWeather = text;
                     document.getElementById('weatherInfo').innerText = text;
                     if (filterModes[currentFilterIndex] === 'auto') applyEnvironmentFilter(realWeather);
                 }
-            } catch { document.getElementById('weatherInfo').innerText = '暂无天气数据'; }
+            } catch { document.getElementById('weatherInfo').innerText = '鏆傛棤澶╂皵鏁版嵁'; }
         }
         fetchWeather(); setInterval(fetchWeather, 600000);
 
-        // ================== 3. 底部行情双行排版 ==================
+        // ================== 3. 搴曢儴琛屾儏鍙岃鎺掔増 ==================
 
         const SPARKLINE_MIN_POINTS = 3;
 
@@ -759,7 +764,7 @@
                 const container = document.getElementById('tickerContent');
                 if (!items || items.length === 0) return;
 
-                // 优化：如果后端增删了行情条目（数量不一致），则清空重绘，确保列表同步
+                // 浼樺寲锛氬鏋滃悗绔鍒犱簡琛屾儏鏉＄洰锛堟暟閲忎笉涓€鑷达級锛屽垯娓呯┖閲嶇粯锛岀‘淇濆垪琛ㄥ悓姝?
                 if (container.children.length !== items.length) container.innerHTML = '';
 
                 if (container.children.length === 0) {
@@ -798,7 +803,7 @@
                         }
                     }
                 });
-            } catch { console.error("行情同步异常"); }
+            } catch { console.error("琛屾儏鍚屾寮傚父"); }
         }
         fetchTickerData(); setInterval(fetchTickerData, 15000);
 
@@ -813,7 +818,7 @@
 
                 const ageMinutes = ts.updated_at ? (Date.now() / 1000 - ts.updated_at) / 60 : 0;
                 if (ageMinutes > 5) {
-                    statusText.innerText = '离线';
+                    statusText.innerText = '绂荤嚎';
                     statusText.className = 'text-[10px] font-bold text-red-400';
                     statusPing.className = 'hidden';
                     statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-red-500';
@@ -822,13 +827,13 @@
                 }
 
                 if (ts.status === 'failed') {
-                    statusText.innerText = '行情失败';
+                    statusText.innerText = '琛屾儏澶辫触';
                     statusText.className = 'text-[10px] font-bold text-red-400';
                     statusPing.className = 'hidden';
                     statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-red-500';
                     statusDot.parentElement.parentElement.title = '行情源失败，当前显示上次成功数据';
                 } else if (ts.status === 'degraded') {
-                    statusText.innerText = '降级';
+                    statusText.innerText = '闄嶇骇';
                     statusText.className = 'text-[10px] font-bold text-amber-400';
                     statusPing.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75';
                     statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500';
@@ -840,31 +845,31 @@
                     statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-green-500';
                     statusDot.parentElement.parentElement.title = '行情源正常';
                 }
-            } catch { /* ticker-status 不可用时保持原状 */ }
+            } catch { /* ticker-status 涓嶅彲鐢ㄦ椂淇濇寔鍘熺姸 */ }
         }
         fetchTickerStatus(); setInterval(fetchTickerStatus, 15000);
 
-        // ================== 4. 新闻流与交互渲染 ==================
+        // ================== 4. 鏂伴椈娴佷笌浜や簰娓叉煋 ==================
 
         let allNewsData = [];
         let currentFilter = 'all';
         let lastFirstNewsContent = '';
         let currentFontSize = 'sm';
 
-        // 统一渲染函数：根据当前数据和过滤条件，全量重绘列表
+        // 缁熶竴娓叉煋鍑芥暟锛氭牴鎹綋鍓嶆暟鎹拰杩囨护鏉′欢锛屽叏閲忛噸缁樺垪琛?
         function renderNewsList() {
             const listContainer = document.getElementById('newsList');
             const filtered = allNewsData.filter(applyFilter);
 
             listContainer.innerHTML = '';
             if (filtered.length === 0) {
-                listContainer.innerHTML = '<div class="text-center text-white/30 mt-10 text-sm">暂无对应快讯</div>';
+                listContainer.innerHTML = '<div class="text-center text-white/30 mt-10 text-sm">鏆傛棤瀵瑰簲蹇</div>';
             } else {
                 filtered.forEach(n => listContainer.appendChild(createNewsElement(n)));
             }
         }
 
-        // 字体切换 (0 延时本地秒切)
+        // 瀛椾綋鍒囨崲 (0 寤舵椂鏈湴绉掑垏)
         function setFontSize(size) {
             currentFontSize = size;
             ['sm', 'base', 'lg'].forEach(s => {
@@ -875,7 +880,7 @@
             renderNewsList();
         }
 
-        // 字体切换 (0 延时本地秒切)
+        // 瀛椾綋鍒囨崲 (0 寤舵椂鏈湴绉掑垏)
         function setFontSize(size) {
             currentFilter = filter;
             const apply = () => {
@@ -911,7 +916,7 @@
         function normalizeNewsDisplayText(news) {
             const rawText = news.display_content || news.content || '';
             if ((news.category || '') === 'news') {
-                return rawText.replace(/^【[^】]+】\s*/, '');
+                return rawText.replace(/^銆怺^銆慮+銆慭s*/, '');
             }
             return rawText;
         }
@@ -984,7 +989,7 @@
 
                 const listContainer = document.getElementById('newsList');
 
-                // 首次加载：初始化数据并全量渲染
+                // 棣栨鍔犺浇锛氬垵濮嬪寲鏁版嵁骞跺叏閲忔覆鏌?
                 if (allNewsData.length === 0) {
                     allNewsData = newsList;
                     lastFirstNewsContent = newsList[0].content;
@@ -995,7 +1000,7 @@
                     return;
                 }
 
-                // 增量同步：发现新数据时，执行平滑插入
+                // 澧為噺鍚屾锛氬彂鐜版柊鏁版嵁鏃讹紝鎵ц骞虫粦鎻掑叆
                 if (newsList[0].content !== lastFirstNewsContent) {
                     const newItems = [];
                     for (let n of newsList) {
@@ -1023,32 +1028,32 @@
                     lastFirstNewsContent = newsList[0].content;
                 }
             } catch (e) {
-                console.error("快讯同步失败:", e);
-                document.getElementById('statusText').innerText = '断连';
+                console.error("蹇鍚屾澶辫触:", e);
+                document.getElementById('statusText').innerText = '鏂繛';
                 document.getElementById('statusText').className = 'text-[10px] font-bold text-red-400';
                 document.getElementById('statusPing').className = 'hidden';
                 document.getElementById('statusDot').className = 'relative inline-flex rounded-full h-2 w-2 bg-red-500';
             }
         }
 
-        // ================== 5. 辅助交互与快捷键 ==================
+        // ================== 5. 杈呭姪浜や簰涓庡揩鎹烽敭 ==================
 
-        // 全局快捷键监听
+        // 鍏ㄥ眬蹇嵎閿洃鍚?
         window.addEventListener('keydown', (e) => {
             const searchInput = document.getElementById('searchInput');
-            // 一键聚焦搜索框 ( / 键 )
+            // 涓€閿仛鐒︽悳绱㈡ ( / 閿?)
             if (e.key === '/' && document.activeElement !== searchInput && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
                 e.preventDefault();
                 searchInput.focus();
             }
-            // 一键清空并退出搜索 ( Esc 键 )
+            // 涓€閿竻绌哄苟閫€鍑烘悳绱?( Esc 閿?)
             if (e.key === 'Escape' && document.activeElement === searchInput) {
                 searchInput.value = '';
                 searchInput.blur();
             }
         });
 
-        // 回到顶部悬浮按钮
+        // 鍥炲埌椤堕儴鎮诞鎸夐挳
         const newsListEl = document.getElementById('newsList');
         const bttBtn = document.getElementById('backToTop');
         newsListEl.addEventListener('scroll', () => {
@@ -1057,12 +1062,12 @@
         });
         function scrollToTop() { newsListEl.scrollTo({ top: 0, behavior: 'smooth' }); }
 
-        // 侧边栏拖拽拉伸
+        // 渚ц竟鏍忔嫋鎷芥媺浼?
         const aside = document.querySelector('aside');
         const resizer = document.getElementById('resizer');
         let isResizing = false;
 
-        // 初始化加载宽度
+        // 鍒濆鍖栧姞杞藉搴?
         const savedWidth = localStorage.getItem('newsPanelWidth');
         if (savedWidth && window.innerWidth >= 768) {
             aside.style.width = `${savedWidth}px`;
@@ -1085,7 +1090,7 @@
             aside.classList.remove('select-none');
         });
 
-        // 初始拉取快讯
+        // 鍒濆鎷夊彇蹇
         fetchRealNews(); setInterval(fetchRealNews, 10000);
     </script>
 </body>
