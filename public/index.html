@@ -563,7 +563,7 @@
             const panel = document.getElementById('news-panel');
             const ticker = document.getElementById('bottom-ticker');
             uiBounds = [];
-            if (bar) { const r = bar.getBoundingClientRect(); uiBounds.push({ ...r, radius: 9999 }); }
+            if (bar) { const r = bar.getBoundingClientRect(); uiBounds.push({ ...r, radius: 22 }); }
             if (panel) { const r = panel.getBoundingClientRect(); uiBounds.push({ ...r, radius: 24 }); }
             if (ticker) { const r = ticker.getBoundingClientRect(); uiBounds.push({ ...r, radius: 0 }); }
         }
@@ -597,8 +597,8 @@
                 if (this.type === 'rain') {
                     this.speed = 12 + Math.random() * 5;
                     this.len = 16 + Math.random() * 12;
-                    this.opacity = 0.12 + Math.random() * 0.15;
-                    this.lineWidth = 0.6 + Math.random() * 0.5;
+                    this.opacity = 0.25 + Math.random() * 0.25;
+                    this.lineWidth = 0.8 + Math.random() * 0.6;
                     this.angle = 0.06 + Math.random() * 0.08;
                     this.windDrift = (Math.random() - 0.5) * 0.15;
                 } else {
@@ -713,7 +713,7 @@
             draw() {
                 ctx.beginPath();
                 if (this.state === 'streaming') {
-                    ctx.strokeStyle = `rgba(140, 170, 210, ${this.streamOpacity * 0.5})`;
+                    ctx.strokeStyle = `rgba(140, 170, 210, ${this.streamOpacity * 0.7})`;
                     ctx.lineWidth = this.streamWidth;
                     ctx.moveTo(this.x, this.streamY - 10);
                     ctx.lineTo(this.x, this.streamY);
@@ -721,14 +721,14 @@
                     return;
                 }
                 if (this.state === 'pooling') {
-                    ctx.fillStyle = `rgba(140, 170, 210, ${this.poolOpacity * 0.6})`;
+                    ctx.fillStyle = `rgba(140, 170, 210, ${this.poolOpacity * 0.8})`;
                     ctx.ellipse(this.x, this.y, this.poolWidth, 1, 0, 0, Math.PI * 2);
                     ctx.fill();
                     return;
                 }
                 if (this.state === 'splashing') {
-                    ctx.strokeStyle = `rgba(140, 170, 210, ${this.splashAlpha * 0.5})`;
-                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = `rgba(140, 170, 210, ${this.splashAlpha * 0.7})`;
+                    ctx.lineWidth = 1.2;
                     const r = Math.min(this.splashRadius, 10);
                     ctx.ellipse(this.x, this.y, r, r * 0.25, 0, 0, Math.PI * 2);
                     ctx.stroke();
@@ -764,7 +764,7 @@
                 if (p.type === 'puddle') {
                     p.opacity -= p.decay;
                     if (p.opacity <= 0) { accumulatedParticles.splice(i, 1); continue; }
-                    ctx.fillStyle = `rgba(120, 150, 190, ${p.opacity * 0.5})`;
+                    ctx.fillStyle = `rgba(120, 150, 190, ${p.opacity * 0.7})`;
                     ctx.ellipse(p.x, p.y, p.width, 1, 0, 0, Math.PI * 2);
                     ctx.fill();
                 } else if (p.type === 'microdrop') {
@@ -773,7 +773,7 @@
                     p.vy += p.gravity;
                     p.opacity -= 0.02;
                     if (p.opacity <= 0 || p.y > canvas.height) { accumulatedParticles.splice(i, 1); continue; }
-                    ctx.fillStyle = `rgba(140, 170, 210, ${p.opacity * 0.4})`;
+                    ctx.fillStyle = `rgba(140, 170, 210, ${p.opacity * 0.6})`;
                     ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
                     ctx.fill();
                 } else if (p.type === 'drip') {
@@ -781,7 +781,7 @@
                     p.life--;
                     p.opacity -= 0.008;
                     if (p.life <= 0 || p.opacity <= 0 || p.y > canvas.height) { accumulatedParticles.splice(i, 1); continue; }
-                    ctx.fillStyle = `rgba(120, 150, 190, ${p.opacity * 0.5})`;
+                    ctx.fillStyle = `rgba(120, 150, 190, ${p.opacity * 0.7})`;
                     ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
                     ctx.fill();
                 }
