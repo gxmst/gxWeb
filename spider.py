@@ -3,6 +3,8 @@ import json
 import time
 import os
 import html
+import signal
+import hashlib
 import requests
 import feedparser
 import calendar
@@ -116,11 +118,10 @@ def atomic_load_json(path, default=None):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
-        print(f"鈿狅笍 [绯荤粺] 璇诲彇缂撳瓨澶辫触 ({path}): {e}")
+        print(f"⚠️ [系统] 读取缓存失败 ({path}): {e}")
         return default
 
 def get_beijing_time():
-    # 强制获取北京时间 (UTC+8)
     return datetime.now(timezone(timedelta(hours=8)))
 
 def clean_html(text):
@@ -128,7 +129,6 @@ def clean_html(text):
     clean = re.sub(r'<[^>]+>', '', text)
     return clean.replace('&nbsp;', ' ').replace('&mdash;', '—').strip()
 
-# ================= 引擎 1：必应壁纸 =================
 def escape_text(value):
     return html.escape(str(value or ""), quote=True)
 
@@ -141,17 +141,37 @@ def sanitize_url(url):
         return ""
     return candidate
 
+_translate_cache = {}
+
+def translate_en_to_zh(text):
+    if not text: return ""
+    cache_key = hashlib.md5(text.encode()).hexdigest()
+    if cache_key in _translate_cache:
+        return _translate_cache[cache_key]
+    try:
+        translated = GoogleTranslator(source='en', target='zh-CN').translate(text)
+        time.sleep(0.5)
+        _translate_cache[cache_key] = translated
+        if len(_translate_cache) > 500:
+            keys = list(_translate_cache.keys())
+            for k in keys[:100]:
+                del _translate_cache[k]
+        return translated
+    except Exception as e:
+        print(f"⚠️ [翻译引擎] 失败: {e}")
+        return text
+
+# ================= 引擎 1：必应壁纸 =================
 def fetch_bing_wallpaper():
     print(f"[{get_beijing_time().strftime('%H:%M:%S')}][壁纸引擎] 正在检查今日必应壁纸...")
     try:
         url = "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=5&mkt=zh-CN"
         headers = {"User-Agent": get_random_ua()}
-        data = requests.get(url, headers=headers, timeout=10).json()
+        data = HTTP_SESSION.get(url, headers=headers, timeout=10).json()
         for i in range(len(data["images"])):
             img_url = "https://www.bing.com" + data["images"][i]["url"]
-            img_data = requests.get(img_url, headers={"User-Agent": get_random_ua()}, timeout=15).content
-            
-            # 使用 Pillow 压缩图片，降低体积
+            img_data = HTTP_SESSION.get(img_url, headers={"User-Agent": get_random_ua()}, timeout=15).content
+
             img = Image.open(io.BytesIO(img_data)).convert('RGB')
             img.save(f"./public/bg_{i}.jpg", "JPEG", quality=82)
             print(f"✅ [壁纸引擎] bg_{i}.jpg 下载并压缩成功。")
@@ -161,8 +181,7 @@ def update_wallpaper_list():
     favorite_dir = "./public/favorite"
     if not os.path.exists(favorite_dir):
         os.makedirs(favorite_dir)
-    
-    # 扫描收藏夹图片
+
     favorite_files = []
     try:
         files = os.listdir(favorite_dir)
@@ -171,11 +190,10 @@ def update_wallpaper_list():
                 favorite_files.append(f"favorite/{f}")
     except Exception as e:
         print(f"❌ [壁纸引擎] 扫描收藏夹失败: {e}")
-    
-    # 构建完整列表：收藏夹在前，必应 5 图在后
+
     bing_files = [f"bg_{i}.jpg" for i in range(5) if os.path.exists(f"./public/bg_{i}.jpg")]
     wallpapers = favorite_files + bing_files
-    
+
     atomic_save_json("./public/wallpapers.json", wallpapers)
     print(f"✅ [壁纸引擎] 已更新 wallpapers.json，共包含 {len(wallpapers)} 张壁纸。")
 
@@ -183,26 +201,23 @@ def update_wallpaper_list():
 def fetch_sina():
     print(f"[{get_beijing_time().strftime('%H:%M:%S')}][新浪引擎] 开始抓取...")
     url = "https://zhibo.sina.com.cn/api/zhibo/feed?page=1&page_size=100&zhibo_id=152"
-    
+
     news_list = []
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            # 斩断僵尸连接，加入弹性超时
             headers = {
-                "User-Agent": get_random_ua(),
-                "Connection": "close"
+                "User-Agent": get_random_ua()
             }
-            resp = requests.get(url, headers=headers, timeout=15)
+            resp = HTTP_SESSION.get(url, headers=headers, timeout=15)
             data = resp.json()
             items = data.get("result", {}).get("data", {}).get("feed", {}).get("list", [])
-            
+
             for item in items:
                 clean_txt = clean_html(item.get("rich_text", "").replace("<br>", ""))
                 if clean_txt:
-                    # 提取重要性标记 (focus字段或is_top字段)
                     is_important = str(item.get("focus", "0")) == "1" or str(item.get("is_top", "0")) == "1"
-                    
+
                     ts_val = item.get("create_time")
                     try:
                         if isinstance(ts_val, str):
@@ -211,27 +226,27 @@ def fetch_sina():
                             time_str = dt.strftime('%H:%M')
                         else:
                             ts = int(ts_val)
-                            time_str = (datetime.utcfromtimestamp(ts).replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=8)))).strftime('%H:%M')
+                            time_str = (datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(timezone(timedelta(hours=8)))).strftime('%H:%M')
                     except Exception as e:
                         now = get_beijing_time(); ts = int(now.timestamp()); time_str = now.strftime('%H:%M')
                     news_list.append({
-                        "time": time_str, 
-                        "raw_time": ts, 
-                        "content": f"【新浪】{clean_txt}", 
+                        "time": time_str,
+                        "raw_time": ts,
+                        "content": f"【新浪】{clean_txt}",
                         "url": "",
                         "is_important": is_important,
                         "category": "news",
                         "source": "sina"
                     })
             print(f"✅ [新浪引擎] 成功抓取 {len(news_list)} 条。")
-            return news_list  # 成功抓取后直接返回
+            return news_list
         except Exception as e:
             print(f"⚠️ [新浪引擎] 第 {attempt + 1} 次尝试失败: {e}")
             if attempt < max_retries - 1:
                 time.sleep(2)
             else:
                 print(f"❌ [新浪引擎] 达到最大重试次数，抓取任务终止。")
-    
+
     return news_list
 
 # ================= 引擎 3：强化版 RSS 引擎 =================
@@ -252,7 +267,7 @@ def fetch_rss_news():
         source_news = []
         try:
             headers = {"User-Agent": get_random_ua()}
-            resp = requests.get(source["url"], headers=headers, timeout=15)
+            resp = HTTP_SESSION.get(source["url"], headers=headers, timeout=15)
             if resp.status_code != 200: continue
             feed = feedparser.parse(resp.text)
             for entry in feed.entries[:20]:
@@ -263,11 +278,11 @@ def fetch_rss_news():
                     ts = int(get_beijing_time().timestamp())
                     pub_parsed = entry.get("published_parsed")
                     if pub_parsed: ts = calendar.timegm(pub_parsed)
-                    time_str = (datetime.utcfromtimestamp(ts).replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=8)))).strftime('%H:%M')
+                    time_str = (datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(timezone(timedelta(hours=8)))).strftime('%H:%M')
                     source_news.append({
-                        "time": time_str, 
-                        "raw_time": ts, 
-                        "content": f"【{source['name']}】{title}", 
+                        "time": time_str,
+                        "raw_time": ts,
+                        "content": f"【{source['name']}】{title}",
                         "url": sanitize_url(link),
                         "is_important": False,
                         "category": "foreign",
@@ -278,16 +293,6 @@ def fetch_rss_news():
             all_rss_news.extend(source_news)
         except Exception as e: print(f"❌ [RSS引擎] {source['name']} 失败: {e}")
     return all_rss_news
-
-def translate_en_to_zh(text):
-    if not text: return ""
-    try:
-        translated = GoogleTranslator(source='en', target='zh-CN').translate(text)
-        time.sleep(0.5) # 降低翻译频率，防止被封
-        return translated
-    except Exception as e:
-        print(f"⚠️ [翻译引擎] 失败: {e}")
-        return text
 
 # ================= 引擎 4：科技趋势聚合 (V2EX, HN, GitHub) =================
 def fetch_github_trends(days=7, limit=10):
@@ -309,21 +314,6 @@ def fetch_github_trends(days=7, limit=10):
     if not isinstance(data, dict):
         raise ValueError("GitHub API response format is invalid")
     return data.get("items", [])[:limit]
-
-def build_github_html_legacy(items):
-    github_html = "銆怗itHub 瓒嬪娍 (鍙岃瀵圭収/鎮仠灞曞紑)銆?"
-    for i, repo in enumerate(items):
-        name = escape_text(repo.get("full_name"))
-        stars = int(repo.get("stargazers_count") or 0)
-        desc_en_raw = repo.get("description") or "No description"
-        desc_en = escape_text(desc_en_raw)
-        desc_zh = escape_text(translate_en_to_zh(desc_en_raw[:200]))
-        repo_url = escape_text(sanitize_url(repo.get("html_url")))
-        github_html += f'<div class="group mb-3 border-b border-white/5 pb-2 last:border-0">'
-        github_html += f'<a href="{repo_url}" target="_blank" rel="noopener noreferrer" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {name} (STAR {stars})</a>'
-        github_html += f'<div class="text-white/80 text-sm mt-1">{desc_en}</div>'
-        github_html += f'<div class="overflow-hidden max-h-0 opacity-0 group-hover:max-h-24 group-hover:opacity-100 transition-all duration-500 ease-in-out text-white/50 text-xs mt-1">鈫?ZH: {desc_zh}</div></div>'
-    return github_html
 
 def build_github_html(sections):
     github_html = '<div class="font-semibold text-white mb-3">GitHub Trends</div>'
@@ -361,77 +351,12 @@ def build_v2ex_html(hot_topics, new_topics):
 
     return v2ex_html
 
-def fetch_tech_news_legacy():
-    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][科技引擎] 开始抓取并聚合趋势...")
-    tech_blocks = []
-    now_bj = get_beijing_time()
-    ts = int(now_bj.timestamp())
-    time_str = now_bj.strftime('%H:%M')
-    
-    # 1. GitHub Trends (聚合模式)
-    try:
-        items = fetch_github_trends()
-        
-        github_html = "【GitHub 趋势 (双语对照/悬停展开)】"
-        for i, repo in enumerate(items):
-            name = repo.get("full_name")
-            stars = repo.get("stargazers_count")
-            desc_en = repo.get("description") or "No description"
-            desc_zh = translate_en_to_zh(desc_en[:200])
-            github_html += f'<div class="group mb-3 border-b border-white/5 pb-2 last:border-0">'
-            github_html += f'<a href="{repo.get("html_url")}" target="_blank" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {name} (⭐{stars})</a>'
-            github_html += f'<div class="text-white/80 text-sm mt-1">{desc_en}</div>'
-            github_html += f'<div class="overflow-hidden max-h-0 opacity-0 group-hover:max-h-24 group-hover:opacity-100 transition-all duration-500 ease-in-out text-white/50 text-xs mt-1">↳ ZH: {desc_zh}</div></div>'
-        
-        tech_blocks.append({
-            "time": time_str, "raw_time": ts, "content": github_html, "url": "", "is_important": False, "category": "tech"
-        })
-        print(f"✅ [科技引擎] GitHub 聚合成功")
-    except Exception as e: print(f"❌ [科技引擎] GitHub 失败: {e}")
-
-    # 2. Hacker News (聚合模式)
-    try:
-        resp = requests.get("https://hnrss.org/frontpage?points=50", headers={"User-Agent": get_random_ua()}, timeout=15)
-        if resp.status_code == 200:
-            feed = feedparser.parse(resp.text)
-            hn_html = "【HN 热帖 (双语对照/悬停展开)】"
-            for i, entry in enumerate(feed.entries[:10]):
-                title_en = entry.get("title", "").strip()
-                title_zh = translate_en_to_zh(title_en)
-                hn_html += f'<div class="group mb-3 border-b border-white/5 pb-2 last:border-0">'
-                hn_html += f'<a href="{entry.get("link")}" target="_blank" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {title_en}</a>'
-                hn_html += f'<div class="overflow-hidden max-h-0 opacity-0 group-hover:max-h-20 group-hover:opacity-100 transition-all duration-500 ease-in-out text-white/50 text-xs mt-1">↳ ZH: {title_zh}</div></div>'
-            
-            tech_blocks.append({
-                "time": time_str, "raw_time": ts, "content": hn_html, "url": "", "is_important": False, "category": "tech"
-            })
-            print(f"✅ [科技引擎] HN 聚合成功")
-    except Exception as e: print(f"❌ [科技引擎] HN 失败: {e}")
-
-    # 3. V2EX (聚合模式)
-    try:
-        resp = requests.get("https://www.v2ex.com/index.xml", headers={"User-Agent": get_random_ua()}, timeout=15)
-        if resp.status_code == 200:
-            feed = feedparser.parse(resp.text)
-            v2ex_html = "【V2EX 热门】"
-            for i, entry in enumerate(feed.entries[:10]):
-                v2ex_html += f'<div class="mb-3 border-b border-white/5 pb-2 last:border-0">'
-                v2ex_html += f'<a href="{entry.get("link")}" target="_blank" class="text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {entry.get("title", "").strip()}</a></div>'
-            
-            tech_blocks.append({
-                "time": time_str, "raw_time": ts, "content": v2ex_html, "url": "", "is_important": False, "category": "tech"
-            })
-            print(f"✅ [科技引擎] V2EX 聚合成功")
-    except Exception as e: print(f"❌ [科技引擎] V2EX 失败: {e}")
-
-    return tech_blocks
-
 # ================= 引擎 5：稳定天气 (Open-Meteo) =================
 def fetch_weather():
     try:
         url = "https://api.open-meteo.com/v1/forecast?latitude=41.80&longitude=123.43&current_weather=true"
         headers = {"User-Agent": get_random_ua()}
-        resp = requests.get(url, headers=headers, timeout=10).json()
+        resp = HTTP_SESSION.get(url, headers=headers, timeout=10).json()
         curr = resp.get("current_weather", {})
         temp, code = curr.get("temperature"), curr.get("weathercode")
         emoji_map = {0: "☀️", 1: "☁️", 2: "☁️", 3: "☁️", 45: "🌫️", 48: "🌫️", 51: "🌧️", 53: "🌧️", 55: "🌧️", 61: "🌧️", 63: "🌧️", 65: "🌧️", 71: "❄️", 73: "❄️", 75: "❄️", 95: "⛈️"}
@@ -441,7 +366,7 @@ def fetch_weather():
         with open("./public/weather.txt", "w", encoding="utf-8") as f: f.write(f"{emoji} {temp}°C")
     except Exception as e: print(f"[天气引擎] 失败: {e}")
 
-# ================= 引擎 5：行情条 (Sina) =================
+# ================= 引擎 6：行情条 (Sina) =================
 TICKER_FILE = "./public/ticker.json"
 TICKER_STATUS_FILE = "./public/ticker-status.json"
 TICKER_RETRY_MAX = 3
@@ -465,8 +390,8 @@ def _fetch_sina_all(configs):
 
     try:
         symbols = ",".join([c["symbol"] for c in sina_entries])
-        url = f"http://hq.sinajs.cn/list={symbols}"
-        headers = {"Referer": "http://finance.sina.com.cn/", "User-Agent": get_random_ua()}
+        url = f"https://hq.sinajs.cn/list={symbols}"
+        headers = {"Referer": "https://finance.sina.com.cn/", "User-Agent": get_random_ua()}
         resp = HTTP_SESSION.get(url, headers=headers, timeout=15)
         resp.raise_for_status()
 
@@ -492,22 +417,28 @@ def _fetch_sina_all(configs):
                 pc = None
                 sym = entry["symbol"]
 
+                # gb_: 美股 — raw[1]=当前价, raw[26]=昨收
                 if sym.startswith("gb_") and len(raw) > 26:
                     p = float(raw[1])
                     pc = float(raw[26])
+                # fx_: 外汇 — raw[1]=当前价, raw[3]=昨收
                 elif sym.startswith("fx_") and len(raw) > 3:
                     p = float(raw[1])
                     pc = float(raw[3])
+                # hf_: 期货 — raw[0]=当前价, raw[7]=昨收
                 elif sym.startswith("hf_") and len(raw) > 8:
                     p = float(raw[0])
                     pc = float(raw[7])
+                # rt_hk: 港股实时 — raw[6]=当前价, raw[3]=昨收
                 elif sym.startswith("rt_hk") and len(raw) > 6:
                     p = float(raw[6])
                     pc = float(raw[3])
+                # s_: A股简版 — raw[1]=当前价, raw[2]=涨跌额, 昨收=当前价-涨跌额
                 elif sym.startswith("s_") and len(raw) > 2:
                     p = float(raw[1])
                     change_val = float(raw[2])
                     pc = p - change_val
+                # b_: 全球指数 — 新浪该接口不提供实时价格字段，跳过
                 elif sym.startswith("b_"):
                     continue
 
@@ -610,73 +541,7 @@ def fetch_ticker():
     if stale_used:
         print(f"  ℹ️ [行情引擎] 沿用旧值: {', '.join(stale_used)}")
 
-# ================= 主循环控制 =================
-def fetch_tech_news_legacy_2():
-    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][绉戞妧寮曟搸] 寮€濮嬫姄鍙栧苟鑱氬悎瓒嬪娍...")
-    tech_blocks = []
-    now_bj = get_beijing_time()
-    ts = int(now_bj.timestamp())
-    time_str = now_bj.strftime('%H:%M')
-
-    try:
-        items = fetch_github_trends()
-        github_html = build_github_html(items)
-        tech_block = {
-            "time": time_str,
-            "raw_time": ts,
-            "content": github_html,
-            "url": "",
-            "is_important": False,
-            "category": "tech"
-        }
-        tech_blocks.append(tech_block)
-        atomic_save_json(GITHUB_CACHE_PATH, tech_block)
-        print(f"鉁?[绉戞妧寮曟搸] GitHub 鑱氬悎鎴愬姛")
-    except Exception as e:
-        cached_github = atomic_load_json(GITHUB_CACHE_PATH, default={})
-        if cached_github:
-            tech_blocks.append(cached_github)
-            print(f"鈿狅笍 [绉戞妧寮曟搸] GitHub 澶辫触锛屼娇鐢ㄤ笂娆＄紦瀛? {e}")
-        else:
-            print(f"鉂?[绉戞妧寮曟搸] GitHub 澶辫触: {e}")
-
-    try:
-        resp = requests.get("https://hnrss.org/frontpage?points=50", headers={"User-Agent": get_random_ua()}, timeout=15)
-        if resp.status_code == 200:
-            feed = feedparser.parse(resp.text)
-            hn_html = "銆怘N 鐑笘 (鍙岃瀵圭収/鎮仠灞曞紑)銆?"
-            for i, entry in enumerate(feed.entries[:10]):
-                title_en = entry.get("title", "").strip()
-                title_zh = translate_en_to_zh(title_en)
-                hn_html += f'<div class="group mb-3 border-b border-white/5 pb-2 last:border-0">'
-                hn_html += f'<a href="{entry.get("link")}" target="_blank" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {title_en}</a>'
-                hn_html += f'<div class="overflow-hidden max-h-0 opacity-0 group-hover:max-h-20 group-hover:opacity-100 transition-all duration-500 ease-in-out text-white/50 text-xs mt-1">鈫?ZH: {title_zh}</div></div>'
-
-            tech_blocks.append({
-                "time": time_str, "raw_time": ts, "content": hn_html, "url": "", "is_important": False, "category": "tech"
-            })
-            print(f"鉁?[绉戞妧寮曟搸] HN 鑱氬悎鎴愬姛")
-    except Exception as e:
-        print(f"鉂?[绉戞妧寮曟搸] HN 澶辫触: {e}")
-
-    try:
-        resp = requests.get("https://www.v2ex.com/index.xml", headers={"User-Agent": get_random_ua()}, timeout=15)
-        if resp.status_code == 200:
-            feed = feedparser.parse(resp.text)
-            v2ex_html = "銆怴2EX 鐑棬銆?"
-            for i, entry in enumerate(feed.entries[:10]):
-                v2ex_html += f'<div class="mb-3 border-b border-white/5 pb-2 last:border-0">'
-                v2ex_html += f'<a href="{entry.get("link")}" target="_blank" class="text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {entry.get("title", "").strip()}</a></div>'
-
-            tech_blocks.append({
-                "time": time_str, "raw_time": ts, "content": v2ex_html, "url": "", "is_important": False, "category": "tech"
-            })
-            print(f"鉁?[绉戞妧寮曟搸] V2EX 鑱氬悎鎴愬姛")
-    except Exception as e:
-        print(f"鉂?[绉戞妧寮曟搸] V2EX 澶辫触: {e}")
-
-    return tech_blocks
-
+# ================= 科技趋势抓取 =================
 def fetch_tech_news():
     print(f"[{get_beijing_time().strftime('%H:%M:%S')}][tech] fetching trend blocks...")
     tech_blocks = []
@@ -711,7 +576,7 @@ def fetch_tech_news():
             print(f"[tech] GitHub request failed: {e}")
 
     try:
-        resp = requests.get("https://hnrss.org/frontpage?points=50", headers={"User-Agent": get_random_ua()}, timeout=15)
+        resp = HTTP_SESSION.get("https://hnrss.org/frontpage?points=50", headers={"User-Agent": get_random_ua()}, timeout=15)
         if resp.status_code == 200:
             feed = feedparser.parse(resp.text)
             hn_html = "HN Trends"
@@ -739,8 +604,8 @@ def fetch_tech_news():
         print(f"[tech] HN request failed: {e}")
 
     try:
-        hot_resp = requests.get("https://www.v2ex.com/api/topics/hot.json", headers={"User-Agent": get_random_ua()}, timeout=15)
-        new_resp = requests.get("https://www.v2ex.com/api/topics/latest.json", headers={"User-Agent": get_random_ua()}, timeout=15)
+        hot_resp = HTTP_SESSION.get("https://www.v2ex.com/api/topics/hot.json", headers={"User-Agent": get_random_ua()}, timeout=15)
+        new_resp = HTTP_SESSION.get("https://www.v2ex.com/api/topics/latest.json", headers={"User-Agent": get_random_ua()}, timeout=15)
         if hot_resp.status_code == 200 and new_resp.status_code == 200:
             hot_topics = hot_resp.json()
             new_topics = new_resp.json()
@@ -762,86 +627,105 @@ def fetch_tech_news():
 
     return tech_blocks
 
-global_rss_news = []
-global_tech_news = []
+# ================= 主循环控制 =================
+class SpiderApp:
+    def __init__(self):
+        self.rss_news = []
+        self.tech_news = []
+        self.last_wallpaper_date = None
+        self.last_rss_time = 0
+        self.last_weather_time = 0
+        self.last_tech_time = 0
+        self.last_wallpaper_list_time = 0
+        self.shutdown = False
 
-def main():
-    global global_rss_news, global_tech_news
-    last_wallpaper_date = None
-    last_rss_time = 0
-    last_weather_time = 0
-    last_tech_time = 0
-    
-    while True:
-        try:
-            now_ts = time.time()
-            now_bj = get_beijing_time()
-            print(f"\n--- {now_bj.strftime('%Y-%m-%d %H:%M:%S')} 开始轮询 ---")
-            
-            # 1. 壁纸逻辑 (每天一次)
-            if now_bj.strftime('%Y-%m-%d') != last_wallpaper_date or not os.path.exists("./public/bg_0.jpg"):
-                fetch_bing_wallpaper()
-                last_wallpaper_date = now_bj.strftime('%Y-%m-%d')
-            
-            # 2. 天气逻辑 (每 30 分钟)
-            if now_ts - last_weather_time >= 1800:
-                fetch_weather()
-                last_weather_time = now_ts
+    def run(self):
+        signal.signal(signal.SIGTERM, self._handle_signal)
+        signal.signal(signal.SIGINT, self._handle_signal)
 
-            # 3. 扫描壁纸列表 (每 60 秒)
-            update_wallpaper_list()
-                
-            # 4. 行情逻辑 (每 60 秒)
-            fetch_ticker()
-            
-            # 5. RSS 逻辑 (每 15 分钟)
-            if now_ts - last_rss_time >= 1800 or not global_rss_news:
-                rss_news_raw = fetch_rss_news()
-                seen_rss = set(); unique_rss = []
-                for item in rss_news_raw:
-                    if item["content"] not in seen_rss:
-                        unique_rss.append(item); seen_rss.add(item["content"])
-                unique_rss.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
-                global_rss_news = unique_rss[:500]
-                last_rss_time = now_ts
+        while not self.shutdown:
+            try:
+                now_ts = time.time()
+                now_bj = get_beijing_time()
+                print(f"\n--- {now_bj.strftime('%Y-%m-%d %H:%M:%S')} 开始轮询 ---")
 
-            # 6. 科技逻辑 (每 15 分钟)
-            if now_ts - last_tech_time >= 1800 or not global_tech_news:
-                tech_news_raw = fetch_tech_news()
-                seen_tech = set(); unique_tech = []
-                for item in tech_news_raw:
-                    if item["content"] not in seen_tech:
-                        unique_tech.append(item); seen_tech.add(item["content"])
-                global_tech_news = unique_tech[:100]
-                last_tech_time = now_ts
+                # 1. 壁纸逻辑 (每天一次)
+                if now_bj.strftime('%Y-%m-%d') != self.last_wallpaper_date or not os.path.exists("./public/bg_0.jpg"):
+                    fetch_bing_wallpaper()
+                    self.last_wallpaper_date = now_bj.strftime('%Y-%m-%d')
 
-            # 7. 新浪快讯 (每 60 秒)
-            sina_news_raw = fetch_sina()
-            seen_sina = set()
-            unique_sina = []
-            for item in sina_news_raw:
-                if item["content"] not in seen_sina:
-                    unique_sina.append(item)
-                    seen_sina.add(item["content"])
-            sina_1500 = unique_sina[:1500]
+                # 2. 天气逻辑 (每 30 分钟)
+                if now_ts - self.last_weather_time >= 1800:
+                    fetch_weather()
+                    self.last_weather_time = now_ts
 
-            # 8. 合并并保存
-            final_news = sina_1500 + global_rss_news + global_tech_news
-            final_news.sort(key=lambda x: (x.get("is_important", False), x.get("raw_time", 0)), reverse=True)
-            
-            if final_news:
-                output_data = {
-                    "last_updated": int(now_bj.timestamp()),
-                    "news_list": final_news
-                }
-                atomic_save_json("./public/finance-news.json", output_data)
-                print(f"✅ 更新完成：总库 {len(final_news)} 条。")
-                
-        except Exception as e:
-            print(f"🚨 [主循环] 发生严重异常: {e}")
-            
-        print("休眠 60 秒...")
-        time.sleep(60)
+                # 3. 扫描壁纸列表 (每 5 分钟)
+                if now_ts - self.last_wallpaper_list_time >= 300:
+                    update_wallpaper_list()
+                    self.last_wallpaper_list_time = now_ts
+
+                # 4. 行情逻辑 (每 60 秒)
+                fetch_ticker()
+
+                # 5. RSS 逻辑 (每 15 分钟)
+                if now_ts - self.last_rss_time >= 1800 or not self.rss_news:
+                    rss_news_raw = fetch_rss_news()
+                    seen_rss = set(); unique_rss = []
+                    for item in rss_news_raw:
+                        content_hash = hashlib.md5(item["content"].encode()).hexdigest()
+                        if content_hash not in seen_rss:
+                            unique_rss.append(item); seen_rss.add(content_hash)
+                    unique_rss.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
+                    self.rss_news = unique_rss[:500]
+                    self.last_rss_time = now_ts
+
+                # 6. 科技逻辑 (每 15 分钟)
+                if now_ts - self.last_tech_time >= 1800 or not self.tech_news:
+                    tech_news_raw = fetch_tech_news()
+                    seen_tech = set(); unique_tech = []
+                    for item in tech_news_raw:
+                        content_hash = hashlib.md5(item["content"].encode()).hexdigest()
+                        if content_hash not in seen_tech:
+                            unique_tech.append(item); seen_tech.add(content_hash)
+                    self.tech_news = unique_tech[:100]
+                    self.last_tech_time = now_ts
+
+                # 7. 新浪快讯 (每 60 秒)
+                sina_news_raw = fetch_sina()
+                seen_sina = set()
+                unique_sina = []
+                for item in sina_news_raw:
+                    content_hash = hashlib.md5(item["content"].encode()).hexdigest()
+                    if content_hash not in seen_sina:
+                        unique_sina.append(item)
+                        seen_sina.add(content_hash)
+                sina_1500 = unique_sina[:1500]
+
+                # 8. 合并并保存
+                final_news = sina_1500 + self.rss_news + self.tech_news
+                final_news.sort(key=lambda x: (x.get("is_important", False), x.get("raw_time", 0)), reverse=True)
+
+                if final_news:
+                    output_data = {
+                        "last_updated": int(now_bj.timestamp()),
+                        "news_list": final_news
+                    }
+                    atomic_save_json("./public/finance-news.json", output_data)
+                    print(f"✅ 更新完成：总库 {len(final_news)} 条。")
+
+            except Exception as e:
+                print(f"🚨 [主循环] 发生严重异常: {e}")
+
+            print("休眠 60 秒...")
+            for _ in range(60):
+                if self.shutdown:
+                    break
+                time.sleep(1)
+
+    def _handle_signal(self, signum, frame):
+        print(f"\n🛑 收到信号 {signum}，正在优雅退出...")
+        self.shutdown = True
 
 if __name__ == "__main__":
-    main()
+    app = SpiderApp()
+    app.run()

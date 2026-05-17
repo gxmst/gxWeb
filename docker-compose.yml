@@ -7,7 +7,9 @@ services:
     container_name: workspace-spider
     restart: always
     volumes:
-      - ./:/app
+      - ./spider.py:/app/spider.py
+      - ./requirements.txt:/app/requirements.txt
+      - ./public:/app/public
     environment:
       - TZ=Asia/Shanghai
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
@@ -27,6 +29,7 @@ services:
       - "1881:80"
     volumes:
       - ./public:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     environment:
       - TZ=Asia/Shanghai
     logging:

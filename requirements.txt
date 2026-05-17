@@ -1,4 +1,4 @@
-requests
-feedparser
-Pillow
-deep-translator
+requests>=2.31,<3
+feedparser>=6.0,<7
+Pillow>=10.0,<12
+deep-translator>=1.11,<2
