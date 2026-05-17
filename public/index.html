@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="./favicon.png">
     <!-- 引入 Tailwind CSS 引擎 -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.7/purify.min.js" integrity="sha512-k8c9jUeR5I5sK6iO3U5fN3p/GDh5rT40M0Wk0r0GP8MfULYmMbxlF4p0MVM6p3p4tU7q0l0s5M0XH7Y1f2pO3A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.7/purify.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
         body {
             font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
@@ -23,11 +23,16 @@
 
         /* 核心：毛玻璃质感 */
         .glass {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            background: rgba(255, 255, 255, 0.25);
             border: 1px solid rgba(255, 255, 255, 0.2);
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+        @supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
+            .glass {
+                background: rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(12px);
+                -webkit-backdrop-filter: blur(12px);
+            }
         }
 
         /* 隐藏滚动条但保留滚动功能 */
@@ -100,17 +105,16 @@
             content: "";
         }
 
-        .tech-content a:hover {
-            filter: brightness(1.2);
-            text-decoration: underline;
-        }
-
         .tech-content a {
             color: #7dd3fc !important;
             text-decoration: underline;
             text-decoration-color: rgba(125, 211, 252, 0.55);
             text-underline-offset: 0.18em;
             text-shadow: 0 1px 10px rgba(8, 47, 73, 0.3);
+            transition: color 0.2s ease, text-decoration-color 0.2s ease, background-color 0.2s ease;
+            border-radius: 0.35rem;
+            padding: 0 0.1rem;
+            background: linear-gradient(180deg, rgba(8, 47, 73, 0.14), rgba(8, 47, 73, 0.02));
         }
 
         .tech-content a:hover {
@@ -187,7 +191,7 @@
     <div class="absolute top-6 left-6 flex gap-4 z-30">
         <button id="wallpaperBtn" onclick="toggleWallpaper()" style="opacity: 0.5; pointer-events: none;"
             class="w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg outline-none focus:outline-none"
-            title="切换壁纸">
+            title="切换壁纸" aria-label="切换壁纸">
             <svg class="w-5 h-5 text-white/70 group-hover:text-white" fill="none" stroke="currentColor"
                 viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -197,7 +201,7 @@
         </button>
         <button onclick="toggleWeatherFilter()" id="filterBtn"
             class="w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg text-lg outline-none focus:outline-none"
-            title="切换环境滤镜">✨</button>
+            title="切换环境滤镜" aria-label="切换环境滤镜">✨</button>
     </div>
 
     <!-- 主体内容区 (左侧) -->
@@ -370,7 +374,8 @@
 
             <!-- 回到顶部按钮 -->
             <div id="backToTop" onclick="scrollToTop()"
-                class="absolute bottom-16 right-6 z-40 w-10 h-10 bg-white/10 backdrop-blur-xl rounded-full flex items-center justify-center cursor-pointer opacity-0 pointer-events-none transition-all duration-300 hover:bg-white/20 active:scale-95 shadow-xl border border-white/20">
+                class="absolute bottom-16 right-6 z-40 w-10 h-10 bg-white/10 backdrop-blur-xl rounded-full flex items-center justify-center cursor-pointer opacity-0 pointer-events-none transition-all duration-300 hover:bg-white/20 active:scale-95 shadow-xl border border-white/20"
+                role="button" aria-label="回到顶部">
                 <svg class="w-5 h-5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18">
                     </path>
@@ -384,7 +389,7 @@
         class="fixed bottom-0 left-0 w-full h-[38px] z-50 bg-white/5 bg-gradient-to-t from-black/60 to-transparent backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border-t border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] group/ticker">
 
         <!-- 修复后的翻页按钮：左 -->
-        <button onclick="scrollTicker(-500)"
+        <button onclick="scrollTicker(-500)" aria-label="行情向左滚动"
             class="absolute left-2 top-1/2 -translate-y-1/2 z-50 w-8 h-8 bg-black/50 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center opacity-0 group-hover/ticker:opacity-100 transition-all hover:bg-white/20 outline-none shadow-lg">
             <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
@@ -407,7 +412,7 @@
         </div>
 
         <!-- 修复后的翻页按钮：右 -->
-        <button onclick="scrollTicker(500)"
+        <button onclick="scrollTicker(500)" aria-label="行情向右滚动"
             class="absolute right-2 top-1/2 -translate-y-1/2 z-50 w-8 h-8 bg-black/50 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center opacity-0 group-hover/ticker:opacity-100 transition-all hover:bg-white/20 outline-none shadow-lg">
             <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -438,10 +443,10 @@
                     };
                     img1.src = firstSrc;
                     img2.src = firstSrc;
-                    wallpapersArray.forEach(url => {
-                        const img = new Image();
-                        img.src = url + '?v=' + vSuffix;
-                    });
+                    if (wallpapersArray.length > 1) {
+                        const nextImg = new Image();
+                        nextImg.src = wallpapersArray[1] + '?v=' + vSuffix;
+                    }
                     // 列表加载成功后激活切换按钮
                     const btn = document.getElementById('wallpaperBtn');
                     btn.style.opacity = '1';
@@ -492,10 +497,8 @@
         }
         setSearchEngine(currentEngine);
         function handleSearch(event) {
-            if (event.key === 'Enter') {
-                const query = document.getElementById('searchInput').value.trim();
-                if (query) window.open(engines[currentEngine].url + encodeURIComponent(query), '_blank');
-            }
+            const query = document.getElementById('searchInput').value.trim();
+            if (query) window.open(engines[currentEngine].url + encodeURIComponent(query), '_blank');
         }
 
         // 壁纸轮换 (动态适配收藏夹 + 必应 5 图)
@@ -503,6 +506,8 @@
             if (wallpapersArray.length === 0) return;
             if (isSwitchingBg) return;
             isSwitchingBg = true;
+
+            const switchTimeout = setTimeout(() => { isSwitchingBg = false; }, 5000);
 
             currentBgIndex = (currentBgIndex + 1) % wallpapersArray.length;
             const nextSrc = wallpapersArray[currentBgIndex] + '?v=' + vSuffix;
@@ -514,9 +519,14 @@
             const hiddenLayer = activeBgLayer === 1 ? img2 : img1;
 
             hiddenLayer.onload = () => {
+                clearTimeout(switchTimeout);
                 hiddenLayer.style.opacity = '1';
                 currentLayer.style.opacity = '0';
                 activeBgLayer = activeBgLayer === 1 ? 2 : 1;
+
+                const nextIdx = (currentBgIndex + 1) % wallpapersArray.length;
+                const preload = new Image();
+                preload.src = wallpapersArray[nextIdx] + '?v=' + vSuffix;
 
                 setTimeout(() => {
                     isSwitchingBg = false;
@@ -524,6 +534,7 @@
             };
 
             hiddenLayer.onerror = () => {
+                clearTimeout(switchTimeout);
                 isSwitchingBg = false;
             };
 
@@ -536,7 +547,7 @@
         }
 
 
-        // ================== 2. 天气与粒子物理引擎 ==================
+        // ================== 3. 天气与粒子物理引擎 ==================
 
         const canvas = document.getElementById('weatherCanvas');
         const ctx = canvas.getContext('2d');
@@ -550,7 +561,10 @@
             updateUIBounds();
         }
 
+        let _uiBoundsDirty = true;
         function updateUIBounds() {
+            if (!_uiBoundsDirty) return;
+            _uiBoundsDirty = false;
             const bar = document.getElementById('search-bar');
             const panel = document.getElementById('news-panel');
             const ticker = document.getElementById('bottom-ticker');
@@ -559,7 +573,9 @@
             if (panel) uiBounds.push(panel.getBoundingClientRect());
             if (ticker) uiBounds.push(ticker.getBoundingClientRect());
         }
+        function markUIBoundsDirty() { _uiBoundsDirty = true; }
         window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('scroll', markUIBoundsDirty, true);
         resizeCanvas();
 
         class WeatherParticle {
@@ -680,7 +696,10 @@
             }
         }
 
+        let _uiBoundsFrame = 0;
         function animateWeather() {
+            _uiBoundsFrame++;
+            if (_uiBoundsFrame % 60 === 0) _uiBoundsDirty = true;
             updateUIBounds();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             particles.forEach(p => { p.update(); p.draw(); });
@@ -735,7 +754,7 @@
         }
         fetchWeather(); setInterval(fetchWeather, 600000);
 
-        // ================== 3. 底部行情双行排版 ==================
+        // ================== 4. 底部行情双行排版 ==================
 
         const SPARKLINE_MIN_POINTS = 3;
 
@@ -764,23 +783,40 @@
                 if (container.children.length !== items.length) container.innerHTML = '';
 
                 if (container.children.length === 0) {
-                    let html = '';
                     items.forEach(item => {
                         const showSparkline = item.price_history && item.price_history.length >= SPARKLINE_MIN_POINTS;
-                        const sparklineHtml = showSparkline ? `<span class="sparkline-container inline-flex items-center" data-symbol="${item.symbol}"></span>` : '';
-                        html += `
-                        <div class="flex flex-col justify-center min-w-max px-1.5 gap-0" data-symbol="${item.symbol}">
-                            <div class="flex items-center gap-1">
-                                <span class="text-[9px] text-white/50 tracking-wide drop-shadow-md name-val whitespace-nowrap">${item.name}</span>
-                                ${sparklineHtml}
-                            </div>
-                            <div class="flex items-baseline gap-1">
-                                <span class="text-[10px] font-bold text-white drop-shadow-md numeric price-val whitespace-nowrap">--</span>
-                                <span class="text-[9px] font-semibold drop-shadow-md numeric change-val whitespace-nowrap">--</span>
-                            </div>
-                        </div>`;
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'flex flex-col justify-center min-w-max px-1.5 gap-0';
+                        wrapper.dataset.symbol = item.symbol;
+
+                        const topRow = document.createElement('div');
+                        topRow.className = 'flex items-center gap-1';
+                        const nameSpan = document.createElement('span');
+                        nameSpan.className = 'text-[9px] text-white/50 tracking-wide drop-shadow-md name-val whitespace-nowrap';
+                        nameSpan.textContent = item.name;
+                        topRow.appendChild(nameSpan);
+                        if (showSparkline) {
+                            const sparkSpan = document.createElement('span');
+                            sparkSpan.className = 'sparkline-container inline-flex items-center';
+                            sparkSpan.dataset.symbol = item.symbol;
+                            topRow.appendChild(sparkSpan);
+                        }
+                        wrapper.appendChild(topRow);
+
+                        const botRow = document.createElement('div');
+                        botRow.className = 'flex items-baseline gap-1';
+                        const priceSpan = document.createElement('span');
+                        priceSpan.className = 'text-[10px] font-bold text-white drop-shadow-md numeric price-val whitespace-nowrap';
+                        priceSpan.textContent = '--';
+                        const changeSpan = document.createElement('span');
+                        changeSpan.className = 'text-[9px] font-semibold drop-shadow-md numeric change-val whitespace-nowrap';
+                        changeSpan.textContent = '--';
+                        botRow.appendChild(priceSpan);
+                        botRow.appendChild(changeSpan);
+                        wrapper.appendChild(botRow);
+
+                        container.appendChild(wrapper);
                     });
-                    container.innerHTML = html;
                 }
 
                 items.forEach(item => {
@@ -790,18 +826,18 @@
                         if (nameEl) nameEl.innerText = item.name;
                         el.querySelector('.price-val').innerText = item.price;
                         const cEl = el.querySelector('.change-val');
-                        cEl.innerText = item.change;
                         const isUp = !item.change.startsWith('-');
+                        cEl.innerText = (isUp ? '▲' : '▼') + ' ' + item.change;
                         cEl.className = `text-[9px] font-semibold drop-shadow-md numeric change-val whitespace-nowrap ${isUp ? 'text-rose-400' : 'text-emerald-400'}`;
                         const sparkContainer = el.querySelector('.sparkline-container');
                         if (sparkContainer && item.price_history && item.price_history.length >= SPARKLINE_MIN_POINTS) {
-                            sparkContainer.innerHTML = buildSparklineSVG(item.price_history, isUp);
+                            sparkContainer.innerHTML = DOMPurify.sanitize(buildSparklineSVG(item.price_history, isUp));
                         }
                     }
                 });
             } catch { console.error("行情同步异常"); }
         }
-        fetchTickerData(); setInterval(fetchTickerData, 15000);
+        fetchTickerData(); setInterval(fetchTickerData, 20000);
 
         async function fetchTickerStatus() {
             try {
@@ -843,14 +879,22 @@
                 }
             } catch { /* ticker-status 不可用时保持原状 */ }
         }
-        fetchTickerStatus(); setInterval(fetchTickerStatus, 15000);
+        fetchTickerStatus(); setInterval(fetchTickerStatus, 20000);
 
-        // ================== 4. 新闻流与交互渲染 ==================
+        // ================== 5. 新闻流与交互渲染 ==================
 
         let allNewsData = [];
         let currentFilter = 'all';
-        let lastFirstNewsContent = '';
+        let lastFirstNewsHash = '';
         let currentFontSize = 'sm';
+
+        function simpleHash(str) {
+            let h = 0;
+            for (let i = 0; i < str.length; i++) {
+                h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+            }
+            return h;
+        }
 
         // 统一渲染函数：根据当前数据和过滤条件，全量重绘列表
         function renderNewsList() {
@@ -981,7 +1025,7 @@
                 // 首次加载：初始化数据并全量渲染
                 if (allNewsData.length === 0) {
                     allNewsData = newsList;
-                    lastFirstNewsContent = newsList[0].content;
+                    lastFirstNewsHash = simpleHash(newsList[0].content);
                     document.getElementById('lastUpdateTime').innerText = `${newsList[0].time}`;
                     const sk = document.getElementById('newsSkeleton');
                     if (sk) sk.remove();
@@ -990,10 +1034,11 @@
                 }
 
                 // 增量同步：发现新数据时，执行平滑插入
-                if (newsList[0].content !== lastFirstNewsContent) {
+                const newFirstHash = simpleHash(newsList[0].content);
+                if (newFirstHash !== lastFirstNewsHash) {
                     const newItems = [];
                     for (let n of newsList) {
-                        if (n.content === lastFirstNewsContent) break;
+                        if (simpleHash(n.content) === lastFirstNewsHash) break;
                         if (applyFilter(n)) newItems.push(n);
                     }
 
@@ -1014,7 +1059,7 @@
                     } else {
                         renderNewsList();
                     }
-                    lastFirstNewsContent = newsList[0].content;
+                    lastFirstNewsHash = newFirstHash;
                 }
             } catch (e) {
                 console.error("快讯同步失败:", e);
@@ -1025,7 +1070,7 @@
             }
         }
 
-        // ================== 5. 辅助交互与快捷键 ==================
+        // ================== 6. 辅助交互与快捷键 ==================
 
         // 全局快捷键监听
         window.addEventListener('keydown', (e) => {
@@ -1063,6 +1108,7 @@
         }
 
         resizer.addEventListener('mousedown', () => { if (window.innerWidth < 768) return; isResizing = true; document.body.style.cursor = 'ew-resize'; aside.classList.add('select-none'); });
+        resizer.addEventListener('touchstart', (e) => { if (window.innerWidth < 768) return; isResizing = true; aside.classList.add('select-none'); }, { passive: true });
         window.addEventListener('mousemove', (e) => {
             if (!isResizing) return;
             const newWidth = window.innerWidth - e.clientX;
@@ -1070,6 +1116,14 @@
                 aside.style.width = `${newWidth}px`;
             }
         });
+        window.addEventListener('touchmove', (e) => {
+            if (!isResizing) return;
+            const touch = e.touches[0];
+            const newWidth = window.innerWidth - touch.clientX;
+            if (newWidth >= 350 && newWidth <= window.innerWidth * 0.6) {
+                aside.style.width = `${newWidth}px`;
+            }
+        }, { passive: true });
         window.addEventListener('mouseup', () => {
             if (isResizing) {
                 localStorage.setItem('newsPanelWidth', aside.offsetWidth);
@@ -1078,9 +1132,16 @@
             document.body.style.cursor = 'default';
             aside.classList.remove('select-none');
         });
+        window.addEventListener('touchend', () => {
+            if (isResizing) {
+                localStorage.setItem('newsPanelWidth', aside.offsetWidth);
+            }
+            isResizing = false;
+            aside.classList.remove('select-none');
+        });
 
         // 初始拉取快讯
-        fetchRealNews(); setInterval(fetchRealNews, 10000);
+        fetchRealNews(); setInterval(fetchRealNews, 30000);
     </script>
 </body>
 
