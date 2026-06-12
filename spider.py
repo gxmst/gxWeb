@@ -29,10 +29,10 @@ USER_AGENTS = [
 ]
 
 MARKET_TICKERS = [
-    {"symbol": "shcomp", "name": "上证综指", "category": "亚太", "decimals": 2, "sina": "s_sh000001"},
-    {"symbol": "dji", "name": "道琼斯", "category": "美股", "decimals": 2, "sina": "gb_dji"},
-    {"symbol": "ixic", "name": "纳斯达克", "category": "美股", "decimals": 2, "sina": "gb_ixic"},
-    {"symbol": "nvda", "name": "英伟达", "category": "美股", "decimals": 2, "sina": "gb_nvda"},
+    {"symbol": "shcomp", "name": "上证综指", "category": "亚太", "decimals": 2, "sina": "s_sh000001", "tencent": "sh000001"},
+    {"symbol": "dji", "name": "道琼斯", "category": "美股", "decimals": 2, "sina": "gb_dji", "tencent": "usDJI"},
+    {"symbol": "ixic", "name": "纳斯达克", "category": "美股", "decimals": 2, "sina": "gb_ixic", "tencent": "usIXIC"},
+    {"symbol": "nvda", "name": "英伟达", "category": "美股", "decimals": 2, "sina": "gb_nvda", "tencent": "usNVDA"},
     {"symbol": "gc00y", "name": "COMEX黄金", "category": "商品", "decimals": 2, "sina": "hf_GC"},
     {"symbol": "si00y", "name": "COMEX白银", "category": "商品", "decimals": 3, "sina": "hf_SI"},
     {"symbol": "hg00y", "name": "COMEX铜", "category": "商品", "decimals": 4, "sina": "hf_HG"},
@@ -40,9 +40,9 @@ MARKET_TICKERS = [
     {"symbol": "usdcny", "name": "美元/人民币", "category": "外汇", "decimals": 4, "sina": "fx_susdcny"},
     {"symbol": "usdjpy", "name": "美元/日元", "category": "外汇", "decimals": 3, "sina": "fx_susdjpy"},
     {"symbol": "n225", "name": "日经225", "category": "亚太", "decimals": 2, "sina": "b_NIKKEI225"},
-    {"symbol": "hsi", "name": "恒生指数", "category": "亚太", "decimals": 2, "sina": "rt_hkHSI"},
+    {"symbol": "hsi", "name": "恒生指数", "category": "亚太", "decimals": 2, "sina": "rt_hkHSI", "tencent": "hkHSI"},
     {"symbol": "kospi200", "name": "KOSPI 200", "category": "亚太", "decimals": 2, "sina": "b_KS200F"},
-    {"symbol": "spx", "name": "标普500", "category": "美股", "decimals": 2, "sina": "gb_inx"},
+    {"symbol": "spx", "name": "标普500", "category": "美股", "decimals": 2, "sina": "gb_inx", "tencent": "usINX"},
     {"symbol": "ftse", "name": "富时100", "category": "欧洲", "decimals": 2, "sina": "b_FTSE"},
     {"symbol": "gdaxi", "name": "DAX 40", "category": "欧洲", "decimals": 2, "sina": "b_DAX"},
     {"symbol": "fchi", "name": "CAC 40", "category": "欧洲", "decimals": 2, "sina": "b_CAC"},
@@ -391,9 +391,18 @@ def _fetch_sina_all(configs):
     try:
         symbols = ",".join([c["symbol"] for c in sina_entries])
         url = f"https://hq.sinajs.cn/list={symbols}"
-        headers = {"Referer": "https://finance.sina.com.cn/", "User-Agent": get_random_ua()}
+        # hq.sinajs.cn 按"请求是否像浏览器"做拦截，而非按频率：
+        # Referer/Origin 必须是新浪域，否则返回 403 或空内容。
+        headers = {
+            "Referer": "https://finance.sina.com.cn/",
+            "Origin": "https://finance.sina.com.cn",
+            "Accept": "*/*",
+            "User-Agent": get_random_ua(),
+        }
         resp = HTTP_SESSION.get(url, headers=headers, timeout=15)
         resp.raise_for_status()
+        # 该接口返回 GBK 编码且常不带正确 charset，显式指定避免中文乱码。
+        resp.encoding = "gbk"
 
         sina_raw = {}
         for line in resp.text.splitlines():
@@ -454,6 +463,57 @@ def _fetch_sina_all(configs):
     return result_map
 
 
+def _fetch_tencent_all(configs):
+    """腾讯 qt.gtimg.cn 备用源。
+
+    仅用于补齐 Sina 拉取失败的标的，反爬比新浪宽松。
+    返回结构与 _fetch_sina_all 一致：{canonical_symbol: ticker_entry}。
+    腾讯接口对 A股/港股/美股字段结构统一，以 '~' 分隔：
+      索引 1=名称，3=当前价，4=昨收。
+    """
+    result_map = {}
+    entries = [c for c in configs if c.get("tencent")]
+    if not entries:
+        return result_map
+
+    try:
+        symbols = ",".join([c["tencent"] for c in entries])
+        url = f"https://qt.gtimg.cn/q={symbols}"
+        headers = {"Referer": "https://gu.qq.com/", "User-Agent": get_random_ua()}
+        resp = HTTP_SESSION.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        # 腾讯接口同样返回 GBK 编码。
+        resp.encoding = "gbk"
+
+        tencent_raw = {}
+        for line in resp.text.splitlines():
+            if not line or "=" not in line:
+                continue
+            # 形如 v_usNVDA="...~...~...";
+            key = line.split("=")[0].split("_", 1)[-1]
+            data_str = line.split("=", 1)[1].strip().strip('";')
+            if not data_str:
+                continue
+            tencent_raw[key] = data_str.split("~")
+
+        for entry in entries:
+            raw = tencent_raw.get(entry["tencent"])
+            if not raw or len(raw) < 5:
+                continue
+            try:
+                p = float(raw[3])
+                pc = float(raw[4])
+                if p > 0 and pc > 0:
+                    result_map[entry["symbol"]] = build_ticker_entry(entry, p, pc, source="Tencent")
+            except (ValueError, TypeError, IndexError):
+                pass
+
+    except Exception as e:
+        print(f"  ⚠️ [行情引擎] Tencent 抓取异常: {type(e).__name__}: {e}")
+
+    return result_map
+
+
 def fetch_ticker():
     ts_str = get_beijing_time().strftime('%H:%M:%S')
     print(f"[{ts_str}][行情引擎] 开始同步行情...")
@@ -473,13 +533,22 @@ def fetch_ticker():
         except Exception:
             pass
 
-    # 1. Sina 抓取
+    # 1. Sina 抓取（主源）
     sina_results = _fetch_sina_all(MARKET_TICKERS)
     for sym, entry in sina_results.items():
         result_map[sym] = entry
     sina_count = len(sina_results)
 
-    # 2. 逐标的沿用旧值
+    # 2. 腾讯抓取（备用源）——仅补齐 Sina 没拿到的标的
+    missing_configs = [c for c in MARKET_TICKERS if c["symbol"] not in result_map]
+    tencent_count = 0
+    if missing_configs:
+        tencent_results = _fetch_tencent_all(missing_configs)
+        for sym, entry in tencent_results.items():
+            result_map[sym] = entry
+        tencent_count = len(tencent_results)
+
+    # 3. 逐标的沿用旧值——主备源都没拿到时的最后兜底
     for config in MARKET_TICKERS:
         sym = config["symbol"]
         if sym not in result_map and sym in old_ticker_map:
@@ -529,7 +598,8 @@ def fetch_ticker():
         "status": status,
         "primary_provider": "sina",
         "primary_success_count": sina_count,
-        "fallback_success_count": 0,
+        "fallback_provider": "tencent",
+        "fallback_success_count": tencent_count,
         "stale_used_count": len(stale_used),
         "final_count": unique_count,
         "total_count": total_count
@@ -537,7 +607,7 @@ def fetch_ticker():
     atomic_save_json(TICKER_STATUS_FILE, status_payload)
 
     # 5. 日志汇总
-    print(f"  📊 [行情引擎] 总标的: {total_count} | Sina: {sina_count} | 沿用旧值: {len(stale_used)} | 最终: {unique_count} | 状态: {status}")
+    print(f"  📊 [行情引擎] 总标的: {total_count} | Sina: {sina_count} | Tencent: {tencent_count} | 沿用旧值: {len(stale_used)} | 最终: {unique_count} | 状态: {status}")
     if stale_used:
         print(f"  ℹ️ [行情引擎] 沿用旧值: {', '.join(stale_used)}")
 
@@ -664,10 +734,10 @@ class SpiderApp:
                     update_wallpaper_list()
                     self.last_wallpaper_list_time = now_ts
 
-                # 4. 行情逻辑 (每 60 秒)
+                # 4. 行情逻辑 (每轮执行，节奏约 60 秒)
                 fetch_ticker()
 
-                # 5. RSS 逻辑 (每 15 分钟)
+                # 5. RSS 逻辑 (每 30 分钟)
                 if now_ts - self.last_rss_time >= 1800 or not self.rss_news:
                     rss_news_raw = fetch_rss_news()
                     seen_rss = set(); unique_rss = []
@@ -679,7 +749,7 @@ class SpiderApp:
                     self.rss_news = unique_rss[:500]
                     self.last_rss_time = now_ts
 
-                # 6. 科技逻辑 (每 15 分钟)
+                # 6. 科技逻辑 (每 30 分钟)
                 if now_ts - self.last_tech_time >= 1800 or not self.tech_news:
                     tech_news_raw = fetch_tech_news()
                     seen_tech = set(); unique_tech = []
@@ -690,7 +760,7 @@ class SpiderApp:
                     self.tech_news = unique_tech[:100]
                     self.last_tech_time = now_ts
 
-                # 7. 新浪快讯 (每 60 秒)
+                # 7. 新浪快讯 (每轮执行，节奏约 60 秒)
                 sina_news_raw = fetch_sina()
                 seen_sina = set()
                 unique_sina = []

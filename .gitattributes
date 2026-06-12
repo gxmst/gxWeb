@@ -1,0 +1,11 @@
+# 字体与图片：二进制，禁止任何换行符转换（防止 CRLF 损坏文件）
+*.woff2 binary
+*.woff  binary
+*.ttf   binary
+*.otf   binary
+*.eot   binary
+*.jpg   binary
+*.jpeg  binary
+*.png   binary
+*.webp  binary
+*.ico   binary

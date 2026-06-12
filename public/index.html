@@ -6,33 +6,59 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Vibe Workspace</title>
     <link rel="icon" type="image/png" href="./favicon.png">
-    <!-- 引入 Tailwind CSS 引擎 -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.7/purify.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <!-- 字体：本地自托管 Inter（正文）+ JetBrains Mono（数字），仅含 latin/latin-ext 子集 -->
+    <link rel="stylesheet" href="./fonts/fonts.css">
+    <!-- 本地自托管：Tailwind CSS 引擎 + DOMPurify(XSS 消毒) -->
+    <script src="./vendor/tailwind.js"></script>
+    <script src="./vendor/purify.min.js"></script>
     <style>
         body {
-            font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+            font-family: "Inter", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
             text-rendering: optimizeLegibility;
             -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
         .numeric {
             font-family: "JetBrains Mono", "SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", monospace;
             font-variant-numeric: tabular-nums;
+            font-feature-settings: "tnum" 1, "cv01" 1;
         }
 
-        /* 核心：毛玻璃质感 */
+        /* 时钟：更紧的字距 + 轻微的光学间距 */
+        #clock {
+            font-feature-settings: "tnum" 1, "ss01" 1;
+            letter-spacing: -0.02em;
+        }
+
+        /* 核心：毛玻璃质感 —— 通透水晶感而非磨砂塑料 */
         .glass {
-            background: rgba(255, 255, 255, 0.25);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.22);
+            border: 1px solid rgba(255, 255, 255, 0.25);
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
         }
         @supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
             .glass {
-                background: rgba(255, 255, 255, 0.1);
-                backdrop-filter: blur(12px);
-                -webkit-backdrop-filter: blur(12px);
+                background: rgba(255, 255, 255, 0.08);
+                backdrop-filter: blur(16px) saturate(160%);
+                -webkit-backdrop-filter: blur(16px) saturate(160%);
+                box-shadow:
+                    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+                    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+                    0 8px 32px rgba(0, 0, 0, 0.28);
             }
+        }
+
+        /* 大面板统一玻璃质感：降模糊提通透 + 高光描边 */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            backdrop-filter: blur(24px) saturate(150%);
+            -webkit-backdrop-filter: blur(24px) saturate(150%);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.28),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+                0 24px 50px rgba(0, 0, 0, 0.45);
         }
 
         /* 隐藏滚动条但保留滚动功能 */
@@ -90,12 +116,13 @@
 
         /* 新闻项悬停优化 */
         .news-item-hover {
-            transition: background 0.2s ease;
-            border-radius: 0.75rem;
+            transition: background 0.2s ease, box-shadow 0.2s ease;
+            border-radius: 0.5rem;
         }
 
         .news-item-hover:hover {
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.06);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
         }
 
         /* 科技聚合块样式适配 */
@@ -183,9 +210,10 @@
 
         <!-- 动态天气滤镜层 -->
         <div id="weatherOverlay" class="absolute inset-0 bg-black/40 transition-colors duration-1000 z-20"></div>
-        <!-- 物理粒子画布 -->
-        <canvas id="weatherCanvas" class="absolute inset-0 z-30 pointer-events-none"></canvas>
     </div>
+
+    <!-- 物理粒子画布：提到面板之上，雨雪/水流才能落在控件表面（不拦截交互） -->
+    <canvas id="weatherCanvas" class="fixed inset-0 z-40 pointer-events-none"></canvas>
 
     <!-- 左上角：控制中心 -->
     <div class="absolute top-6 left-6 flex gap-4 z-30">
@@ -222,7 +250,7 @@
 
         <!-- 融合搜索框 (内嵌引擎选择) -->
         <div id="search-bar"
-            class="w-full max-w-2xl bg-white/5 backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border border-white/20 rounded-full flex items-center p-1.5 pr-4 mb-12 transition-all duration-300 hover:scale-[1.01] focus-within:scale-[1.05] focus-within:ring-4 focus-within:ring-white/20 focus-within:bg-white/10 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_20px_50px_rgba(0,0,0,0.4)] overflow-hidden">
+            class="w-full max-w-2xl glass-panel rounded-full flex items-center p-1.5 pr-4 mb-12 transition-all duration-300 hover:scale-[1.01] focus-within:scale-[1.02] focus-within:ring-4 focus-within:ring-white/20 focus-within:bg-white/10 overflow-hidden">
             <svg class="w-5 h-5 text-white/50 ml-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
@@ -317,7 +345,7 @@
         </div>
 
         <div id="news-panel"
-            class="bg-white/5 backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border border-white/20 flex-1 rounded-3xl p-6 flex flex-col overflow-hidden relative shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_25px_50px_rgba(0,0,0,0.5)]">
+            class="glass-panel flex-1 rounded-3xl p-6 flex flex-col overflow-hidden relative">
             <!-- 标题栏 -->
             <div class="flex items-center justify-between mb-4 border-b border-white/10 pb-4">
                 <div class="flex items-center gap-3">
@@ -386,7 +414,7 @@
 
     <!-- 底部：实时行情条 (静态双行滑动布局) -->
     <footer id="bottom-ticker"
-        class="fixed bottom-0 left-0 w-full h-[38px] z-50 bg-white/5 bg-gradient-to-t from-black/60 to-transparent backdrop-blur-[40px] backdrop-saturate-150 backdrop-brightness-110 border-t border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] group/ticker">
+        class="fixed bottom-0 left-0 w-full h-[38px] z-50 glass-panel !rounded-none border-x-0 border-b-0 bg-gradient-to-t from-black/50 to-transparent group/ticker">
 
         <!-- 修复后的翻页按钮：左 -->
         <button onclick="scrollTicker(-500)" aria-label="行情向左滚动"
@@ -578,6 +606,62 @@
         window.addEventListener('scroll', markUIBoundsDirty, true);
         resizeCanvas();
 
+        // 雨滴打在控件表面后，沿表面蜿蜒向下的水流轨迹
+        let rivulets = [];
+        const RIVULET_MAX = 90;
+
+        class Rivulet {
+            constructor(x, top, bottom) {
+                this.x = x;
+                this.y = top;
+                this.bottom = bottom;
+                this.speed = 0.4 + Math.random() * 1.2;
+                this.accel = 0.015 + Math.random() * 0.03;   // 重力加速感
+                this.width = 0.8 + Math.random() * 1.4;
+                this.alpha = 0.45 + Math.random() * 0.3;
+                this.wobble = Math.random() * Math.PI * 2;
+                this.wobbleAmp = 0.2 + Math.random() * 0.5;
+                this.trail = [];                              // 拖尾点
+                this.dead = false;
+            }
+            update() {
+                this.speed += this.accel;
+                this.y += this.speed;
+                this.wobble += 0.12;
+                this.x += Math.sin(this.wobble) * this.wobbleAmp;
+                this.trail.push({ x: this.x, y: this.y });
+                if (this.trail.length > 16) this.trail.shift();
+                if (this.y >= this.bottom) {
+                    this.alpha -= 0.045;                       // 流到底边后滴落消散
+                    if (this.alpha <= 0) this.dead = true;
+                }
+            }
+            draw() {
+                // 渐隐拖尾
+                for (let i = 0; i < this.trail.length; i++) {
+                    const p = this.trail[i];
+                    const t = i / this.trail.length;
+                    ctx.beginPath();
+                    ctx.fillStyle = `rgba(205, 228, 255, ${this.alpha * t * 0.55})`;
+                    ctx.arc(p.x, p.y, this.width * t, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                // 高光水珠头
+                const head = this.trail[this.trail.length - 1];
+                if (head) {
+                    ctx.beginPath();
+                    ctx.fillStyle = `rgba(225, 242, 255, ${this.alpha})`;
+                    ctx.arc(head.x, head.y, this.width * 1.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        function spawnRivulet(x, bound) {
+            if (rivulets.length >= RIVULET_MAX) return;
+            rivulets.push(new Rivulet(x, bound.top, bound.bottom));
+        }
+
         class WeatherParticle {
             constructor(type) { this.type = type; this.reset(); }
             reset() {
@@ -588,30 +672,23 @@
                 this.isSplashing = false;
                 this.splashRadius = 0;
                 this.splashAlpha = 1;
-                this.isPuddled = false;
-                this.puddleAlpha = 0;
-                this.puddleWidth = 0;
+                this.splashX = 0;
+                this.splashBound = null;
 
                 if (this.type === 'rain') {
-                    this.speed = 15 + Math.random() * 8;
-                    this.len = 10 + Math.random() * 10;
-                    this.opacity = 0.15 + Math.random() * 0.2;
-                    this.lineWidth = 0.5 + Math.random() * 0.5;
+                    this.speed = 18 + Math.random() * 10;      // 更快
+                    this.len = 14 + Math.random() * 14;        // 更长
+                    this.opacity = 0.28 + Math.random() * 0.32; // 更亮
+                    this.lineWidth = 1 + Math.random() * 1.1;  // 更粗
                 } else {
                     this.speed = 0.6 + Math.random() * 1.8;
-                    this.radius = Math.random() * 3 + 1;
-                    this.opacity = 0.4 + Math.random() * 0.4;
+                    this.radius = Math.random() * 2.6 + 1.2;
+                    this.opacity = 0.55 + Math.random() * 0.4; // 雪花更清晰
                     this.swing = Math.random() * 2;
                     this.swingStep = Math.random() * 100;
                 }
             }
             update() {
-                if (this.isPuddled) {
-                    this.puddleAlpha -= 0.003;
-                    if (this.puddleAlpha <= 0) this.reset();
-                    return;
-                }
-
                 if (this.isLanded) {
                     this.landedTime++;
                     if (this.landedTime > 600 + Math.random() * 400) {
@@ -622,14 +699,9 @@
                 }
 
                 if (this.isSplashing) {
-                    this.splashRadius += 1.2;
-                    this.splashAlpha -= 0.08;
-                    if (this.splashAlpha <= 0) {
-                        this.isSplashing = false;
-                        this.isPuddled = true;
-                        this.puddleAlpha = 0.2;
-                        this.puddleWidth = Math.random() * 10 + 5;
-                    }
+                    this.splashRadius += 1.4;
+                    this.splashAlpha -= 0.09;
+                    if (this.splashAlpha <= 0) this.reset();
                     return;
                 }
 
@@ -640,14 +712,17 @@
                 }
 
                 for (const bound of uiBounds) {
-                    if (this.x > bound.left + 20 && this.x < bound.right - 20 && this.y > bound.top && this.y < bound.top + 15) {
+                    if (this.x > bound.left + 6 && this.x < bound.right - 6 && this.y > bound.top && this.y < bound.top + 14) {
                         if (this.type === 'snow') {
                             this.isLanded = true;
                             this.y = bound.top;
                         } else {
+                            // 撞击：飞溅 + 概率性生成沿表面下淌的水流
                             this.isSplashing = true;
+                            this.splashX = this.x;
                             this.splashRadius = 1;
-                            this.splashAlpha = 0.6;
+                            this.splashAlpha = 0.7;
+                            if (Math.random() < 0.5) spawnRivulet(this.x, bound);
                         }
                         return;
                     }
@@ -665,30 +740,35 @@
                 }
 
                 if (this.isSplashing) {
+                    // 撞击水花：一道扁椭圆 + 两侧溅起的小水珠
+                    const r = Math.min(this.splashRadius, 10);
                     ctx.beginPath();
-                    ctx.strokeStyle = `rgba(255, 255, 255, ${this.splashAlpha})`;
-                    ctx.lineWidth = 1.5;
-                    const r = Math.min(this.splashRadius, 12);
-                    ctx.ellipse(this.x, this.y, r, r * 0.3, 0, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(220, 238, 255, ${this.splashAlpha})`;
+                    ctx.lineWidth = 1.4;
+                    ctx.ellipse(this.splashX, this.y, r, r * 0.4, 0, Math.PI, Math.PI * 2);
                     ctx.stroke();
-                    return;
-                }
-
-                if (this.isPuddled) {
-                    ctx.fillStyle = `rgba(255, 255, 255, ${this.puddleAlpha})`;
+                    ctx.fillStyle = `rgba(220, 238, 255, ${this.splashAlpha})`;
                     ctx.beginPath();
-                    ctx.ellipse(this.x, this.y, this.puddleWidth, 1, 0, 0, Math.PI * 2);
+                    ctx.arc(this.splashX - r, this.y - r * 0.4, 0.8, 0, Math.PI * 2);
+                    ctx.arc(this.splashX + r, this.y - r * 0.4, 0.8, 0, Math.PI * 2);
                     ctx.fill();
                     return;
                 }
 
-                ctx.beginPath();
                 if (this.type === 'rain') {
-                    ctx.strokeStyle = `rgba(255, 255, 255, ${this.opacity})`;
+                    // 带头部高光的雨丝（顶端淡、底端亮）
+                    const grad = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.len);
+                    grad.addColorStop(0, `rgba(190, 215, 245, 0)`);
+                    grad.addColorStop(1, `rgba(205, 228, 255, ${this.opacity})`);
+                    ctx.strokeStyle = grad;
                     ctx.lineWidth = this.lineWidth;
-                    ctx.moveTo(this.x, this.y); ctx.lineTo(this.x, this.y + this.len);
+                    ctx.lineCap = 'round';
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y);
+                    ctx.lineTo(this.x, this.y + this.len);
                     ctx.stroke();
                 } else {
+                    ctx.beginPath();
                     ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
                     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                     ctx.fill();
@@ -703,6 +783,11 @@
             updateUIBounds();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             particles.forEach(p => { p.update(); p.draw(); });
+            // 水流轨迹：先更新再绘制，并清理已消散的
+            if (rivulets.length) {
+                for (const r of rivulets) { r.update(); r.draw(); }
+                rivulets = rivulets.filter(r => !r.dead);
+            }
             animationId = requestAnimationFrame(animateWeather);
         }
 
@@ -711,10 +796,11 @@
             cancelAnimationFrame(animationId);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             particles = [];
+            rivulets = [];
 
             if (weatherKeyword.includes('🌧️') || weatherKeyword.includes('雨')) {
                 overlay.className = "absolute inset-0 bg-blue-900/30 transition-colors duration-1000 z-20";
-                for (let i = 0; i < 200; i++) particles.push(new WeatherParticle('rain'));
+                for (let i = 0; i < 240; i++) particles.push(new WeatherParticle('rain'));
                 animateWeather();
             } else if (weatherKeyword.includes('☀️') || weatherKeyword.includes('晴')) {
                 overlay.className = "absolute inset-0 bg-amber-200/12 transition-colors duration-1000 z-20";
@@ -962,9 +1048,12 @@
             const displayText = normalizeNewsDisplayText(news);
             const safeUrl = sanitizeHttpUrl(news.url);
             const isHtmlBlock = news.format === 'html';
-            const importantClass = news.is_important ? ' bg-red-500/10 border-red-500/20' : ' border-white/20';
+            // 普通项：仅底部细分隔线；重要项：左侧红色色条 + 浅红背景强调
+            const importantClass = news.is_important
+                ? ' border-l-2 border-red-500/40 bg-red-500/[0.07] pl-3 rounded-r-lg'
+                : ' px-1';
 
-            item.className = `border-l-2 ${importantClass} pl-3 border-b border-white/5 pb-3 mb-3 last:border-b-0 last:mb-0 last:pb-0 news-item-hover [&_a]:text-blue-400 [&_a]:underline [&_a]:hover:text-blue-300` + (isNew ? ' animate-slide-down' : '');
+            item.className = `${importantClass} py-2.5 border-b border-white/[0.07] last:border-b-0 news-item-hover [&_a]:text-blue-400 [&_a]:underline [&_a]:hover:text-blue-300` + (isNew ? ' animate-slide-down' : '');
 
             header.className = 'text-[11px] text-white/40 font-mono mb-0.5 flex items-center';
             header.append(document.createTextNode(news.time || ''));

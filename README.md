@@ -32,6 +32,7 @@
 
 - `public/finance-news.json`
 - `public/ticker.json`
+- `public/ticker-status.json`
 - `public/weather.txt`
 - `public/wallpapers.json`
 - `public/github-tech-cache-v2.json`
@@ -114,11 +115,15 @@ gxWeb/
 
 - 前端主文件是 `public/index.html`
 - 抓取、聚合、翻译、缓存逻辑都在 `spider.py`
-- 当前 Compose 使用了 volume 挂载：
-  - `./:/app`
+- 当前 Compose 对 `spider` 容器采用按文件挂载，而不是挂整个项目目录：
+  - `./spider.py:/app/spider.py`
+  - `./requirements.txt:/app/requirements.txt`
+  - `./public:/app/public`
+- `web` 容器挂载：
   - `./public:/usr/share/nginx/html`
+  - `./nginx.conf:/etc/nginx/conf.d/default.conf:ro`
 
-这意味着很多代码改动在 `git pull` 后就能直接被容器看到；但如果你改了依赖、镜像、启动方式，还是建议执行：
+这意味着改 `spider.py` 或 `public/` 下的文件在 `git pull` 后就能直接被容器看到；但如果你改了依赖、镜像、启动方式，还是建议执行：
 
 ```bash
 docker compose up -d --build
