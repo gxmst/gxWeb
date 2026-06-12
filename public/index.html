@@ -606,67 +606,12 @@
         window.addEventListener('scroll', markUIBoundsDirty, true);
         resizeCanvas();
 
-        // 雨滴打在控件表面后，沿表面蜿蜒向下的水流轨迹
-        let rivulets = [];
-        const RIVULET_MAX = 90;
-
-        class Rivulet {
-            constructor(x, top, bottom) {
-                this.x = x;
-                this.y = top;
-                this.bottom = bottom;
-                this.speed = 0.4 + Math.random() * 1.2;
-                this.accel = 0.015 + Math.random() * 0.03;   // 重力加速感
-                this.width = 0.8 + Math.random() * 1.4;
-                this.alpha = 0.45 + Math.random() * 0.3;
-                this.wobble = Math.random() * Math.PI * 2;
-                this.wobbleAmp = 0.2 + Math.random() * 0.5;
-                this.trail = [];                              // 拖尾点
-                this.dead = false;
-            }
-            update() {
-                this.speed += this.accel;
-                this.y += this.speed;
-                this.wobble += 0.12;
-                this.x += Math.sin(this.wobble) * this.wobbleAmp;
-                this.trail.push({ x: this.x, y: this.y });
-                if (this.trail.length > 16) this.trail.shift();
-                if (this.y >= this.bottom) {
-                    this.alpha -= 0.045;                       // 流到底边后滴落消散
-                    if (this.alpha <= 0) this.dead = true;
-                }
-            }
-            draw() {
-                // 渐隐拖尾
-                for (let i = 0; i < this.trail.length; i++) {
-                    const p = this.trail[i];
-                    const t = i / this.trail.length;
-                    ctx.beginPath();
-                    ctx.fillStyle = `rgba(205, 228, 255, ${this.alpha * t * 0.55})`;
-                    ctx.arc(p.x, p.y, this.width * t, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-                // 高光水珠头
-                const head = this.trail[this.trail.length - 1];
-                if (head) {
-                    ctx.beginPath();
-                    ctx.fillStyle = `rgba(225, 242, 255, ${this.alpha})`;
-                    ctx.arc(head.x, head.y, this.width * 1.5, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            }
-        }
-
-        function spawnRivulet(x, bound) {
-            if (rivulets.length >= RIVULET_MAX) return;
-            rivulets.push(new Rivulet(x, bound.top, bound.bottom));
-        }
-
         class WeatherParticle {
             constructor(type) { this.type = type; this.reset(); }
             reset() {
                 this.x = Math.random() * canvas.width;
                 this.y = Math.random() * (canvas.height + 100) - canvas.height;
+                this.prevY = this.y;
                 this.isLanded = false;
                 this.landedTime = 0;
                 this.isSplashing = false;
@@ -676,10 +621,10 @@
                 this.splashBound = null;
 
                 if (this.type === 'rain') {
-                    this.speed = 18 + Math.random() * 10;      // 更快
-                    this.len = 14 + Math.random() * 14;        // 更长
-                    this.opacity = 0.28 + Math.random() * 0.32; // 更亮
-                    this.lineWidth = 1 + Math.random() * 1.1;  // 更粗
+                    this.speed = 14 + Math.random() * 8;       // 自然下落
+                    this.len = 16 + Math.random() * 16;        // 细长雨丝
+                    this.opacity = 0.16 + Math.random() * 0.22; // 柔和、不刺眼
+                    this.lineWidth = 0.7 + Math.random() * 0.7; // 更细
                 } else {
                     this.speed = 0.6 + Math.random() * 1.8;
                     this.radius = Math.random() * 2.6 + 1.2;
@@ -705,6 +650,7 @@
                     return;
                 }
 
+                this.prevY = this.y;
                 this.y += this.speed;
                 if (this.type === 'snow') {
                     this.x += Math.sin(this.swingStep) * this.swing;
@@ -712,17 +658,19 @@
                 }
 
                 for (const bound of uiBounds) {
-                    if (this.x > bound.left + 6 && this.x < bound.right - 6 && this.y > bound.top && this.y < bound.top + 14) {
+                    // 跨越检测：本帧从顶沿上方越过了顶沿（雨速再快也不会漏检）
+                    if (this.x > bound.left + 8 && this.x < bound.right - 8 &&
+                        this.prevY < bound.top && this.y >= bound.top) {
                         if (this.type === 'snow') {
                             this.isLanded = true;
                             this.y = bound.top;
                         } else {
-                            // 撞击：飞溅 + 概率性生成沿表面下淌的水流
+                            // 撞击：表面溅起小水花
                             this.isSplashing = true;
                             this.splashX = this.x;
+                            this.y = bound.top;
                             this.splashRadius = 1;
-                            this.splashAlpha = 0.7;
-                            if (Math.random() < 0.5) spawnRivulet(this.x, bound);
+                            this.splashAlpha = 0.55;
                         }
                         return;
                     }
@@ -756,13 +704,14 @@
                 }
 
                 if (this.type === 'rain') {
-                    // 带头部高光的雨丝（顶端淡、底端亮）
+                    // 干净细雨丝：两端淡、中段亮，平头线帽，避免“蝌蚪头”
                     const grad = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.len);
-                    grad.addColorStop(0, `rgba(190, 215, 245, 0)`);
-                    grad.addColorStop(1, `rgba(205, 228, 255, ${this.opacity})`);
+                    grad.addColorStop(0, `rgba(200, 222, 250, 0)`);
+                    grad.addColorStop(0.5, `rgba(208, 230, 255, ${this.opacity})`);
+                    grad.addColorStop(1, `rgba(200, 222, 250, 0)`);
                     ctx.strokeStyle = grad;
                     ctx.lineWidth = this.lineWidth;
-                    ctx.lineCap = 'round';
+                    ctx.lineCap = 'butt';
                     ctx.beginPath();
                     ctx.moveTo(this.x, this.y);
                     ctx.lineTo(this.x, this.y + this.len);
@@ -783,11 +732,6 @@
             updateUIBounds();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             particles.forEach(p => { p.update(); p.draw(); });
-            // 水流轨迹：先更新再绘制，并清理已消散的
-            if (rivulets.length) {
-                for (const r of rivulets) { r.update(); r.draw(); }
-                rivulets = rivulets.filter(r => !r.dead);
-            }
             animationId = requestAnimationFrame(animateWeather);
         }
 
@@ -796,11 +740,10 @@
             cancelAnimationFrame(animationId);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             particles = [];
-            rivulets = [];
 
             if (weatherKeyword.includes('🌧️') || weatherKeyword.includes('雨')) {
                 overlay.className = "absolute inset-0 bg-blue-900/30 transition-colors duration-1000 z-20";
-                for (let i = 0; i < 240; i++) particles.push(new WeatherParticle('rain'));
+                for (let i = 0; i < 170; i++) particles.push(new WeatherParticle('rain'));
                 animateWeather();
             } else if (weatherKeyword.includes('☀️') || weatherKeyword.includes('晴')) {
                 overlay.className = "absolute inset-0 bg-amber-200/12 transition-colors duration-1000 z-20";
