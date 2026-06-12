@@ -185,6 +185,92 @@
         /* sparkline */
         .sparkline-svg { display: block; overflow: visible; }
         .sparkline-poly { fill: none; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
+        /* sparkline 画入：沿线描绘动画 */
+        .sparkline-poly.draw-in {
+            stroke-dasharray: var(--spark-len, 120);
+            stroke-dashoffset: var(--spark-len, 120);
+            animation: sparkDraw 0.9s ease-out forwards;
+        }
+        @keyframes sparkDraw { to { stroke-dashoffset: 0; } }
+
+        /* ============ 进场错峰动画 ============ */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        [data-enter] { opacity: 0; will-change: transform, opacity; }
+        [data-enter].entered {
+            animation: fadeUp 0.62s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+            animation-delay: var(--enter-delay, 0s);
+        }
+
+        /* ============ 玻璃面板鼠标光斑 ============ */
+        .glass-spot { position: relative; }
+        .glass-spot::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: radial-gradient(260px circle at var(--mx, 50%) var(--my, -40%),
+                        rgba(255, 255, 255, 0.22), transparent 62%);
+            opacity: var(--spot, 0);
+            transition: opacity 0.4s ease;
+            pointer-events: none;
+            mix-blend-mode: soft-light;
+            z-index: 3;
+        }
+
+        /* ============ Dock 磁吸：交由 JS 驱动 transform，仅设过渡 ============ */
+        .dock-ico {
+            transition: transform 0.18s cubic-bezier(0.22, 0.61, 0.36, 1),
+                        background 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+            transform-origin: center bottom;
+            will-change: transform;
+        }
+
+        /* ============ 时段自适应色调层 ============ */
+        #timeTint {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            mix-blend-mode: soft-light;
+            opacity: 0;
+            transition: background 2s ease, opacity 2s ease;
+            z-index: 15;
+        }
+
+        /* ============ 雷暴闪电 ============ */
+        #lightningFlash {
+            background: rgba(225, 238, 255, 0.9);
+        }
+        #lightningFlash.flash { animation: lightningFlash 0.9s ease-out; }
+        @keyframes lightningFlash {
+            0%   { opacity: 0; }
+            4%   { opacity: 0.55; }
+            8%   { opacity: 0.12; }
+            12%  { opacity: 0.68; }
+            22%  { opacity: 0; }
+            100% { opacity: 0; }
+        }
+
+        /* ============ 晴天光束光晕 ============ */
+        #sunGlow {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 1.6s ease;
+            z-index: 14;
+            background:
+                radial-gradient(circle at 82% 14%, rgba(255, 244, 214, 0.5), rgba(255, 244, 214, 0) 38%),
+                conic-gradient(from 150deg at 82% 14%, rgba(255, 240, 200, 0) 0deg,
+                    rgba(255, 238, 196, 0.16) 30deg, rgba(255, 240, 200, 0) 70deg);
+        }
+        #sunGlow.on { opacity: 1; }
+        @media (prefers-reduced-motion: reduce) {
+            [data-enter].entered { animation: none; opacity: 1; }
+            .sparkline-poly.draw-in { animation: none; stroke-dashoffset: 0; }
+        }
     </style>
 </head>
 
@@ -210,10 +296,20 @@
 
         <!-- 动态天气滤镜层 -->
         <div id="weatherOverlay" class="absolute inset-0 bg-black/40 transition-colors duration-1000 z-20"></div>
+
+        <!-- 时段自适应色调（很淡，soft-light 叠色） -->
+        <div id="timeTint"></div>
+        <!-- 晴天柔和光束光晕 -->
+        <div id="sunGlow"></div>
+        <!-- 夜晚缓慢闪烁星空 -->
+        <canvas id="starCanvas" class="absolute inset-0 pointer-events-none z-[13]" style="opacity:0;transition:opacity 1.6s ease;"></canvas>
     </div>
 
     <!-- 物理粒子画布：提到面板之上，雨雪/水流才能落在控件表面（不拦截交互） -->
     <canvas id="weatherCanvas" class="fixed inset-0 z-40 pointer-events-none"></canvas>
+
+    <!-- 雷暴闪电泛光层（雨模式下偶发，不拦截交互） -->
+    <div id="lightningFlash" class="fixed inset-0 z-[41] pointer-events-none opacity-0"></div>
 
     <!-- 左上角：控制中心 -->
     <div class="absolute top-6 left-6 flex gap-4 z-30">
@@ -236,7 +332,7 @@
     <main
         class="relative z-10 flex flex-col items-center justify-center p-8 pb-20 w-full min-h-[80vh] md:flex-1 md:min-h-0">
         <!-- 时间与天气 -->
-        <div class="flex flex-col items-center mb-10">
+        <div class="flex flex-col items-center mb-10" data-enter style="--enter-delay:0.05s">
             <div id="clock"
                 class="text-7xl font-semibold tracking-tight numeric drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]">00:00
             </div>
@@ -249,8 +345,8 @@
         </div>
 
         <!-- 融合搜索框 (内嵌引擎选择) -->
-        <div id="search-bar"
-            class="w-full max-w-2xl glass-panel rounded-full flex items-center p-1.5 pr-4 mb-12 transition-all duration-300 hover:scale-[1.01] focus-within:scale-[1.02] focus-within:ring-4 focus-within:ring-white/20 focus-within:bg-white/10 overflow-hidden">
+        <div id="search-bar" data-enter style="--enter-delay:0.14s"
+            class="glass-spot w-full max-w-2xl glass-panel rounded-full flex items-center p-1.5 pr-4 mb-12 transition-all duration-300 hover:scale-[1.01] focus-within:scale-[1.02] focus-within:ring-4 focus-within:ring-white/20 focus-within:bg-white/10 overflow-hidden">
             <svg class="w-5 h-5 text-white/50 ml-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
@@ -273,11 +369,12 @@
         </div>
 
         <!-- 快捷导航 Dock (去包装悬浮态) -->
-        <div class="flex gap-10 px-4 py-4 w-full max-w-fit overflow-x-auto no-scrollbar">
+        <div id="dockRow" data-enter style="--enter-delay:0.22s"
+            class="flex gap-10 px-4 py-4 w-full max-w-fit overflow-x-auto no-scrollbar">
             <a href="https://bilibili.com" target="_blank" rel="noopener noreferrer"
                 class="flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0">
                 <div
-                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:bg-[#FB7299] group-hover:text-white group-hover:border-transparent group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(251,114,153,0.4)] transition-all duration-300 shadow-lg">
+                    class="dock-ico w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:bg-[#FB7299] group-hover:text-white group-hover:border-transparent group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(251,114,153,0.4)] transition-all duration-300 shadow-lg">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                         <path
                             d="M17.813 4.653h.854c1.51.054 2.769.578 3.773 1.574 1.004.995 1.524 2.249 1.56 3.76v7.36c-.036 1.51-.556 2.769-1.56 3.765-1.004.995-2.263 1.519-3.773 1.573H5.32c-1.51-.054-2.769-.578-3.773-1.573-1.004-.996-1.524-2.255-1.56-3.765V10c.036-1.511.556-2.765 1.56-3.76 1.004-.996 2.263-1.52 3.773-1.574h.774l-1.174-1.12a1.234 1.234 0 0 1-.373-.906c0-.356.124-.658.373-.907l.027-.027c.267-.249.573-.373.92-.373.347 0 .653.124.92.373L9.653 4.44c.071.071.134.142.187.213h4.267a.836.836 0 0 1 .16-.213l2.853-2.747c.267-.249.573-.373.92-.373.347 0 .662.124.946.373.285.249.427.551.427.907 0 .328-.124.63-.374.906l-1.227 1.147zM5 10v7.36c.007.622.231 1.14.671 1.554.44.413.965.626 1.574.639h13.507c.609-.013 1.134-.226 1.574-.639.44-.413.664-.932.671-1.554V10c-.007-.622-.231-1.14-.671-1.554-.44-.413-.965-.626-1.574-.639H7.245c-.609.013-1.134.226-1.574.639C5.231 8.86 5.007 9.378 5 10zm3.867 2.533c.373 0 .68.12.92.36.24.24.36.547.36.92 0 .373-.12.68-.36.92-.24.24-.547.36-.92.36-.373 0-.68-.12-.92-.36-.24-.24-.36-.547-.36-.92 0-.373.12-.68.36-.92.24-.24.547-.36.92-.36zm6.266 0c.374 0 .68.12.92.36.24.24.36.547.36.92 0 .373-.12.68-.36.92-.24.24-.546.36-.92.36-.373 0-.68-.12-.92-.36-.24-.24-.36-.547-.36-.92 0-.373.12-.68.36-.92.24-.24.546-.36.92-.36z" />
@@ -289,7 +386,7 @@
             <a href="https://x.com" target="_blank" rel="noopener noreferrer"
                 class="flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0">
                 <div
-                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:bg-black group-hover:text-white group-hover:border-transparent group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(255,255,255,0.2)] transition-all duration-300 shadow-lg">
+                    class="dock-ico w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:bg-black group-hover:text-white group-hover:border-transparent group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(255,255,255,0.2)] transition-all duration-300 shadow-lg">
                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                         <path
                             d="M18.244 2.25h3.308l-7.227 7.719 8.502 11.281h-6.657l-5.213-6.817L4.99 21.25H1.68l7.73-8.235L1.25 2.25h6.826l4.704 6.217 5.464-6.217zM17.082 19.27h1.833L7.006 4.185H5.038L17.082 19.27z" />
@@ -301,7 +398,7 @@
             <a href="https://github.com" target="_blank" rel="noopener noreferrer"
                 class="flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0">
                 <div
-                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:bg-[#333333] group-hover:text-white group-hover:border-transparent group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(255,255,255,0.2)] transition-all duration-300 shadow-lg">
+                    class="dock-ico w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:bg-[#333333] group-hover:text-white group-hover:border-transparent group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(255,255,255,0.2)] transition-all duration-300 shadow-lg">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                         <path
                             d="M12 .297c-6.63 0-11.5 5.373-11.5 12 0 5.303 3.438 9.8 8.205 11.385.575.105.785-.25.785-.555 0-.27-.01-1.05-.015-2.06-3.197.69-3.872-1.54-3.872-1.54-.522-1.327-1.275-1.68-1.275-1.68-1.044-.712.08-.698.08-.698 1.155.08 1.762 1.185 1.762 1.185 1.026 1.758 2.646 1.25 3.29.956.104-.744.425-1.25.777-1.538-2.55-.29-5.23-1.275-5.23-5.677 0-1.253.448-2.277 1.183-3.077-.117-.29-.513-1.458.113-3.034 0 0 .964-.31 3.155 1.175a10.97 10.97 0 0 1 2.875-.387c.975.005 1.95.13 2.875.387 2.19-1.485 3.153-1.175 3.153-1.175.628 1.576.232 2.744.115 3.034.738.8 1.181 1.824 1.181 3.077 0 4.412-2.685 5.384-5.242 5.666.413.356.78 1.055.78 2.127 0 1.535-.014 2.774-.014 3.15 0 .308.21.665.793.548C18.563 22.092 22 17.592 22 12.297c0-6.627-4.87-12-11.5-12z" />
@@ -313,7 +410,7 @@
             <a href="https://douyin.com" target="_blank" rel="noopener noreferrer"
                 class="flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0">
                 <div
-                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:bg-[#FE2C55] group-hover:text-white group-hover:border-transparent group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(254,44,85,0.4)] transition-all duration-300 font-bold shadow-lg">
+                    class="dock-ico w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:bg-[#FE2C55] group-hover:text-white group-hover:border-transparent group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(254,44,85,0.4)] transition-all duration-300 font-bold shadow-lg">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                         <path
                             d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.59-1.01V14.1c.01 2.32-.6 4.68-2.12 6.47-1.53 1.77-3.81 2.85-6.14 2.98-2.34.14-4.74-.5-6.53-2.31-1.8-1.82-2.43-4.46-2.1-6.97.31-2.5 1.89-4.73 4.13-5.86 1.37-.68 2.93-.96 4.44-.81V11.7c-1.67-.24-3.44.18-4.67 1.3-1.23 1.12-1.7 2.87-1.56 4.52.14 1.65 1.05 3.14 2.43 4.01 1.38.87 3.17 1.05 4.72.51 1.55-.54 2.78-1.89 3.14-3.49.12-.54.17-1.1.16-1.66V.02z" />
@@ -325,7 +422,7 @@
             <a href="https://discord.com" target="_blank" rel="noopener noreferrer"
                 class="flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0">
                 <div
-                    class="w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:bg-[#5865F2] group-hover:text-white group-hover:border-transparent group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(88,101,242,0.4)] transition-all duration-300 font-bold shadow-lg">
+                    class="dock-ico w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:bg-[#5865F2] group-hover:text-white group-hover:border-transparent group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(88,101,242,0.4)] transition-all duration-300 font-bold shadow-lg">
                     <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                         <path
                             d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037 19.736 19.736 0 0 0-4.885 1.515.069.069 0 0 0-.032.027C.533 9.048-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.736 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.077 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.419-2.157 2.419z" />
@@ -344,8 +441,8 @@
             class="hidden md:block absolute left-0 top-0 w-1.5 h-full cursor-ew-resize z-20 hover:bg-white/30 transition-colors group-hover/aside:bg-white/10">
         </div>
 
-        <div id="news-panel"
-            class="glass-panel flex-1 rounded-3xl p-6 flex flex-col overflow-hidden relative">
+        <div id="news-panel" data-enter style="--enter-delay:0.30s"
+            class="glass-spot glass-panel flex-1 rounded-3xl p-6 flex flex-col overflow-hidden relative">
             <!-- 标题栏 -->
             <div class="flex items-center justify-between mb-4 border-b border-white/10 pb-4">
                 <div class="flex items-center gap-3">
@@ -413,7 +510,7 @@
     </aside>
 
     <!-- 底部：实时行情条 (静态双行滑动布局) -->
-    <footer id="bottom-ticker"
+    <footer id="bottom-ticker" data-enter style="--enter-delay:0.38s"
         class="fixed bottom-0 left-0 w-full h-[38px] z-50 glass-panel !rounded-none border-x-0 border-b-0 bg-gradient-to-t from-black/50 to-transparent group/ticker">
 
         <!-- 修复后的翻页按钮：左 -->
@@ -745,15 +842,27 @@
                 overlay.className = "absolute inset-0 bg-blue-900/30 transition-colors duration-1000 z-20";
                 for (let i = 0; i < 170; i++) particles.push(new WeatherParticle('rain'));
                 animateWeather();
+                setWeatherAmbient('rain');
             } else if (weatherKeyword.includes('☀️') || weatherKeyword.includes('晴')) {
                 overlay.className = "absolute inset-0 bg-amber-200/12 transition-colors duration-1000 z-20";
+                setWeatherAmbient('sunny');
             } else if (weatherKeyword.includes('❄️') || weatherKeyword.includes('雪')) {
                 overlay.className = "absolute inset-0 bg-slate-800/40 transition-colors duration-1000 z-20";
                 for (let i = 0; i < 250; i++) particles.push(new WeatherParticle('snow'));
                 animateWeather();
+                setWeatherAmbient('snow');
             } else {
                 overlay.className = "absolute inset-0 bg-black/30 transition-colors duration-1000 z-20";
+                setWeatherAmbient('none');
             }
+        }
+
+        // 氛围桥接：天气引擎 → 视觉增强钩子（晴天 sunny→sun，光晕/星空/雷暴在 §7 内响应）
+        function setWeatherAmbient(kind) {
+            const map = { rain: 'rain', snow: 'snow', sunny: 'sun', none: 'none' };
+            const ambiance = map[kind] || 'none';
+            if (typeof window.__setAmbiance === 'function') window.__setAmbiance(ambiance);
+            else window.__weatherAmbiance = ambiance; // §7 尚未就绪时暂存，初始化后会自行校准
         }
 
         let realWeather = '';
@@ -853,14 +962,23 @@
                     if (el) {
                         const nameEl = el.querySelector('.name-val');
                         if (nameEl) nameEl.innerText = item.name;
-                        el.querySelector('.price-val').innerText = item.price;
+                        const priceEl = el.querySelector('.price-val');
+                        // 价格变化时做数字滚动插值（保留货币符号/千分位格式）
+                        if (window.__animateNumber) window.__animateNumber(priceEl, item.price);
+                        else priceEl.innerText = item.price;
                         const cEl = el.querySelector('.change-val');
                         const isUp = !item.change.startsWith('-');
                         cEl.innerText = (isUp ? '▲' : '▼') + ' ' + item.change;
                         cEl.className = `text-[9px] font-semibold drop-shadow-md numeric change-val whitespace-nowrap ${isUp ? 'text-rose-400' : 'text-emerald-400'}`;
                         const sparkContainer = el.querySelector('.sparkline-container');
                         if (sparkContainer && item.price_history && item.price_history.length >= SPARKLINE_MIN_POINTS) {
-                            sparkContainer.innerHTML = DOMPurify.sanitize(buildSparklineSVG(item.price_history, isUp));
+                            // 仅在折线数据实际变化时重绘并触发画入动画
+                            const sig = item.price_history.join(',');
+                            if (sparkContainer.dataset.sig !== sig) {
+                                sparkContainer.dataset.sig = sig;
+                                sparkContainer.innerHTML = DOMPurify.sanitize(buildSparklineSVG(item.price_history, isUp));
+                                if (window.__drawInSparkline) window.__drawInSparkline(sparkContainer);
+                            }
                         }
                     }
                 });
@@ -1174,6 +1292,215 @@
 
         // 初始拉取快讯
         fetchRealNews(); setInterval(fetchRealNews, 30000);
+
+        // ================== 7. 视觉增强：进场 / 光斑 / 磁吸 / 时段 / 雷暴 / 星空 / 数字滚动 ==================
+        (function visualEnhancements() {
+            const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+            // ---- 7.1 进场错峰动画：逐个触发 .entered ----
+            const enterEls = Array.from(document.querySelectorAll('[data-enter]'));
+            if (reduceMotion) {
+                enterEls.forEach(el => { el.style.opacity = '1'; });
+            } else {
+                requestAnimationFrame(() => {
+                    enterEls.forEach(el => el.classList.add('entered'));
+                });
+            }
+
+            // ---- 7.2 玻璃面板鼠标光斑：跟随指针的柔光 ----
+            const spotEls = Array.from(document.querySelectorAll('.glass-spot'));
+            spotEls.forEach(el => {
+                el.addEventListener('pointermove', (e) => {
+                    const r = el.getBoundingClientRect();
+                    el.style.setProperty('--mx', ((e.clientX - r.left) / r.width * 100).toFixed(1) + '%');
+                    el.style.setProperty('--my', ((e.clientY - r.top) / r.height * 100).toFixed(1) + '%');
+                    el.style.setProperty('--spot', '1');
+                });
+                el.addEventListener('pointerleave', () => el.style.setProperty('--spot', '0'));
+            });
+
+            // ---- 7.3 Dock 图标磁吸放大：靠近指针的图标按距离放大 ----
+            const dockRow = document.getElementById('dockRow');
+            if (dockRow && !reduceMotion) {
+                const icos = Array.from(dockRow.querySelectorAll('.dock-ico'));
+                const MAX = 1.42, RANGE = 110; // 最大放大倍率 / 影响半径(px)
+                dockRow.addEventListener('pointermove', (e) => {
+                    icos.forEach(ico => {
+                        const r = ico.getBoundingClientRect();
+                        const cx = r.left + r.width / 2;
+                        const d = Math.abs(e.clientX - cx);
+                        const f = Math.max(0, 1 - d / RANGE);
+                        const scale = 1 + (MAX - 1) * f;
+                        ico.style.transform = `scale(${scale.toFixed(3)}) translateY(${(-10 * f).toFixed(1)}px)`;
+                    });
+                });
+                dockRow.addEventListener('pointerleave', () => {
+                    icos.forEach(ico => { ico.style.transform = ''; });
+                });
+            }
+
+            // ---- 7.4 时段自适应色调：很淡的 soft-light 叠色，夜晚偏冷 ----
+            const timeTint = document.getElementById('timeTint');
+            const starCanvas = document.getElementById('starCanvas');
+            function applyTimeTint() {
+                if (!timeTint) return;
+                const h = new Date().getHours();
+                let bg, opacity;
+                if (h >= 5 && h < 9) {
+                    // 清晨：极淡的暖橘
+                    bg = 'linear-gradient(160deg, rgba(255,214,170,0.5), rgba(255,180,150,0.25))';
+                    opacity = '0.35';
+                } else if (h >= 9 && h < 17) {
+                    // 白天：几乎中性，略微提亮
+                    bg = 'linear-gradient(160deg, rgba(255,250,235,0.35), rgba(220,235,255,0.2))';
+                    opacity = '0.22';
+                } else if (h >= 17 && h < 20) {
+                    // 黄昏：淡金紫
+                    bg = 'linear-gradient(160deg, rgba(255,190,140,0.5), rgba(170,140,200,0.3))';
+                    opacity = '0.4';
+                } else {
+                    // 夜晚（用户主要使用时段）：冷蓝靛，营造沉静氛围
+                    bg = 'linear-gradient(160deg, rgba(90,120,180,0.55), rgba(40,60,110,0.4))';
+                    opacity = '0.5';
+                }
+                timeTint.style.background = bg;
+                timeTint.style.opacity = opacity;
+                // 夜晚开启星空（仅在非雨雪氛围下由 setAmbiance 控制可见性）
+                document.body.dataset.daypart = (h >= 20 || h < 5) ? 'night' : 'day';
+                refreshStarVisibility();
+            }
+
+            // ---- 7.5 雷暴闪电：仅雨模式下偶发泛光 ----
+            const lightning = document.getElementById('lightningFlash');
+            let lightningTimer = null;
+            function scheduleLightning() {
+                if (!lightning) return;
+                const delay = 6000 + Math.random() * 12000; // 6~18s 一次
+                lightningTimer = setTimeout(() => {
+                    if (window.__weatherAmbiance === 'rain' && !reduceMotion) {
+                        lightning.classList.remove('flash');
+                        void lightning.offsetWidth; // 重排以重启动画
+                        lightning.classList.add('flash');
+                    }
+                    scheduleLightning();
+                }, delay);
+            }
+            lightning && lightning.addEventListener('animationend', () => lightning.classList.remove('flash'));
+
+            // ---- 7.6 夜晚星空：缓慢闪烁的星点 ----
+            let stars = [], starAnimId = null, starCtx = null;
+            function initStars() {
+                if (!starCanvas) return;
+                starCtx = starCanvas.getContext('2d');
+                starCanvas.width = window.innerWidth;
+                starCanvas.height = window.innerHeight;
+                const count = Math.min(140, Math.floor(window.innerWidth * window.innerHeight / 14000));
+                stars = [];
+                for (let i = 0; i < count; i++) {
+                    stars.push({
+                        x: Math.random() * starCanvas.width,
+                        y: Math.random() * starCanvas.height * 0.75, // 多集中在上方天空
+                        r: Math.random() * 1.1 + 0.3,
+                        base: Math.random() * 0.4 + 0.25,
+                        amp: Math.random() * 0.4 + 0.2,
+                        ph: Math.random() * Math.PI * 2,
+                        sp: Math.random() * 0.015 + 0.005
+                    });
+                }
+            }
+            function animateStars() {
+                if (!starCtx) return;
+                starCtx.clearRect(0, 0, starCanvas.width, starCanvas.height);
+                for (const s of stars) {
+                    s.ph += s.sp;
+                    const a = s.base + Math.sin(s.ph) * s.amp;
+                    starCtx.beginPath();
+                    starCtx.fillStyle = `rgba(220, 232, 255, ${Math.max(0, a).toFixed(3)})`;
+                    starCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+                    starCtx.fill();
+                }
+                starAnimId = requestAnimationFrame(animateStars);
+            }
+            function refreshStarVisibility() {
+                if (!starCanvas) return;
+                const isNight = document.body.dataset.daypart === 'night';
+                // 雨/雪氛围下不显示星空，避免画面杂乱
+                const ambiance = window.__weatherAmbiance;
+                const show = isNight && !reduceMotion && ambiance !== 'rain' && ambiance !== 'snow';
+                if (show) {
+                    if (!stars.length) initStars();
+                    if (!starAnimId) animateStars();
+                    starCanvas.style.opacity = '0.9';
+                } else {
+                    starCanvas.style.opacity = '0';
+                    if (starAnimId) { cancelAnimationFrame(starAnimId); starAnimId = null; }
+                }
+            }
+            window.addEventListener('resize', () => {
+                if (starAnimId) { initStars(); }
+            });
+
+            // ---- 暴露给天气引擎调用的氛围切换钩子 ----
+            window.__setAmbiance = function (ambiance) {
+                window.__weatherAmbiance = ambiance; // 'rain' | 'snow' | 'sun' | 'none'
+                const sunGlow = document.getElementById('sunGlow');
+                if (sunGlow) sunGlow.classList.toggle('on', ambiance === 'sun');
+                if (ambiance === 'rain') { if (!lightningTimer) scheduleLightning(); }
+                refreshStarVisibility();
+            };
+
+            applyTimeTint();
+            setInterval(applyTimeTint, 5 * 60 * 1000); // 每 5 分钟校准一次时段
+
+            // ---- 7.7 行情数字滚动 + sparkline 画入：作为全局工具暴露 ----
+            // 数字滚动：把字符串价格里的数字部分做插值动画，保留非数字格式（货币符号/逗号）
+            window.__animateNumber = function (el, toStr) {
+                if (reduceMotion) { el.innerText = toStr; return; }
+                const fromStr = el.dataset.rawVal || '';
+                const toNum = parseFloat(String(toStr).replace(/[^0-9.\-]/g, ''));
+                const fromNum = parseFloat(String(fromStr).replace(/[^0-9.\-]/g, ''));
+                el.dataset.rawVal = toStr;
+                if (isNaN(toNum) || isNaN(fromNum) || fromNum === toNum) { el.innerText = toStr; return; }
+                // 推断小数位与千分位格式
+                const decimals = (String(toStr).split('.')[1] || '').replace(/[^0-9]/g, '').length;
+                const hasComma = /,/.test(String(toStr));
+                const prefix = (String(toStr).match(/^[^0-9.\-]+/) || [''])[0];
+                const suffix = (String(toStr).match(/[^0-9.,]+$/) || [''])[0];
+                const dur = 600, t0 = performance.now();
+                if (el.__numRAF) cancelAnimationFrame(el.__numRAF);
+                function fmt(v) {
+                    let s = v.toFixed(decimals);
+                    if (hasComma) {
+                        const parts = s.split('.');
+                        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                        s = parts.join('.');
+                    }
+                    return prefix + s + suffix;
+                }
+                function step(now) {
+                    const p = Math.min(1, (now - t0) / dur);
+                    const eased = 1 - Math.pow(1 - p, 3);
+                    el.innerText = fmt(fromNum + (toNum - fromNum) * eased);
+                    if (p < 1) el.__numRAF = requestAnimationFrame(step);
+                    else el.innerText = toStr;
+                }
+                el.__numRAF = requestAnimationFrame(step);
+            };
+
+            // sparkline 画入：为新插入的折线测量长度并触发描绘动画
+            window.__drawInSparkline = function (container) {
+                if (reduceMotion) return;
+                const poly = container.querySelector('.sparkline-poly');
+                if (!poly || typeof poly.getTotalLength !== 'function') return;
+                let len = 0;
+                try { len = poly.getTotalLength(); } catch { return; }
+                if (!len) return;
+                poly.style.setProperty('--spark-len', Math.ceil(len));
+                poly.classList.remove('draw-in');
+                void poly.getBoundingClientRect();
+                poly.classList.add('draw-in');
+            };
+        })();
     </script>
 </body>
 
