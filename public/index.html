@@ -8,8 +8,9 @@
     <link rel="icon" type="image/png" href="./favicon.png">
     <!-- 字体：本地自托管 Inter（正文）+ JetBrains Mono（数字），仅含 latin/latin-ext 子集 -->
     <link rel="stylesheet" href="./fonts/fonts.css">
-    <!-- 本地自托管：Tailwind CSS 引擎 + DOMPurify(XSS 消毒) -->
-    <script src="./vendor/tailwind.js"></script>
+    <!-- Tailwind：静态预编译产物（由 `npm run build:css` 生成，替代旧的 407KB 浏览器端运行时）。
+         改动 class 后需重新构建。DOMPurify 仍用于 XSS 消毒。 -->
+    <link rel="stylesheet" href="./vendor/app.css">
     <script src="./vendor/purify.min.js"></script>
     <style>
         body {

@@ -1,0 +1,6 @@
+/* Tailwind 编译入口。等价于 Play CDN 默认注入的三层：
+   base(含 Preflight 重置) + components + utilities。
+   产物经 `npm run build:css` 输出到 public/vendor/app.css。 */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

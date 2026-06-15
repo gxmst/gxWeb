@@ -19,6 +19,13 @@ build/
 dist/
 *.egg-info/
 
+# 例外：Tailwind 编译入口是源文件，必须提交（上面的 build/ 是 Python 产物约定）
+!build/
+!build/tailwind-input.css
+
+# Node（仅前端构建期使用；产物 public/vendor/app.css 需提交，故不忽略）
+node_modules/
+
 # 日志与临时文件
 *.log
 .DS_Store

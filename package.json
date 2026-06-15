@@ -1,0 +1,13 @@
+{
+  "name": "gxweb-frontend-build",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Tailwind 静态预编译工具链（仅开发期使用，产物 public/vendor/app.css 随仓库提交，VPS 无需构建）",
+  "scripts": {
+    "build:css": "tailwindcss -c tailwind.config.js -i build/tailwind-input.css -o public/vendor/app.css --minify",
+    "watch:css": "tailwindcss -c tailwind.config.js -i build/tailwind-input.css -o public/vendor/app.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.17"
+  }
+}

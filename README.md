@@ -97,13 +97,37 @@ $env:GITHUB_API_TIMEOUT="20"
 docker compose up -d --build
 ```
 
+## Frontend Build (Tailwind 预编译)
+
+前端 Tailwind 已从浏览器端运行时（407KB Play CDN）改为**静态预编译**。产物 `public/vendor/app.css`（约 24KB，gzip 后约 6KB）已随仓库提交，**VPS 部署无需任何构建步骤**。
+
+只有当你**改动了 `index.html` 或 `spider.py` 里的 Tailwind class** 时，才需要在开发机重新生成 CSS：
+
+```bash
+npm install        # 首次：安装 tailwindcss 3.4.17（已 pin 版本）
+npm run build:css  # 重新编译出 public/vendor/app.css
+```
+
+开发时也可以用 `npm run watch:css` 自动监听重建。
+
+- Tailwind 配置：`tailwind.config.js`（content 同时扫描 `public/index.html` 和 `spider.py`）
+- 编译入口：`build/tailwind-input.css`
+- `node_modules/` 不提交；`app.css` 必须提交
+
 ## Project Structure
 
 ```text
 gxWeb/
 ├─ public/
 │  ├─ index.html
-│  └─ favicon.png
+│  ├─ favicon.png
+│  └─ vendor/
+│     ├─ app.css        # Tailwind 预编译产物（提交）
+│     └─ purify.min.js
+├─ build/
+│  └─ tailwind-input.css
+├─ tailwind.config.js
+├─ package.json
 ├─ spider.py
 ├─ Dockerfile
 ├─ docker-compose.yml
