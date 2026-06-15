@@ -63,9 +63,11 @@
         }
 
         /* 真·玻璃折射：仅在 JS 检测到浏览器支持 url() backdrop-filter 时启用（加 .glass-refract）。
-           不支持（如 Safari）则保持上面的纯模糊，无副作用。 */
+           不支持（如 Safari）则保持上面的纯模糊，无副作用。
+           关键：折射要显形必须「降模糊 + 提位移」——模糊半径若大于位移幅度会把折射糊掉。 */
         html.glass-refract .glass-panel {
-            backdrop-filter: blur(20px) saturate(150%) url(#glassDisplace);
+            backdrop-filter: blur(9px) saturate(155%) brightness(1.04) url(#glassDisplace);
+            -webkit-backdrop-filter: blur(9px) saturate(155%) url(#glassDisplace);
         }
 
         /* 隐藏滚动条但保留滚动功能 */
@@ -140,6 +142,50 @@
         .news-item-hover:hover {
             background: rgba(255, 255, 255, 0.06);
             box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+        }
+
+        /* ============ 快讯：连续时间轴信息流（取代表格式分隔线，整体化） ============ */
+        /* 列表整体左侧一条贯穿的细竖线（时间轴主干） */
+        #newsList { position: relative; }
+        .news-feed-item {
+            position: relative;
+            padding-left: 1.15rem;
+            transition: background 0.2s ease;
+            border-radius: 0.5rem;
+        }
+        /* 主干竖线：每条画一段，首尾相接成连续轴 */
+        .news-feed-item::before {
+            content: "";
+            position: absolute;
+            left: 4px; top: 0; bottom: 0;
+            width: 1px;
+            background: rgba(255, 255, 255, 0.12);
+        }
+        .news-feed-item:first-child::before { top: 0.7rem; }
+        .news-feed-item:last-child::before { bottom: auto; height: 0.7rem; }
+        /* 节点圆点：对齐时间行 */
+        .news-feed-item::after {
+            content: "";
+            position: absolute;
+            left: 1px; top: 0.62rem;
+            width: 7px; height: 7px;
+            border-radius: 9999px;
+            background: rgba(255, 255, 255, 0.35);
+            box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.55);
+            transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+        }
+        .news-feed-item:hover { background: rgba(255, 255, 255, 0.05); }
+        .news-feed-item:hover::after {
+            background: rgba(125, 211, 252, 0.95);
+            transform: scale(1.25);
+        }
+        /* 重要项：红色节点 + 极淡红底，融入信息流而非独立色条行 */
+        .news-feed-item.is-important::after {
+            background: rgba(248, 113, 113, 0.95);
+            box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.55), 0 0 8px rgba(248, 113, 113, 0.6);
+        }
+        .news-feed-item.is-important {
+            background: linear-gradient(90deg, rgba(248, 113, 113, 0.08), rgba(248, 113, 113, 0));
         }
 
         /* 科技聚合块样式适配 */
@@ -221,21 +267,49 @@
             animation-delay: var(--enter-delay, 0s);
         }
 
-        /* ============ 玻璃面板鼠标光斑 ============ */
+        /* ============ 玻璃面板鼠标光斑（精致版：边缘吃光 + 微弱高光核，不再一坨白斑） ============ */
         .glass-spot { position: relative; }
+        /* 高光核：小而淡，screen 叠加只提亮不糊文字 */
         .glass-spot::after {
             content: "";
             position: absolute;
             inset: 0;
             border-radius: inherit;
-            background: radial-gradient(260px circle at var(--mx, 50%) var(--my, -40%),
-                        rgba(255, 255, 255, 0.22), transparent 62%);
+            background: radial-gradient(140px circle at var(--mx, 50%) var(--my, -40%),
+                        rgba(255, 255, 255, 0.16), transparent 60%);
             opacity: var(--spot, 0);
-            transition: opacity 0.4s ease;
+            transition: opacity 0.5s ease;
             pointer-events: none;
-            mix-blend-mode: soft-light;
+            mix-blend-mode: screen;
             z-index: 3;
         }
+        /* 边缘描光：光只落在玻璃棱边（用 mask 掏空内部），像真实光打在玻璃边缘 */
+        .glass-spot::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            padding: 1px;
+            background: radial-gradient(200px circle at var(--mx, 50%) var(--my, -40%),
+                        rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.12) 45%, transparent 70%);
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            -webkit-mask-composite: xor;
+            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            mask-composite: exclude;
+            opacity: var(--spot, 0);
+            transition: opacity 0.5s ease;
+            pointer-events: none;
+            z-index: 4;
+        }
+
+        /* ============ 指针视差 3D 倾斜：玻璃面板随光标做小角度立体翻转 ============ */
+        main, aside { perspective: 1400px; }
+        [data-tilt] {
+            transform-style: preserve-3d;
+            transition: transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
+            will-change: transform;
+        }
+        [data-tilt].tilting { transition: transform 0.08s linear; }
 
         /* ============ Dock 磁吸：交由 JS 驱动 transform，仅设过渡 ============ */
         .dock-ico {
@@ -311,11 +385,11 @@
          默认隐藏、不占布局；仅被支持 url() backdrop-filter 的浏览器引用（见 html.glass-refract）。 -->
     <svg width="0" height="0" style="position:absolute;pointer-events:none" aria-hidden="true">
         <filter id="glassDisplace" x="-20%" y="-20%" width="140%" height="140%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.008 0.012" numOctaves="2" seed="7" result="noise">
-                <animate attributeName="baseFrequency" dur="28s"
-                    values="0.008 0.012;0.011 0.009;0.008 0.012" repeatCount="indefinite" />
+            <feTurbulence type="fractalNoise" baseFrequency="0.013 0.017" numOctaves="2" seed="7" result="noise">
+                <animate attributeName="baseFrequency" dur="26s"
+                    values="0.013 0.017;0.018 0.012;0.013 0.017" repeatCount="indefinite" />
             </feTurbulence>
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="14"
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="34"
                 xChannelSelector="R" yChannelSelector="G" />
         </filter>
     </svg>
@@ -388,7 +462,7 @@
         </div>
 
         <!-- 融合搜索框 (内嵌引擎选择) -->
-        <div id="search-bar" data-enter style="--enter-delay:0.14s"
+        <div id="search-bar" data-enter data-tilt="7" style="--enter-delay:0.14s"
             class="glass-spot w-full max-w-2xl glass-panel rounded-full flex items-center p-1.5 pr-4 mb-12 transition-all duration-300 hover:scale-[1.01] focus-within:scale-[1.02] focus-within:ring-4 focus-within:ring-white/20 focus-within:bg-white/10 overflow-hidden">
             <svg class="w-5 h-5 text-white/50 ml-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -484,7 +558,7 @@
             class="hidden md:block absolute left-0 top-0 w-1.5 h-full cursor-ew-resize z-20 hover:bg-white/30 transition-colors group-hover/aside:bg-white/10">
         </div>
 
-        <div id="news-panel" data-enter style="--enter-delay:0.30s"
+        <div id="news-panel" data-enter data-tilt="3" style="--enter-delay:0.30s"
             class="glass-spot glass-panel flex-1 rounded-3xl p-6 flex flex-col overflow-hidden relative">
             <!-- 标题栏 -->
             <div class="flex items-center justify-between mb-4 border-b border-white/10 pb-4">
@@ -1306,12 +1380,10 @@
             const displayText = normalizeNewsDisplayText(news);
             const safeUrl = sanitizeHttpUrl(news.url);
             const isHtmlBlock = news.format === 'html';
-            // 普通项：仅底部细分隔线；重要项：左侧红色色条 + 浅红背景强调
-            const importantClass = news.is_important
-                ? ' border-l-2 border-red-500/40 bg-red-500/[0.07] pl-3 rounded-r-lg'
-                : ' px-1';
+            // 时间轴信息流：去掉表格式分隔线，靠竖线+节点圆点串联；重要项染红节点与底色
+            const importantClass = news.is_important ? ' is-important' : '';
 
-            item.className = `${importantClass} py-2.5 border-b border-white/[0.07] last:border-b-0 news-item-hover [&_a]:text-blue-400 [&_a]:underline [&_a]:hover:text-blue-300` + (isNew ? ' animate-slide-down' : '');
+            item.className = `news-feed-item${importantClass} py-2.5 [&_a]:text-blue-400 [&_a]:underline [&_a]:hover:text-blue-300` + (isNew ? ' animate-slide-down' : '');
 
             header.className = 'text-[11px] text-white/40 font-mono mb-0.5 flex items-center';
             header.append(document.createTextNode(news.time || ''));
@@ -1504,6 +1576,34 @@
             if (supported && !reduce && wide) {
                 document.documentElement.classList.add('glass-refract');
             }
+        })();
+
+        // 指针视差 3D 倾斜：玻璃面板随光标做小角度立体翻转（桌面 + 非省电才启用）
+        (function enableTilt() {
+            const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (reduce || window.innerWidth < 768) return;
+            const els = Array.from(document.querySelectorAll('[data-tilt]'));
+            els.forEach(el => {
+                const max = parseFloat(el.dataset.tilt) || 5;
+                let raf = null;
+                el.addEventListener('pointermove', (e) => {
+                    const r = el.getBoundingClientRect();
+                    const px = (e.clientX - r.left) / r.width - 0.5;   // -0.5 ~ 0.5
+                    const py = (e.clientY - r.top) / r.height - 0.5;
+                    if (raf) cancelAnimationFrame(raf);
+                    raf = requestAnimationFrame(() => {
+                        el.classList.add('tilting');
+                        // 光标在右→绕 Y 正转；在下→绕 X 负转，符合实体板直觉
+                        el.style.transform =
+                            `rotateX(${(-py * max).toFixed(2)}deg) rotateY(${(px * max).toFixed(2)}deg)`;
+                    });
+                });
+                el.addEventListener('pointerleave', () => {
+                    if (raf) cancelAnimationFrame(raf);
+                    el.classList.remove('tilting');
+                    el.style.transform = '';
+                });
+            });
         })();
 
         // ================== 7. 视觉增强：进场 / 光斑 / 磁吸 / 时段 / 雷暴 / 星空 / 数字滚动 ==================
