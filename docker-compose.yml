@@ -43,9 +43,12 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    # 健康检查：探首页可访问性。nginx:alpine 自带 wget。
+    # 健康检查：探首页可访问性。
+    # 用 127.0.0.1 而非 localhost——容器内 localhost 可能先解析到 IPv6 ::1，
+    # 而 nginx `listen 80;` 只监听 IPv4，会导致 wget 连接被拒、误判 unhealthy。
+    # busybox 版 wget 不支持 --spider/--tries，用 -q -O /dev/null。
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/"]
       interval: 30s
       timeout: 5s
       retries: 3
