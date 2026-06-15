@@ -9,6 +9,7 @@ import requests
 import feedparser
 import calendar
 import random
+import threading
 from json import JSONDecodeError
 from datetime import datetime, timedelta, timezone
 from PIL import Image
@@ -70,8 +71,19 @@ def build_http_session():
     session.mount("https://", adapter)
     return session
 
-HTTP_SESSION = build_http_session()
 GITHUB_CACHE_PATH = "./public/github-tech-cache-v2.json"
+
+# 线程本地 Session：requests.Session 并非完全线程安全（底层连接池在并发下可能串数据）。
+# 快/慢两个工作线程各自持有独立 Session，互不干扰。
+_thread_local = threading.local()
+
+def get_session():
+    """返回当前线程独享的 HTTP Session（懒初始化）。"""
+    sess = getattr(_thread_local, "session", None)
+    if sess is None:
+        sess = build_http_session()
+        _thread_local.session = sess
+    return sess
 
 def format_market_price(price, decimals):
     return format(price, f".{decimals}f")
@@ -142,20 +154,24 @@ def sanitize_url(url):
     return candidate
 
 _translate_cache = {}
+_translate_lock = threading.Lock()
 
 def translate_en_to_zh(text):
     if not text: return ""
     cache_key = hashlib.md5(text.encode()).hexdigest()
-    if cache_key in _translate_cache:
-        return _translate_cache[cache_key]
+    with _translate_lock:
+        if cache_key in _translate_cache:
+            return _translate_cache[cache_key]
     try:
+        # 网络请求与 sleep 放在锁外，避免长时间持锁阻塞其它线程。
         translated = GoogleTranslator(source='en', target='zh-CN').translate(text)
         time.sleep(0.5)
-        _translate_cache[cache_key] = translated
-        if len(_translate_cache) > 500:
-            keys = list(_translate_cache.keys())
-            for k in keys[:100]:
-                del _translate_cache[k]
+        with _translate_lock:
+            _translate_cache[cache_key] = translated
+            if len(_translate_cache) > 500:
+                keys = list(_translate_cache.keys())
+                for k in keys[:100]:
+                    del _translate_cache[k]
         return translated
     except Exception as e:
         print(f"⚠️ [翻译引擎] 失败: {e}")
@@ -167,10 +183,10 @@ def fetch_bing_wallpaper():
     try:
         url = "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=5&mkt=zh-CN"
         headers = {"User-Agent": get_random_ua()}
-        data = HTTP_SESSION.get(url, headers=headers, timeout=10).json()
+        data = get_session().get(url, headers=headers, timeout=10).json()
         for i in range(len(data["images"])):
             img_url = "https://www.bing.com" + data["images"][i]["url"]
-            img_data = HTTP_SESSION.get(img_url, headers={"User-Agent": get_random_ua()}, timeout=15).content
+            img_data = get_session().get(img_url, headers={"User-Agent": get_random_ua()}, timeout=15).content
 
             img = Image.open(io.BytesIO(img_data)).convert('RGB')
             img.save(f"./public/bg_{i}.jpg", "JPEG", quality=82)
@@ -209,7 +225,7 @@ def fetch_sina():
             headers = {
                 "User-Agent": get_random_ua()
             }
-            resp = HTTP_SESSION.get(url, headers=headers, timeout=15)
+            resp = get_session().get(url, headers=headers, timeout=15)
             data = resp.json()
             items = data.get("result", {}).get("data", {}).get("feed", {}).get("list", [])
 
@@ -267,7 +283,7 @@ def fetch_rss_news():
         source_news = []
         try:
             headers = {"User-Agent": get_random_ua()}
-            resp = HTTP_SESSION.get(source["url"], headers=headers, timeout=15)
+            resp = get_session().get(source["url"], headers=headers, timeout=15)
             if resp.status_code != 200: continue
             feed = feedparser.parse(resp.text)
             for entry in feed.entries[:20]:
@@ -308,7 +324,7 @@ def fetch_github_trends(days=7, limit=10):
         headers["Authorization"] = f"Bearer {github_token}"
 
     timeout = float(os.getenv("GITHUB_API_TIMEOUT", "20"))
-    resp = HTTP_SESSION.get(url, headers=headers, timeout=(5, timeout))
+    resp = get_session().get(url, headers=headers, timeout=(5, timeout))
     resp.raise_for_status()
     data = resp.json()
     if not isinstance(data, dict):
@@ -356,7 +372,7 @@ def fetch_weather():
     try:
         url = "https://api.open-meteo.com/v1/forecast?latitude=41.80&longitude=123.43&current_weather=true"
         headers = {"User-Agent": get_random_ua()}
-        resp = HTTP_SESSION.get(url, headers=headers, timeout=10).json()
+        resp = get_session().get(url, headers=headers, timeout=10).json()
         curr = resp.get("current_weather", {})
         temp, code = curr.get("temperature"), curr.get("weathercode")
         emoji_map = {0: "☀️", 1: "☁️", 2: "☁️", 3: "☁️", 45: "🌫️", 48: "🌫️", 51: "🌧️", 53: "🌧️", 55: "🌧️", 61: "🌧️", 63: "🌧️", 65: "🌧️", 71: "❄️", 73: "❄️", 75: "❄️", 95: "⛈️"}
@@ -399,7 +415,7 @@ def _fetch_sina_all(configs):
             "Accept": "*/*",
             "User-Agent": get_random_ua(),
         }
-        resp = HTTP_SESSION.get(url, headers=headers, timeout=15)
+        resp = get_session().get(url, headers=headers, timeout=15)
         resp.raise_for_status()
         # 该接口返回 GBK 编码且常不带正确 charset，显式指定避免中文乱码。
         resp.encoding = "gbk"
@@ -480,7 +496,7 @@ def _fetch_tencent_all(configs):
         symbols = ",".join([c["tencent"] for c in entries])
         url = f"https://qt.gtimg.cn/q={symbols}"
         headers = {"Referer": "https://gu.qq.com/", "User-Agent": get_random_ua()}
-        resp = HTTP_SESSION.get(url, headers=headers, timeout=15)
+        resp = get_session().get(url, headers=headers, timeout=15)
         resp.raise_for_status()
         # 腾讯接口同样返回 GBK 编码。
         resp.encoding = "gbk"
@@ -646,7 +662,7 @@ def fetch_tech_news():
             print(f"[tech] GitHub request failed: {e}")
 
     try:
-        resp = HTTP_SESSION.get("https://hnrss.org/frontpage?points=50", headers={"User-Agent": get_random_ua()}, timeout=15)
+        resp = get_session().get("https://hnrss.org/frontpage?points=50", headers={"User-Agent": get_random_ua()}, timeout=15)
         if resp.status_code == 200:
             feed = feedparser.parse(resp.text)
             hn_html = "HN Trends"
@@ -674,8 +690,8 @@ def fetch_tech_news():
         print(f"[tech] HN request failed: {e}")
 
     try:
-        hot_resp = HTTP_SESSION.get("https://www.v2ex.com/api/topics/hot.json", headers={"User-Agent": get_random_ua()}, timeout=15)
-        new_resp = HTTP_SESSION.get("https://www.v2ex.com/api/topics/latest.json", headers={"User-Agent": get_random_ua()}, timeout=15)
+        hot_resp = get_session().get("https://www.v2ex.com/api/topics/hot.json", headers={"User-Agent": get_random_ua()}, timeout=15)
+        new_resp = get_session().get("https://www.v2ex.com/api/topics/latest.json", headers={"User-Agent": get_random_ua()}, timeout=15)
         if hot_resp.status_code == 200 and new_resp.status_code == 200:
             hot_topics = hot_resp.json()
             new_topics = new_resp.json()
@@ -708,59 +724,46 @@ class SpiderApp:
         self.last_tech_time = 0
         self.last_wallpaper_list_time = 0
         self.shutdown = False
+        # 保护快/慢线程共享的 rss_news / tech_news。
+        # 慢线程整体替换列表引用，快线程在锁内取快照引用，持锁极短。
+        self._data_lock = threading.Lock()
+
+    def _interruptible_sleep(self, seconds):
+        for _ in range(int(seconds)):
+            if self.shutdown:
+                return
+            time.sleep(1)
 
     def run(self):
         signal.signal(signal.SIGTERM, self._handle_signal)
         signal.signal(signal.SIGINT, self._handle_signal)
 
+        # 快线程：行情 + 新浪快讯 + 合并写盘，稳定 60s 节奏，不被慢任务拖累。
+        # 慢线程：壁纸 / 天气 / RSS / 科技，各自节奏，慢就慢，只更新内存列表。
+        fast = threading.Thread(target=self._fast_loop, name="fast", daemon=True)
+        slow = threading.Thread(target=self._slow_loop, name="slow", daemon=True)
+        fast.start()
+        slow.start()
+
+        while not self.shutdown:
+            time.sleep(0.5)
+
+        # 优雅退出：给在途的原子写一点收尾时间（atomic_save_json 本身保证不会写出半截文件）。
+        fast.join(timeout=5)
+        slow.join(timeout=5)
+        print("🛑 已停止所有工作线程。")
+
+    def _fast_loop(self):
+        """行情 + 新浪快讯，每轮约 60 秒。唯一写 finance-news.json / ticker*.json 的线程。"""
         while not self.shutdown:
             try:
-                now_ts = time.time()
                 now_bj = get_beijing_time()
-                print(f"\n--- {now_bj.strftime('%Y-%m-%d %H:%M:%S')} 开始轮询 ---")
+                print(f"\n--- [fast] {now_bj.strftime('%H:%M:%S')} 行情+快讯 ---")
 
-                # 1. 壁纸逻辑 (每天一次)
-                if now_bj.strftime('%Y-%m-%d') != self.last_wallpaper_date or not os.path.exists("./public/bg_0.jpg"):
-                    fetch_bing_wallpaper()
-                    self.last_wallpaper_date = now_bj.strftime('%Y-%m-%d')
-
-                # 2. 天气逻辑 (每 30 分钟)
-                if now_ts - self.last_weather_time >= 1800:
-                    fetch_weather()
-                    self.last_weather_time = now_ts
-
-                # 3. 扫描壁纸列表 (每 5 分钟)
-                if now_ts - self.last_wallpaper_list_time >= 300:
-                    update_wallpaper_list()
-                    self.last_wallpaper_list_time = now_ts
-
-                # 4. 行情逻辑 (每轮执行，节奏约 60 秒)
+                # 行情（内部自行写 ticker.json / ticker-status.json）
                 fetch_ticker()
 
-                # 5. RSS 逻辑 (每 30 分钟)
-                if now_ts - self.last_rss_time >= 1800 or not self.rss_news:
-                    rss_news_raw = fetch_rss_news()
-                    seen_rss = set(); unique_rss = []
-                    for item in rss_news_raw:
-                        content_hash = hashlib.md5(item["content"].encode()).hexdigest()
-                        if content_hash not in seen_rss:
-                            unique_rss.append(item); seen_rss.add(content_hash)
-                    unique_rss.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
-                    self.rss_news = unique_rss[:500]
-                    self.last_rss_time = now_ts
-
-                # 6. 科技逻辑 (每 30 分钟)
-                if now_ts - self.last_tech_time >= 1800 or not self.tech_news:
-                    tech_news_raw = fetch_tech_news()
-                    seen_tech = set(); unique_tech = []
-                    for item in tech_news_raw:
-                        content_hash = hashlib.md5(item["content"].encode()).hexdigest()
-                        if content_hash not in seen_tech:
-                            unique_tech.append(item); seen_tech.add(content_hash)
-                    self.tech_news = unique_tech[:100]
-                    self.last_tech_time = now_ts
-
-                # 7. 新浪快讯 (每轮执行，节奏约 60 秒)
+                # 新浪快讯
                 sina_news_raw = fetch_sina()
                 seen_sina = set()
                 unique_sina = []
@@ -771,8 +774,12 @@ class SpiderApp:
                         seen_sina.add(content_hash)
                 sina_1500 = unique_sina[:1500]
 
-                # 8. 合并并保存
-                final_news = sina_1500 + self.rss_news + self.tech_news
+                # 取慢线程数据的快照（持锁极短，仅复制引用）
+                with self._data_lock:
+                    rss_snapshot = self.rss_news
+                    tech_snapshot = self.tech_news
+
+                final_news = sina_1500 + rss_snapshot + tech_snapshot
                 final_news.sort(key=lambda x: (x.get("is_important", False), x.get("raw_time", 0)), reverse=True)
 
                 if final_news:
@@ -781,16 +788,65 @@ class SpiderApp:
                         "news_list": final_news
                     }
                     atomic_save_json("./public/finance-news.json", output_data)
-                    print(f"✅ 更新完成：总库 {len(final_news)} 条。")
+                    print(f"✅ [fast] 更新完成：总库 {len(final_news)} 条 (新浪 {len(sina_1500)} / RSS {len(rss_snapshot)} / 科技 {len(tech_snapshot)})。")
 
             except Exception as e:
-                print(f"🚨 [主循环] 发生严重异常: {e}")
+                print(f"🚨 [fast] 发生异常: {e}")
 
-            print("休眠 60 秒...")
-            for _ in range(60):
-                if self.shutdown:
-                    break
-                time.sleep(1)
+            self._interruptible_sleep(60)
+
+    def _slow_loop(self):
+        """壁纸 / 天气 / RSS / 科技，各自独立节奏。只更新内存共享列表，不写 finance-news.json。"""
+        while not self.shutdown:
+            try:
+                now_ts = time.time()
+                now_bj = get_beijing_time()
+
+                # 1. 壁纸 (每天一次)
+                if now_bj.strftime('%Y-%m-%d') != self.last_wallpaper_date or not os.path.exists("./public/bg_0.jpg"):
+                    fetch_bing_wallpaper()
+                    self.last_wallpaper_date = now_bj.strftime('%Y-%m-%d')
+
+                # 2. 天气 (每 30 分钟)
+                if now_ts - self.last_weather_time >= 1800:
+                    fetch_weather()
+                    self.last_weather_time = now_ts
+
+                # 3. 扫描壁纸列表 (每 5 分钟)
+                if now_ts - self.last_wallpaper_list_time >= 300:
+                    update_wallpaper_list()
+                    self.last_wallpaper_list_time = now_ts
+
+                # 4. RSS (每 30 分钟；首轮 rss_news 为空时立即抓)
+                if now_ts - self.last_rss_time >= 1800 or not self.rss_news:
+                    rss_news_raw = fetch_rss_news()
+                    seen_rss = set(); unique_rss = []
+                    for item in rss_news_raw:
+                        content_hash = hashlib.md5(item["content"].encode()).hexdigest()
+                        if content_hash not in seen_rss:
+                            unique_rss.append(item); seen_rss.add(content_hash)
+                    unique_rss.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
+                    with self._data_lock:
+                        self.rss_news = unique_rss[:500]
+                    self.last_rss_time = now_ts
+
+                # 5. 科技 (每 30 分钟；首轮 tech_news 为空时立即抓)
+                if now_ts - self.last_tech_time >= 1800 or not self.tech_news:
+                    tech_news_raw = fetch_tech_news()
+                    seen_tech = set(); unique_tech = []
+                    for item in tech_news_raw:
+                        content_hash = hashlib.md5(item["content"].encode()).hexdigest()
+                        if content_hash not in seen_tech:
+                            unique_tech.append(item); seen_tech.add(content_hash)
+                    with self._data_lock:
+                        self.tech_news = unique_tech[:100]
+                    self.last_tech_time = now_ts
+
+            except Exception as e:
+                print(f"🚨 [slow] 发生异常: {e}")
+
+            # 慢线程 30s 醒一次检查各任务是否到点，节奏由上面的时间判断控制。
+            self._interruptible_sleep(30)
 
     def _handle_signal(self, signum, frame):
         print(f"\n🛑 收到信号 {signum}，正在优雅退出...")
