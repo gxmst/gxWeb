@@ -62,6 +62,12 @@
                 0 24px 50px rgba(0, 0, 0, 0.45);
         }
 
+        /* 真·玻璃折射：仅在 JS 检测到浏览器支持 url() backdrop-filter 时启用（加 .glass-refract）。
+           不支持（如 Safari）则保持上面的纯模糊，无副作用。 */
+        html.glass-refract .glass-panel {
+            backdrop-filter: blur(20px) saturate(150%) url(#glassDisplace);
+        }
+
         /* 隐藏滚动条但保留滚动功能 */
         .no-scrollbar::-webkit-scrollbar {
             display: none;
@@ -281,12 +287,38 @@
         @media (prefers-reduced-motion: reduce) {
             [data-enter].entered { animation: none; opacity: 1; }
             .sparkline-poly.draw-in { animation: none; stroke-dashoffset: 0; }
+            #tabIndicator { transition: none; }
         }
+
+        /* 分类 Tab：默认淡，激活态由 JS 配合滑动指示器染强调色 */
+        .tab-btn { color: rgba(255,255,255,0.42); font-weight: 500; }
+        .tab-btn:hover { color: rgba(255,255,255,0.72); }
+        .tab-btn.active { color: #fff; font-weight: 700; }
+        .tab-badge {
+            font-size: 9px; line-height: 1; padding: 2px 5px; border-radius: 9999px;
+            background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.6);
+            font-variant-numeric: tabular-nums; transition: all .3s;
+        }
+        .tab-btn.active .tab-badge { background: rgba(255,255,255,0.22); color: #fff; }
+        .tab-badge:empty { display: none; }
     </style>
 </head>
 
 <body
     class="min-h-screen w-screen text-white font-sans bg-gray-900 flex flex-col md:flex-row md:h-screen md:overflow-hidden overflow-y-auto no-scrollbar">
+
+    <!-- 玻璃折射用 SVG 滤镜：feTurbulence 噪声 → feDisplacementMap 让背景透过玻璃微微扭曲流动。
+         默认隐藏、不占布局；仅被支持 url() backdrop-filter 的浏览器引用（见 html.glass-refract）。 -->
+    <svg width="0" height="0" style="position:absolute;pointer-events:none" aria-hidden="true">
+        <filter id="glassDisplace" x="-20%" y="-20%" width="140%" height="140%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.008 0.012" numOctaves="2" seed="7" result="noise">
+                <animate attributeName="baseFrequency" dur="28s"
+                    values="0.008 0.012;0.011 0.009;0.008 0.012" repeatCount="indefinite" />
+            </feTurbulence>
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="14"
+                xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+    </svg>
 
     <!-- 动态背景 -->
     <div class="fixed inset-0 z-0">
@@ -480,17 +512,24 @@
                 </div>
             </div>
 
-            <!-- 选项卡切换 -->
-            <div
-                class="flex p-1 mb-4 bg-black/20 rounded-xl border border-white/5 backdrop-blur-md overflow-x-auto no-scrollbar">
-                <button onclick="setFilter('all')" id="tab-all"
-                    class="flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 bg-white/20 text-white shadow-lg shrink-0 min-w-[60px] scale-[1.02] border border-white/20">全部</button>
-                <button onclick="setFilter('news')" id="tab-news"
-                    class="flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]">快讯</button>
-                <button onclick="setFilter('foreign')" id="tab-foreign"
-                    class="flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]">外媒</button>
-                <button onclick="setFilter('tech')" id="tab-tech"
-                    class="flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]">科技</button>
+            <!-- 选项卡切换：滑动高亮指示器 + 分类强调色 + 实时数量角标 -->
+            <div id="tabBar"
+                class="relative flex p-1 mb-4 bg-black/20 rounded-xl border border-white/5 backdrop-blur-md overflow-x-auto no-scrollbar">
+                <span id="tabIndicator"
+                    class="absolute top-1 bottom-1 left-0 rounded-lg transition-all duration-300 ease-out pointer-events-none"
+                    style="width:0"></span>
+                <button onclick="setFilter('all')" id="tab-all" data-filter="all"
+                    class="tab-btn relative z-10 flex-1 py-1.5 text-xs rounded-lg transition-all duration-300 shrink-0 min-w-[64px] flex items-center justify-center gap-1">
+                    <span>全部</span><span id="count-all" class="tab-badge"></span></button>
+                <button onclick="setFilter('news')" id="tab-news" data-filter="news"
+                    class="tab-btn relative z-10 flex-1 py-1.5 text-xs rounded-lg transition-all duration-300 shrink-0 min-w-[64px] flex items-center justify-center gap-1">
+                    <span>国内</span><span id="count-news" class="tab-badge"></span></button>
+                <button onclick="setFilter('foreign')" id="tab-foreign" data-filter="foreign"
+                    class="tab-btn relative z-10 flex-1 py-1.5 text-xs rounded-lg transition-all duration-300 shrink-0 min-w-[64px] flex items-center justify-center gap-1">
+                    <span>外媒</span><span id="count-foreign" class="tab-badge"></span></button>
+                <button onclick="setFilter('tech')" id="tab-tech" data-filter="tech"
+                    class="tab-btn relative z-10 flex-1 py-1.5 text-xs rounded-lg transition-all duration-300 shrink-0 min-w-[64px] flex items-center justify-center gap-1">
+                    <span>科技</span><span id="count-tech" class="tab-badge"></span></button>
             </div>
 
             <!-- 滚动列表区 (增加 pb-24 防止被底部行情条挡住) -->
@@ -690,35 +729,87 @@
         let particles = [];
         let animationId = null;
         let uiBounds = [];
+        let currentWeatherType = null;   // 'rain' | 'snow' | null
+        let canvasFade = 0;              // 切换天气时的画布淡入 (0→1)
+
+        // 鼠标气流场：粒子在光标附近被推开/打旋
+        const mouse = { x: -9999, y: -9999, vx: 0, vy: 0, active: false, lastMove: 0 };
+        window.addEventListener('pointermove', (e) => {
+            mouse.vx = e.clientX - mouse.x;
+            mouse.vy = e.clientY - mouse.y;
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+            mouse.active = true;
+            mouse.lastMove = performance.now();
+        }, { passive: true });
+        window.addEventListener('pointerleave', () => { mouse.active = false; }, { passive: true });
 
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            _uiBoundsDirty = true;
             updateUIBounds();
+        }
+
+        // 按视口面积缩放粒子数，避免大屏太稀、小屏太密
+        function particleCountFor(type) {
+            const area = window.innerWidth * window.innerHeight;
+            if (type === 'snow') return Math.max(120, Math.min(380, Math.round(area / 9000)));
+            return Math.max(90, Math.min(300, Math.round(area / 12000)));   // rain
         }
 
         let _uiBoundsDirty = true;
         function updateUIBounds() {
             if (!_uiBoundsDirty) return;
             _uiBoundsDirty = false;
-            const bar = document.getElementById('search-bar');
-            const panel = document.getElementById('news-panel');
-            const ticker = document.getElementById('bottom-ticker');
+            const ids = ['search-bar', 'news-panel', 'bottom-ticker'];
             uiBounds = [];
-            if (bar) uiBounds.push(bar.getBoundingClientRect());
-            if (panel) uiBounds.push(panel.getBoundingClientRect());
-            if (ticker) uiBounds.push(ticker.getBoundingClientRect());
+            for (const id of ids) {
+                const el = document.getElementById(id);
+                if (!el) continue;
+                const r = el.getBoundingClientRect();
+                // 读取真实圆角半径，碰撞面才能贴合可见弧线（修复"打在空中"）
+                let radius = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
+                radius = Math.min(radius, r.width / 2, r.height / 2);
+                uiBounds.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, radius, snow: 0 });
+            }
         }
         function markUIBoundsDirty() { _uiBoundsDirty = true; }
         window.addEventListener('resize', resizeCanvas);
         window.addEventListener('scroll', markUIBoundsDirty, true);
+
+        // 给定 x，返回该 bound 顶部可见表面的 y（圆角处抬高到弧线上）。x 在 bound 之外返回 null。
+        function surfaceYAt(bound, x) {
+            if (x < bound.left || x > bound.right) return null;
+            const rad = bound.radius;
+            if (rad <= 0) return bound.top;
+            // 左圆角区
+            if (x < bound.left + rad) {
+                const dx = rad - (x - bound.left);
+                return bound.top + (rad - Math.sqrt(Math.max(0, rad * rad - dx * dx)));
+            }
+            // 右圆角区
+            if (x > bound.right - rad) {
+                const dx = rad - (bound.right - x);
+                return bound.top + (rad - Math.sqrt(Math.max(0, rad * rad - dx * dx)));
+            }
+            // 中间平直段
+            return bound.top;
+        }
+
         resizeCanvas();
 
         class WeatherParticle {
-            constructor(type) { this.type = type; this.reset(); }
-            reset() {
+            constructor(type, seed) { this.type = type; this.reset(seed); }
+            // seed=true：初始播种，散布在屏幕上方较高的带里，让雪/雨"开始下"而非瞬间铺满。
+            // seed=false：落地/出界回收，只补在顶沿略上方，保持下落数量恒定、密度均匀。
+            reset(seed) {
                 this.x = Math.random() * canvas.width;
-                this.y = Math.random() * (canvas.height + 100) - canvas.height;
+                if (seed) {
+                    this.y = Math.random() * canvas.height - canvas.height; // [-H, 0)，自上而下渐入
+                } else {
+                    this.y = -10 - Math.random() * 40;                      // 顶沿略上方补员
+                }
                 this.prevY = this.y;
                 this.isLanded = false;
                 this.landedTime = 0;
@@ -726,27 +817,45 @@
                 this.splashRadius = 0;
                 this.splashAlpha = 1;
                 this.splashX = 0;
-                this.splashBound = null;
 
                 if (this.type === 'rain') {
-                    this.speed = 14 + Math.random() * 8;       // 自然下落
-                    this.len = 16 + Math.random() * 16;        // 细长雨丝
-                    this.opacity = 0.16 + Math.random() * 0.22; // 柔和、不刺眼
-                    this.lineWidth = 0.7 + Math.random() * 0.7; // 更细
+                    this.speed = 14 + Math.random() * 8;
+                    this.len = 16 + Math.random() * 16;
+                    this.opacity = 0.16 + Math.random() * 0.22;
+                    this.lineWidth = 0.7 + Math.random() * 0.7;
                 } else {
                     this.speed = 0.6 + Math.random() * 1.8;
                     this.radius = Math.random() * 2.6 + 1.2;
-                    this.opacity = 0.55 + Math.random() * 0.4; // 雪花更清晰
+                    this.opacity = 0.55 + Math.random() * 0.4;
                     this.swing = Math.random() * 2;
                     this.swingStep = Math.random() * 100;
+                    this.vx = 0; // 受鼠标气流影响的横向速度
                 }
             }
+
+            applyMouseField() {
+                // 仅在鼠标近期移动过时生效，避免静止光标持续吸附
+                if (!mouse.active || performance.now() - mouse.lastMove > 600) return;
+                const dx = this.x - mouse.x;
+                const dy = this.y - mouse.y;
+                const dist2 = dx * dx + dy * dy;
+                const R = 110;
+                if (dist2 > R * R || dist2 < 0.01) return;
+                const dist = Math.sqrt(dist2);
+                const force = (1 - dist / R);
+                // 斥力（推开）+ 垂直分量制造打旋观感
+                const push = force * (this.type === 'snow' ? 3.2 : 5.0);
+                this.x += (dx / dist) * push + (-dy / dist) * push * 0.4 * (this.type === 'snow' ? 1 : 0.3);
+                if (this.type === 'snow') this.y += (dy / dist) * push * 0.5;
+            }
+
             update() {
                 if (this.isLanded) {
                     this.landedTime++;
-                    if (this.landedTime > 600 + Math.random() * 400) {
-                        this.opacity -= 0.005;
-                        if (this.opacity <= 0) this.reset();
+                    // 落地快速淡出回收（积雪由窗台积雪层呈现，不靠滞留个体堆叠）
+                    if (this.landedTime > 90 + Math.random() * 90) {
+                        this.opacity -= 0.02;
+                        if (this.opacity <= 0) this.reset(false);
                     }
                     return;
                 }
@@ -754,29 +863,36 @@
                 if (this.isSplashing) {
                     this.splashRadius += 1.4;
                     this.splashAlpha -= 0.09;
-                    if (this.splashAlpha <= 0) this.reset();
+                    if (this.splashAlpha <= 0) this.reset(false);
                     return;
                 }
+
+                this.applyMouseField();
 
                 this.prevY = this.y;
                 this.y += this.speed;
                 if (this.type === 'snow') {
-                    this.x += Math.sin(this.swingStep) * this.swing;
+                    this.x += Math.sin(this.swingStep) * this.swing + this.vx;
                     this.swingStep += 0.02;
+                    this.vx *= 0.94; // 鼠标横推后缓慢回稳
                 }
 
                 for (const bound of uiBounds) {
-                    // 跨越检测：本帧从顶沿上方越过了顶沿（雨速再快也不会漏检）
-                    if (this.x > bound.left + 8 && this.x < bound.right - 8 &&
-                        this.prevY < bound.top && this.y >= bound.top) {
+                    if (this.x <= bound.left || this.x >= bound.right) continue;
+                    const surfY = surfaceYAt(bound, this.x);
+                    if (surfY === null) continue;
+                    // 叠加已积雪厚度：落点再抬高一点，雪会"落在雪上"
+                    const landY = surfY - (this.type === 'snow' ? bound.snow : 0);
+                    if (this.prevY < landY && this.y >= landY) {
                         if (this.type === 'snow') {
                             this.isLanded = true;
-                            this.y = bound.top;
+                            this.y = landY;
+                            // 喂给窗台积雪层（缓慢变厚，封顶）
+                            if (bound.snow < 14) bound.snow += 0.05;
                         } else {
-                            // 撞击：表面溅起小水花
                             this.isSplashing = true;
                             this.splashX = this.x;
-                            this.y = bound.top;
+                            this.y = landY;
                             this.splashRadius = 1;
                             this.splashAlpha = 0.55;
                         }
@@ -784,7 +900,7 @@
                     }
                 }
 
-                if (this.y > canvas.height + 50) this.reset();
+                if (this.y > canvas.height + 50) this.reset(false);
             }
             draw() {
                 if (this.isLanded) {
@@ -796,7 +912,6 @@
                 }
 
                 if (this.isSplashing) {
-                    // 撞击水花：一道扁椭圆 + 两侧溅起的小水珠
                     const r = Math.min(this.splashRadius, 10);
                     ctx.beginPath();
                     ctx.strokeStyle = `rgba(220, 238, 255, ${this.splashAlpha})`;
@@ -812,7 +927,6 @@
                 }
 
                 if (this.type === 'rain') {
-                    // 干净细雨丝：两端淡、中段亮，平头线帽，避免“蝌蚪头”
                     const grad = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.len);
                     grad.addColorStop(0, `rgba(200, 222, 250, 0)`);
                     grad.addColorStop(0.5, `rgba(208, 230, 255, ${this.opacity})`);
@@ -833,13 +947,44 @@
             }
         }
 
+        // 窗台积雪层：沿每个 UI 顶沿（含圆角弧线）描出一条随时间变厚的白边
+        function drawSnowLedges() {
+            for (const bound of uiBounds) {
+                if (bound.snow <= 0.3) continue;
+                const depth = bound.snow;
+                ctx.save();
+                ctx.beginPath();
+                const step = 4;
+                ctx.moveTo(bound.left, surfaceYAt(bound, bound.left));
+                for (let x = bound.left; x <= bound.right; x += step) {
+                    ctx.lineTo(x, surfaceYAt(bound, x) - 0);
+                }
+                // 回扫上沿（抬高 depth）形成厚度带
+                for (let x = bound.right; x >= bound.left; x -= step) {
+                    ctx.lineTo(x, surfaceYAt(bound, x) - depth);
+                }
+                ctx.closePath();
+                const g = ctx.createLinearGradient(0, bound.top - depth, 0, bound.top + 2);
+                g.addColorStop(0, 'rgba(255,255,255,0.92)');
+                g.addColorStop(1, 'rgba(255,255,255,0.55)');
+                ctx.fillStyle = g;
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
         let _uiBoundsFrame = 0;
         function animateWeather() {
             _uiBoundsFrame++;
             if (_uiBoundsFrame % 60 === 0) _uiBoundsDirty = true;
             updateUIBounds();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // 切换天气时整层淡入，消除"啪"地铺满的突兀感
+            if (canvasFade < 1) canvasFade = Math.min(1, canvasFade + 0.02);
+            ctx.globalAlpha = canvasFade;
+            if (currentWeatherType === 'snow') drawSnowLedges();
             particles.forEach(p => { p.update(); p.draw(); });
+            ctx.globalAlpha = 1;
             animationId = requestAnimationFrame(animateWeather);
         }
 
@@ -848,21 +993,31 @@
             cancelAnimationFrame(animationId);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             particles = [];
+            canvasFade = 0;
+            _uiBoundsDirty = true; updateUIBounds();
+            // 重置积雪厚度，避免切走再切回时残留旧雪
+            uiBounds.forEach(b => b.snow = 0);
 
             if (weatherKeyword.includes('🌧️') || weatherKeyword.includes('雨')) {
+                currentWeatherType = 'rain';
                 overlay.className = "absolute inset-0 bg-blue-900/30 transition-colors duration-1000 z-20";
-                for (let i = 0; i < 170; i++) particles.push(new WeatherParticle('rain'));
+                const n = particleCountFor('rain');
+                for (let i = 0; i < n; i++) particles.push(new WeatherParticle('rain', true));
                 animateWeather();
                 setWeatherAmbient('rain');
             } else if (weatherKeyword.includes('☀️') || weatherKeyword.includes('晴')) {
+                currentWeatherType = null;
                 overlay.className = "absolute inset-0 bg-amber-200/12 transition-colors duration-1000 z-20";
                 setWeatherAmbient('sunny');
             } else if (weatherKeyword.includes('❄️') || weatherKeyword.includes('雪')) {
+                currentWeatherType = 'snow';
                 overlay.className = "absolute inset-0 bg-slate-800/40 transition-colors duration-1000 z-20";
-                for (let i = 0; i < 250; i++) particles.push(new WeatherParticle('snow'));
+                const n = particleCountFor('snow');
+                for (let i = 0; i < n; i++) particles.push(new WeatherParticle('snow', true));
                 animateWeather();
                 setWeatherAmbient('snow');
             } else {
+                currentWeatherType = null;
                 overlay.className = "absolute inset-0 bg-black/30 transition-colors duration-1000 z-20";
                 setWeatherAmbient('none');
             }
@@ -1059,6 +1214,7 @@
             const listContainer = document.getElementById('newsList');
             const filtered = allNewsData.filter(applyFilter);
 
+            updateTabCounts();
             listContainer.innerHTML = '';
             if (filtered.length === 0) {
                 listContainer.innerHTML = '<div class="text-center text-white/30 mt-10 text-sm">暂无对应快讯</div>';
@@ -1078,19 +1234,49 @@
             renderNewsList();
         }
 
+        // 分类强调色（rgb 三元组，驱动指示器背景/描边/辉光）
+        const TAB_ACCENTS = {
+            all: '255,255,255',
+            news: '96,165,250',     // 蓝
+            foreign: '251,191,36',  // 琥珀
+            tech: '167,139,250',    // 紫
+        };
+
+        // 移动滑动高亮指示器到当前激活 tab
+        function moveTabIndicator(filter) {
+            const bar = document.getElementById('tabBar');
+            const btn = document.getElementById('tab-' + filter);
+            const ind = document.getElementById('tabIndicator');
+            if (!bar || !btn || !ind) return;
+            const accent = TAB_ACCENTS[filter] || TAB_ACCENTS.all;
+            ind.style.left = btn.offsetLeft + 'px';
+            ind.style.width = btn.offsetWidth + 'px';
+            ind.style.background = `rgba(${accent},0.18)`;
+            ind.style.border = `1px solid rgba(${accent},0.45)`;
+            ind.style.boxShadow = `0 0 14px rgba(${accent},0.35), inset 0 1px 0 rgba(255,255,255,0.15)`;
+        }
+
+        // 更新各分类实时数量角标
+        function updateTabCounts() {
+            const counts = { all: allNewsData.length, news: 0, foreign: 0, tech: 0 };
+            for (const n of allNewsData) {
+                const c = n.category;
+                if (c === 'news' || c === 'foreign' || c === 'tech') counts[c]++;
+            }
+            for (const k of ['all', 'news', 'foreign', 'tech']) {
+                const el = document.getElementById('count-' + k);
+                if (el) el.textContent = counts[k] ? String(counts[k]) : '';
+            }
+        }
+
         // 切换分类 Tab
         function setFilter(filter) {
             currentFilter = filter;
             ['all', 'news', 'foreign', 'tech'].forEach(t => {
                 const btn = document.getElementById('tab-' + t);
-                if (btn) {
-                    if (t === filter) {
-                        btn.className = 'flex-1 py-1.5 text-xs font-bold rounded-lg transition-all duration-300 bg-white/20 text-white shadow-lg shrink-0 min-w-[60px] scale-[1.02] border border-white/20';
-                    } else {
-                        btn.className = 'flex-1 py-1.5 text-xs font-medium rounded-lg transition-all duration-300 text-white/40 hover:text-white/70 hover:bg-white/10 shrink-0 min-w-[60px]';
-                    }
-                }
+                if (btn) btn.classList.toggle('active', t === filter);
             });
+            moveTabIndicator(filter);
             renderNewsList();
         }
 
@@ -1205,6 +1391,7 @@
 
                     allNewsData = newsList;
                     document.getElementById('lastUpdateTime').innerText = `${newsList[0].time}`;
+                    updateTabCounts();
 
                     if (newItems.length > 0) {
                         const currentScroll = listContainer.scrollTop;
@@ -1302,7 +1489,22 @@
         });
 
         // 初始拉取快讯
+        setFilter('all');                  // 初始化激活态 + 滑动指示器定位
         fetchRealNews(); setInterval(fetchRealNews, 30000);
+        // 窗口尺寸变化时重新对齐指示器（tab 宽度会随之变化）
+        window.addEventListener('resize', () => moveTabIndicator(currentFilter));
+
+        // 玻璃折射：仅在浏览器支持 url() backdrop-filter、非省电模式、且非窄屏时启用
+        (function enableGlassRefraction() {
+            const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const wide = window.innerWidth >= 768;
+            const supported = (window.CSS && CSS.supports &&
+                (CSS.supports('backdrop-filter', 'url(#glassDisplace)') ||
+                 CSS.supports('-webkit-backdrop-filter', 'url(#glassDisplace)')));
+            if (supported && !reduce && wide) {
+                document.documentElement.classList.add('glass-refract');
+            }
+        })();
 
         // ================== 7. 视觉增强：进场 / 光斑 / 磁吸 / 时段 / 雷暴 / 星空 / 数字滚动 ==================
         (function visualEnhancements() {
