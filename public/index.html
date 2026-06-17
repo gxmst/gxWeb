@@ -723,16 +723,35 @@
         }
         setInterval(updateClock, 1000); updateClock();
 
+        function safeStorageGet(key, fallback = '') {
+            try {
+                return localStorage.getItem(key) || fallback;
+            } catch {
+                return fallback;
+            }
+        }
+
+        function safeStorageSet(key, value) {
+            try {
+                localStorage.setItem(key, value);
+            } catch {
+                // Storage can be unavailable in private mode or locked-down browsers.
+            }
+        }
+
         // 搜索引擎
-        let currentEngine = localStorage.getItem('preferredEngine') || 'bing';
         const engines = {
             bing: { name: '必应', url: 'https://www.bing.com/search?q=', color: '#00809D' },
             baidu: { name: '百度', url: 'https://www.baidu.com/s?wd=', color: '#2932E1' },
             google: { name: '谷歌', url: 'https://www.google.com/search?q=', color: '#EA4335' },
             duck: { name: 'Duck', url: 'https://duckduckgo.com/?q=', color: '#DE5833' }
         };
+        const storedEngine = safeStorageGet('preferredEngine', 'bing');
+        let currentEngine = engines[storedEngine] ? storedEngine : 'bing';
         function setSearchEngine(engine) {
-            currentEngine = engine; localStorage.setItem('preferredEngine', engine);
+            if (!engines[engine]) engine = 'bing';
+            currentEngine = engine;
+            safeStorageSet('preferredEngine', engine);
             document.getElementById('searchInput').placeholder = `在 ${engines[engine].name} 上搜索...`;
             Object.keys(engines).forEach(key => {
                 const btn = document.getElementById('eng-' + key);
@@ -748,7 +767,11 @@
         setSearchEngine(currentEngine);
         function handleSearch(event) {
             const query = document.getElementById('searchInput').value.trim();
-            if (query) window.open(engines[currentEngine].url + encodeURIComponent(query), '_blank');
+            const engine = engines[currentEngine] || engines.bing;
+            if (query) {
+                const popup = window.open(engine.url + encodeURIComponent(query), '_blank', 'noopener,noreferrer');
+                if (popup) popup.opener = null;
+            }
         }
 
         // 壁纸轮换 (动态适配收藏夹 + 必应 5 图)
@@ -1272,6 +1295,7 @@
         // ================== 5. 新闻流与交互渲染 ==================
 
         let allNewsData = [];
+        let hasLoadedNews = false;
         let currentFilter = 'all';
         let lastFirstNewsHash = '';
         let currentFontSize = 'sm';
@@ -1290,6 +1314,7 @@
             const filtered = allNewsData.filter(applyFilter);
 
             updateTabCounts();
+            if (!hasLoadedNews && allNewsData.length === 0) return;
             listContainer.innerHTML = '';
             if (filtered.length === 0) {
                 listContainer.innerHTML = '<div class="text-center text-white/30 mt-10 text-sm">暂无对应快讯</div>';
@@ -1397,7 +1422,19 @@
 
             body.className = `${fs} leading-loose text-white/90 drop-shadow-sm tech-content`;
             if (isHtmlBlock) {
-                body.innerHTML = DOMPurify.sanitize(news.content || '');
+                body.innerHTML = DOMPurify.sanitize(news.content || '', { ADD_ATTR: ['target', 'rel'] });
+                body.querySelectorAll('a').forEach(a => {
+                    const href = sanitizeHttpUrl(a.getAttribute('href'));
+                    if (!href) {
+                        a.removeAttribute('href');
+                        a.removeAttribute('target');
+                        a.removeAttribute('rel');
+                        return;
+                    }
+                    a.href = href;
+                    a.target = '_blank';
+                    a.rel = 'noopener noreferrer';
+                });
             } else if (safeUrl) {
                 const link = document.createElement('a');
                 link.href = safeUrl;
@@ -1426,6 +1463,7 @@
         async function fetchRealNews() {
             try {
                 const response = await fetch('./finance-news.json?t=' + Date.now());
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
 
                 const newsList = (data.news_list || []).map(item => {
@@ -1438,12 +1476,22 @@
                     if (!normalized.format) normalized.format = normalized.category === 'tech' && !normalized.url ? 'html' : 'text';
                     return normalized;
                 });
-                if (!newsList || newsList.length === 0) return;
+                if (!newsList || newsList.length === 0) {
+                    hasLoadedNews = true;
+                    allNewsData = [];
+                    lastFirstNewsHash = '';
+                    document.getElementById('lastUpdateTime').innerText = '暂无数据';
+                    const sk = document.getElementById('newsSkeleton');
+                    if (sk) sk.remove();
+                    renderNewsList();
+                    return;
+                }
 
                 const listContainer = document.getElementById('newsList');
 
                 // 首次加载：初始化数据并全量渲染
                 if (allNewsData.length === 0) {
+                    hasLoadedNews = true;
                     allNewsData = newsList;
                     lastFirstNewsHash = simpleHash(newsList[0].content);
                     document.getElementById('lastUpdateTime').innerText = `${newsList[0].time}`;
@@ -1488,6 +1536,14 @@
                 document.getElementById('statusText').className = 'text-[10px] font-bold text-red-400';
                 document.getElementById('statusPing').className = 'hidden';
                 document.getElementById('statusDot').className = 'relative inline-flex rounded-full h-2 w-2 bg-red-500';
+                if (!hasLoadedNews) {
+                    hasLoadedNews = true;
+                    const listContainer = document.getElementById('newsList');
+                    if (listContainer) {
+                        listContainer.innerHTML = '<div class="text-center text-white/30 mt-10 text-sm">快讯暂不可用</div>';
+                    }
+                    document.getElementById('lastUpdateTime').innerText = '连接失败';
+                }
             }
         }
 
@@ -1523,9 +1579,18 @@
         let isResizing = false;
 
         // 初始化加载宽度
-        const savedWidth = localStorage.getItem('newsPanelWidth');
+        function clampNewsPanelWidth(value) {
+            const width = Number.parseInt(value, 10);
+            if (!Number.isFinite(width)) return null;
+            const min = 350;
+            const max = Math.floor(window.innerWidth * 0.6);
+            return Math.min(Math.max(width, min), max);
+        }
+
+        const savedWidth = safeStorageGet('newsPanelWidth');
         if (savedWidth && window.innerWidth >= 768) {
-            aside.style.width = `${savedWidth}px`;
+            const restoredWidth = clampNewsPanelWidth(savedWidth);
+            if (restoredWidth) aside.style.width = `${restoredWidth}px`;
         }
 
         resizer.addEventListener('mousedown', () => { if (window.innerWidth < 768) return; isResizing = true; document.body.style.cursor = 'ew-resize'; aside.classList.add('select-none'); });
@@ -1547,7 +1612,7 @@
         }, { passive: true });
         window.addEventListener('mouseup', () => {
             if (isResizing) {
-                localStorage.setItem('newsPanelWidth', aside.offsetWidth);
+                safeStorageSet('newsPanelWidth', aside.offsetWidth);
             }
             isResizing = false;
             document.body.style.cursor = 'default';
@@ -1555,7 +1620,7 @@
         });
         window.addEventListener('touchend', () => {
             if (isResizing) {
-                localStorage.setItem('newsPanelWidth', aside.offsetWidth);
+                safeStorageSet('newsPanelWidth', aside.offsetWidth);
             }
             isResizing = false;
             aside.classList.remove('select-none');
