@@ -164,12 +164,31 @@
             z-index: 1;
         }
 
-        .glass-panel > * {
+        .glass-panel > :not(.absolute):not(.fixed) {
+            position: relative;
             z-index: 2;
         }
 
-        .glass-panel > :not(.absolute):not(.fixed) {
-            position: relative;
+        .glass-panel > .absolute,
+        .glass-panel > .fixed {
+            z-index: 4;
+        }
+
+        #news-panel {
+            background:
+                linear-gradient(145deg, rgba(255, 255, 255, 0.052), rgba(var(--wall-rgb), 0.030) 48%, rgba(255, 255, 255, 0.018)),
+                rgba(255, 255, 255, 0.028);
+            border-color: rgba(255, 255, 255, 0.16);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.25),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.026),
+                inset 0 -14px 34px rgba(var(--wall-rgb), 0.036),
+                0 24px 60px var(--glass-shadow),
+                0 0 0 1px rgba(var(--wall-rgb), 0.038);
+        }
+
+        #news-panel::after {
+            opacity: 0.32;
         }
 
         /* 真·玻璃折射：仅在 JS 检测到浏览器支持 url() backdrop-filter 时启用（加 .glass-refract）。
@@ -772,7 +791,7 @@
 
         <!-- 真正的横向滚动容器 -->
         <div id="tickerScroll"
-            class="flex items-center gap-8 px-14 py-1.5 w-full h-full overflow-x-auto no-scrollbar scroll-smooth">
+            class="flex items-center gap-8 px-2 py-1.5 w-full h-full overflow-x-auto no-scrollbar scroll-smooth">
             <div id="tickerContent" class="flex items-center gap-8 min-w-max">
                 <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
                 <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
