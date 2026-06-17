@@ -18,6 +18,20 @@
             text-rendering: optimizeLegibility;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+            --wall-r: 125;
+            --wall-g: 211;
+            --wall-b: 252;
+            --wall-rgb: var(--wall-r), var(--wall-g), var(--wall-b);
+            --wall-accent: rgb(var(--wall-rgb));
+            --wall-accent-soft: rgba(var(--wall-rgb), 0.22);
+            --glass-fill: rgba(255, 255, 255, 0.075);
+            --glass-fill-strong: rgba(255, 255, 255, 0.115);
+            --glass-border: rgba(255, 255, 255, 0.22);
+            --glass-edge: rgba(var(--wall-rgb), 0.34);
+            --glass-shadow: rgba(0, 0, 0, 0.42);
+            --glass-text-shadow: rgba(0, 0, 0, 0.62);
+            --scene-shade: rgba(0, 0, 0, 0.34);
+            --scene-vignette: rgba(0, 0, 0, 0.58);
         }
 
         .numeric {
@@ -30,44 +44,137 @@
         #clock {
             font-feature-settings: "tnum" 1, "ss01" 1;
             letter-spacing: -0.02em;
+            text-shadow:
+                0 4px 18px rgba(0, 0, 0, 0.62),
+                0 0 34px rgba(var(--wall-rgb), 0.22);
         }
 
-        /* 核心：毛玻璃质感 —— 通透水晶感而非磨砂塑料 */
+        /* 核心：液态玻璃材质 —— 壁纸取色驱动边缘、填充和光泽 */
         .glass {
-            background: rgba(255, 255, 255, 0.22);
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+            background:
+                linear-gradient(145deg, rgba(255, 255, 255, 0.22), rgba(var(--wall-rgb), 0.08) 48%, rgba(255, 255, 255, 0.05)),
+                var(--glass-fill-strong);
+            border: 1px solid var(--glass-border);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.42),
+                inset 0 -10px 28px rgba(var(--wall-rgb), 0.08),
+                0 12px 34px rgba(0, 0, 0, 0.32);
         }
         @supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
             .glass {
-                background: rgba(255, 255, 255, 0.08);
-                backdrop-filter: blur(16px) saturate(160%);
-                -webkit-backdrop-filter: blur(16px) saturate(160%);
+                background:
+                    linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(var(--wall-rgb), 0.08) 54%, rgba(255, 255, 255, 0.04)),
+                    var(--glass-fill);
+                backdrop-filter: blur(18px) saturate(180%) brightness(1.04);
+                -webkit-backdrop-filter: blur(18px) saturate(180%) brightness(1.04);
                 box-shadow:
-                    inset 0 1px 0 rgba(255, 255, 255, 0.35),
-                    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
-                    0 8px 32px rgba(0, 0, 0, 0.28);
+                    inset 0 1px 0 rgba(255, 255, 255, 0.48),
+                    inset 0 -1px 0 rgba(var(--wall-rgb), 0.18),
+                    inset 0 -12px 30px rgba(var(--wall-rgb), 0.08),
+                    0 10px 30px rgba(0, 0, 0, 0.30);
             }
         }
 
-        /* 大面板统一玻璃质感：降模糊提通透 + 高光描边 */
+        .glass::after {
+            content: "";
+            position: absolute;
+            inset: 1px;
+            border-radius: inherit;
+            pointer-events: none;
+            background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), transparent 30%, transparent 66%, rgba(var(--wall-rgb), 0.16));
+            opacity: 0.54;
+            mix-blend-mode: screen;
+        }
+
+        /* 壁纸驱动的场景遮罩：保证随机壁纸下文字与玻璃都稳定可读 */
+        #sceneShade {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 12;
+            background:
+                radial-gradient(circle at 50% 42%, rgba(0, 0, 0, 0.02), var(--scene-shade) 74%),
+                linear-gradient(90deg, rgba(0, 0, 0, 0.30), transparent 38%, rgba(0, 0, 0, 0.42)),
+                linear-gradient(180deg, rgba(0, 0, 0, 0.12), var(--scene-vignette));
+            transition: background 0.8s ease;
+        }
+
+        .ambient-glow {
+            position: absolute;
+            border-radius: 9999px;
+            pointer-events: none;
+            filter: blur(112px);
+            opacity: 0.72;
+            transition: background 1s ease, opacity 1s ease, transform 1s ease;
+            z-index: 11;
+        }
+
+        .ambient-glow-main {
+            top: 9%;
+            right: -10%;
+            width: 560px;
+            height: 560px;
+            background: radial-gradient(circle, rgba(var(--wall-rgb), 0.42), transparent 68%);
+        }
+
+        .ambient-glow-low {
+            left: 28%;
+            bottom: -22%;
+            width: 620px;
+            height: 420px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.18), rgba(var(--wall-rgb), 0.20) 42%, transparent 72%);
+            opacity: 0.45;
+        }
+
+        /* 大面板统一玻璃质感：厚边、折射、壁纸色染边 */
         .glass-panel {
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.16);
-            backdrop-filter: blur(24px) saturate(150%);
-            -webkit-backdrop-filter: blur(24px) saturate(150%);
+            background:
+                linear-gradient(145deg, rgba(255, 255, 255, 0.115), rgba(var(--wall-rgb), 0.075) 48%, rgba(255, 255, 255, 0.045)),
+                var(--glass-fill);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(28px) saturate(175%) brightness(1.03);
+            -webkit-backdrop-filter: blur(28px) saturate(175%) brightness(1.03);
             box-shadow:
-                inset 0 1px 0 rgba(255, 255, 255, 0.28),
-                inset 0 0 0 1px rgba(255, 255, 255, 0.03),
-                0 24px 50px rgba(0, 0, 0, 0.45);
+                inset 0 1px 0 rgba(255, 255, 255, 0.38),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.045),
+                inset 0 -22px 46px rgba(var(--wall-rgb), 0.09),
+                0 24px 60px var(--glass-shadow),
+                0 0 0 1px rgba(var(--wall-rgb), 0.08);
+            text-shadow: 0 1px 16px var(--glass-text-shadow);
+        }
+
+        .glass-panel:not(.fixed) {
+            position: relative;
+        }
+
+        .glass-panel::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            pointer-events: none;
+            background:
+                linear-gradient(140deg, rgba(255, 255, 255, 0.30), transparent 22%, transparent 70%, rgba(var(--wall-rgb), 0.18)),
+                radial-gradient(900px circle at 18% 0%, rgba(255, 255, 255, 0.12), transparent 45%),
+                radial-gradient(700px circle at 100% 100%, rgba(var(--wall-rgb), 0.18), transparent 44%);
+            opacity: 0.62;
+            mix-blend-mode: screen;
+            z-index: 1;
+        }
+
+        .glass-panel > * {
+            position: relative;
+            z-index: 2;
         }
 
         /* 真·玻璃折射：仅在 JS 检测到浏览器支持 url() backdrop-filter 时启用（加 .glass-refract）。
            不支持（如 Safari）则保持上面的纯模糊，无副作用。
            关键：折射要显形必须「降模糊 + 提位移」——模糊半径若大于位移幅度会把折射糊掉。 */
         html.glass-refract .glass-panel {
-            backdrop-filter: blur(9px) saturate(155%) brightness(1.04) url(#glassDisplace);
-            -webkit-backdrop-filter: blur(9px) saturate(155%) url(#glassDisplace);
+            backdrop-filter: blur(10px) saturate(190%) brightness(1.06) url(#glassDisplace);
+            -webkit-backdrop-filter: blur(10px) saturate(190%) brightness(1.06) url(#glassDisplace);
         }
 
         /* 隐藏滚动条但保留滚动功能 */
@@ -129,8 +236,8 @@
 
         .tab-btn-active {
             color: #ffffff;
-            background: rgba(255, 255, 255, 0.2);
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 10px 20px rgba(0, 0, 0, 0.22);
+            background: rgba(var(--wall-rgb), 0.18);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 10px 20px rgba(0, 0, 0, 0.22), 0 0 18px rgba(var(--wall-rgb), 0.18);
         }
 
         /* 新闻项悬停优化 */
@@ -160,7 +267,7 @@
             position: absolute;
             left: 4px; top: 0; bottom: 0;
             width: 1px;
-            background: rgba(255, 255, 255, 0.12);
+            background: linear-gradient(180deg, transparent, rgba(var(--wall-rgb), 0.32), rgba(255, 255, 255, 0.12), transparent);
         }
         .news-feed-item:first-child::before { top: 0.7rem; }
         .news-feed-item:last-child::before { bottom: auto; height: 0.7rem; }
@@ -171,13 +278,13 @@
             left: 1px; top: 0.62rem;
             width: 7px; height: 7px;
             border-radius: 9999px;
-            background: rgba(255, 255, 255, 0.35);
-            box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.55);
+            background: rgba(var(--wall-rgb), 0.72);
+            box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.52), 0 0 10px rgba(var(--wall-rgb), 0.38);
             transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
         }
         .news-feed-item:hover { background: rgba(255, 255, 255, 0.05); }
         .news-feed-item:hover::after {
-            background: rgba(125, 211, 252, 0.95);
+            background: rgba(var(--wall-rgb), 0.98);
             transform: scale(1.25);
         }
         /* 重要项：红色节点 + 极淡红底，融入信息流而非独立色条行 */
@@ -197,39 +304,39 @@
         }
 
         .tech-content a {
-            color: #7dd3fc !important;
+            color: rgb(var(--wall-rgb)) !important;
             text-decoration: underline;
-            text-decoration-color: rgba(125, 211, 252, 0.55);
+            text-decoration-color: rgba(var(--wall-rgb), 0.58);
             text-underline-offset: 0.18em;
             text-shadow: 0 1px 10px rgba(8, 47, 73, 0.3);
             transition: color 0.2s ease, text-decoration-color 0.2s ease, background-color 0.2s ease;
             border-radius: 0.35rem;
             padding: 0 0.1rem;
-            background: linear-gradient(180deg, rgba(8, 47, 73, 0.14), rgba(8, 47, 73, 0.02));
+            background: linear-gradient(180deg, rgba(var(--wall-rgb), 0.14), rgba(8, 47, 73, 0.02));
         }
 
         .tech-content a:hover {
             color: #e0f2fe !important;
             text-decoration-color: rgba(224, 242, 254, 0.9);
-            background: linear-gradient(180deg, rgba(8, 47, 73, 0.22), rgba(8, 47, 73, 0.08));
+            background: linear-gradient(180deg, rgba(var(--wall-rgb), 0.24), rgba(8, 47, 73, 0.08));
         }
 
         .news-link {
-            color: #7dd3fc;
+            color: rgb(var(--wall-rgb));
             text-decoration: underline;
-            text-decoration-color: rgba(125, 211, 252, 0.55);
+            text-decoration-color: rgba(var(--wall-rgb), 0.58);
             text-underline-offset: 0.18em;
             text-shadow: 0 1px 10px rgba(8, 47, 73, 0.3);
             transition: color 0.2s ease, text-decoration-color 0.2s ease, background-color 0.2s ease;
             border-radius: 0.35rem;
             padding: 0 0.1rem;
-            background: linear-gradient(180deg, rgba(8, 47, 73, 0.14), rgba(8, 47, 73, 0.02));
+            background: linear-gradient(180deg, rgba(var(--wall-rgb), 0.14), rgba(8, 47, 73, 0.02));
         }
 
         .news-link:hover {
             color: #bae6fd;
             text-decoration-color: rgba(186, 230, 253, 0.9);
-            background: linear-gradient(180deg, rgba(8, 47, 73, 0.22), rgba(8, 47, 73, 0.08));
+            background: linear-gradient(180deg, rgba(var(--wall-rgb), 0.24), rgba(8, 47, 73, 0.08));
         }
 
         /* 骨架屏动画 */
@@ -314,6 +421,16 @@
 
         /* ============ Dock 磁吸：交由 JS 驱动 transform，仅设过渡 ============ */
         .dock-ico {
+            background:
+                linear-gradient(145deg, rgba(255, 255, 255, 0.14), rgba(var(--wall-rgb), 0.10)),
+                rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.22);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.38),
+                inset 0 -10px 24px rgba(var(--wall-rgb), 0.08),
+                0 14px 30px rgba(0, 0, 0, 0.28);
+            backdrop-filter: blur(16px) saturate(170%);
+            -webkit-backdrop-filter: blur(16px) saturate(170%);
             transition: transform 0.18s cubic-bezier(0.22, 0.61, 0.36, 1),
                         background 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
             transform-origin: center center;
@@ -371,11 +488,18 @@
         .tab-btn.active { color: #fff; font-weight: 700; }
         .tab-badge {
             font-size: 9px; line-height: 1; padding: 2px 5px; border-radius: 9999px;
-            background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.6);
+            background: rgba(var(--wall-rgb), 0.12); color: rgba(255,255,255,0.66);
             font-variant-numeric: tabular-nums; transition: all .3s;
         }
-        .tab-btn.active .tab-badge { background: rgba(255,255,255,0.22); color: #fff; }
+        .tab-btn.active .tab-badge { background: rgba(var(--wall-rgb), 0.28); color: #fff; }
         .tab-badge:empty { display: none; }
+
+        #tabBar {
+            background:
+                linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(var(--wall-rgb), 0.08)),
+                rgba(0, 0, 0, 0.20);
+            border-color: rgba(255, 255, 255, 0.08);
+        }
     </style>
 </head>
 
@@ -396,7 +520,7 @@
     </svg>
 
     <!-- 动态背景 -->
-    <div class="fixed inset-0 z-0">
+    <div class="fixed inset-0 z-0 overflow-hidden">
         <img id="bgImage1" translate="no" src=""
             class="absolute inset-0 w-full h-full object-cover pointer-events-none select-none transition-opacity duration-1000 ease-in-out z-[1] opacity-0"
             alt="">
@@ -404,13 +528,10 @@
             class="absolute inset-0 w-full h-full object-cover pointer-events-none select-none transition-opacity duration-1000 ease-in-out z-[2] opacity-0"
             alt="">
 
-        <!-- 自适应氛围光晕 (中性提亮，确保透过玻璃提取壁纸色彩) -->
-        <div
-            class="absolute top-1/4 -right-20 w-[500px] h-[500px] bg-white/5 rounded-full filter blur-[110px] pointer-events-none animate-pulse z-10">
-        </div>
-        <div
-            class="absolute bottom-1/3 -right-32 w-[450px] h-[450px] bg-slate-300/10 rounded-full filter blur-[100px] pointer-events-none z-10">
-        </div>
+        <!-- 壁纸取色驱动的氛围光与可读性遮罩 -->
+        <div class="ambient-glow ambient-glow-main"></div>
+        <div class="ambient-glow ambient-glow-low"></div>
+        <div id="sceneShade"></div>
 
         <!-- 动态天气滤镜层 -->
         <div id="weatherOverlay" class="absolute inset-0 bg-black/40 transition-colors duration-1000 z-20"></div>
@@ -676,18 +797,127 @@
         let currentBgIndex = 0;
         let activeBgLayer = 1;
         let isSwitchingBg = false;
-        const vSuffix = new Date().toLocaleDateString('zh-CN');
+        const vSuffix = new Date().toISOString().slice(0, 10);
+
+        function wallpaperSrc(index) {
+            return wallpapersArray[index] + '?v=' + vSuffix;
+        }
+
+        function pickRandomWallpaperIndex(excludeIndex = -1) {
+            if (!wallpapersArray.length) return 0;
+            if (wallpapersArray.length === 1) return 0;
+            let idx = Math.floor(Math.random() * wallpapersArray.length);
+            let guard = 0;
+            while (idx === excludeIndex && guard < 8) {
+                idx = Math.floor(Math.random() * wallpapersArray.length);
+                guard++;
+            }
+            return idx === excludeIndex ? (excludeIndex + 1) % wallpapersArray.length : idx;
+        }
+
+        function rgbToHsl(r, g, b) {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h = 0, s = 0;
+            const l = (max + min) / 2;
+            if (max !== min) {
+                const d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+                else if (max === g) h = (b - r) / d + 2;
+                else h = (r - g) / d + 4;
+                h /= 6;
+            }
+            return [h, s, l];
+        }
+
+        function hslToRgb(h, s, l) {
+            const hue2rgb = (p, q, t) => {
+                if (t < 0) t += 1;
+                if (t > 1) t -= 1;
+                if (t < 1 / 6) return p + (q - p) * 6 * t;
+                if (t < 1 / 2) return q;
+                if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+                return p;
+            };
+            let r, g, b;
+            if (s === 0) {
+                r = g = b = l;
+            } else {
+                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                const p = 2 * l - q;
+                r = hue2rgb(p, q, h + 1 / 3);
+                g = hue2rgb(p, q, h);
+                b = hue2rgb(p, q, h - 1 / 3);
+            }
+            return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+        }
+
+        function applyWallpaperThemeFromImage(img) {
+            try {
+                const canvas = document.createElement('canvas');
+                const size = 72;
+                canvas.width = size;
+                canvas.height = size;
+                const c = canvas.getContext('2d', { willReadFrequently: true });
+                c.drawImage(img, 0, 0, size, size);
+                const pixels = c.getImageData(0, 0, size, size).data;
+                let rSum = 0, gSum = 0, bSum = 0, weightSum = 0;
+                let brightSum = 0;
+                for (let i = 0; i < pixels.length; i += 16) {
+                    const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2], a = pixels[i + 3];
+                    if (a < 180) continue;
+                    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+                    const sat = (max - min) / 255;
+                    const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+                    if (lum < 0.06 || lum > 0.94) continue;
+                    const weight = 0.35 + sat * 1.8 + (1 - Math.abs(lum - 0.55)) * 0.45;
+                    rSum += r * weight;
+                    gSum += g * weight;
+                    bSum += b * weight;
+                    brightSum += lum * weight;
+                    weightSum += weight;
+                }
+                if (!weightSum) return;
+                let r = rSum / weightSum;
+                let g = gSum / weightSum;
+                let b = bSum / weightSum;
+                const avgLum = brightSum / weightSum;
+                let [h, s, l] = rgbToHsl(r, g, b);
+                s = Math.max(0.38, Math.min(0.78, s * 1.22));
+                l = Math.max(0.54, Math.min(0.72, avgLum < 0.34 ? l + 0.18 : l + 0.08));
+                [r, g, b] = hslToRgb(h, s, l);
+
+                const root = document.body;
+                root.style.setProperty('--wall-r', Math.round(r));
+                root.style.setProperty('--wall-g', Math.round(g));
+                root.style.setProperty('--wall-b', Math.round(b));
+                root.style.setProperty('--glass-fill', avgLum > 0.62 ? 'rgba(8, 15, 25, 0.18)' : 'rgba(255, 255, 255, 0.075)');
+                root.style.setProperty('--glass-fill-strong', avgLum > 0.62 ? 'rgba(12, 20, 32, 0.24)' : 'rgba(255, 255, 255, 0.115)');
+                root.style.setProperty('--glass-border', avgLum > 0.62 ? 'rgba(255, 255, 255, 0.26)' : 'rgba(255, 255, 255, 0.20)');
+                root.style.setProperty('--glass-shadow', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.50)' : 'rgba(0, 0, 0, 0.40)');
+                root.style.setProperty('--scene-shade', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.46)' : 'rgba(0, 0, 0, 0.32)');
+                root.style.setProperty('--scene-vignette', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.68)' : 'rgba(0, 0, 0, 0.54)');
+                if (typeof moveTabIndicator === 'function') moveTabIndicator(currentFilter);
+            } catch (e) {
+                console.warn('壁纸取色失败:', e);
+            }
+        }
 
         async function initWallpapers() {
             try {
                 const resp = await fetch('./wallpapers.json?t=' + Date.now());
                 wallpapersArray = await resp.json();
                 if (wallpapersArray && wallpapersArray.length > 0) {
-                    // 初始化第一张并预加载
+                    const lastIndex = Number.parseInt(safeStorageGet('lastWallpaperIndex', '-1'), 10);
+                    currentBgIndex = pickRandomWallpaperIndex(Number.isFinite(lastIndex) ? lastIndex : -1);
+                    safeStorageSet('lastWallpaperIndex', currentBgIndex);
+                    // 初始化随机壁纸并预加载下一张候选
                     const img1 = document.getElementById('bgImage1');
                     const img2 = document.getElementById('bgImage2');
-                    const firstSrc = wallpapersArray[0] + '?v=' + vSuffix;
+                    const firstSrc = wallpaperSrc(currentBgIndex);
                     img1.onload = () => {
+                        applyWallpaperThemeFromImage(img1);
                         img1.classList.remove('opacity-0');
                         img1.classList.add('opacity-100');
                     };
@@ -695,7 +925,7 @@
                     img2.src = firstSrc;
                     if (wallpapersArray.length > 1) {
                         const nextImg = new Image();
-                        nextImg.src = wallpapersArray[1] + '?v=' + vSuffix;
+                        nextImg.src = wallpaperSrc(pickRandomWallpaperIndex(currentBgIndex));
                     }
                     // 列表加载成功后激活切换按钮
                     const btn = document.getElementById('wallpaperBtn');
@@ -782,8 +1012,9 @@
 
             const switchTimeout = setTimeout(() => { isSwitchingBg = false; }, 5000);
 
-            currentBgIndex = (currentBgIndex + 1) % wallpapersArray.length;
-            const nextSrc = wallpapersArray[currentBgIndex] + '?v=' + vSuffix;
+            currentBgIndex = pickRandomWallpaperIndex(currentBgIndex);
+            safeStorageSet('lastWallpaperIndex', currentBgIndex);
+            const nextSrc = wallpaperSrc(currentBgIndex);
 
             const img1 = document.getElementById('bgImage1');
             const img2 = document.getElementById('bgImage2');
@@ -793,13 +1024,14 @@
 
             hiddenLayer.onload = () => {
                 clearTimeout(switchTimeout);
+                applyWallpaperThemeFromImage(hiddenLayer);
                 hiddenLayer.style.opacity = '1';
                 currentLayer.style.opacity = '0';
                 activeBgLayer = activeBgLayer === 1 ? 2 : 1;
 
-                const nextIdx = (currentBgIndex + 1) % wallpapersArray.length;
+                const nextIdx = pickRandomWallpaperIndex(currentBgIndex);
                 const preload = new Image();
-                preload.src = wallpapersArray[nextIdx] + '?v=' + vSuffix;
+                preload.src = wallpaperSrc(nextIdx);
 
                 setTimeout(() => {
                     isSwitchingBg = false;
@@ -1348,7 +1580,9 @@
             const btn = document.getElementById('tab-' + filter);
             const ind = document.getElementById('tabIndicator');
             if (!bar || !btn || !ind) return;
-            const accent = TAB_ACCENTS[filter] || TAB_ACCENTS.all;
+            const styles = getComputedStyle(document.body);
+            const dynamicAccent = `${styles.getPropertyValue('--wall-r').trim() || 255},${styles.getPropertyValue('--wall-g').trim() || 255},${styles.getPropertyValue('--wall-b').trim() || 255}`;
+            const accent = filter === 'all' ? dynamicAccent : (TAB_ACCENTS[filter] || dynamicAccent);
             ind.style.left = btn.offsetLeft + 'px';
             ind.style.width = btn.offsetWidth + 'px';
             ind.style.background = `rgba(${accent},0.18)`;
