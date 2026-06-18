@@ -28,10 +28,10 @@
             --glass-fill-strong: rgba(255, 255, 255, 0.075);
             --glass-border: rgba(255, 255, 255, 0.22);
             --glass-edge: rgba(var(--wall-rgb), 0.34);
-            --glass-shadow: rgba(0, 0, 0, 0.42);
-            --glass-text-shadow: rgba(0, 0, 0, 0.62);
-            --scene-shade: rgba(0, 0, 0, 0.34);
-            --scene-vignette: rgba(0, 0, 0, 0.58);
+            --glass-shadow: rgba(0, 0, 0, 0.34);
+            --glass-text-shadow: rgba(0, 0, 0, 0.52);
+            --scene-shade: rgba(0, 0, 0, 0.24);
+            --scene-vignette: rgba(0, 0, 0, 0.42);
         }
 
         .numeric {
@@ -96,8 +96,8 @@
             z-index: 12;
             background:
                 radial-gradient(circle at 50% 42%, rgba(0, 0, 0, 0.02), var(--scene-shade) 74%),
-                linear-gradient(90deg, rgba(0, 0, 0, 0.30), transparent 38%, rgba(0, 0, 0, 0.42)),
-                linear-gradient(180deg, rgba(0, 0, 0, 0.12), var(--scene-vignette));
+                linear-gradient(90deg, rgba(0, 0, 0, 0.20), transparent 38%, rgba(0, 0, 0, 0.30)),
+                linear-gradient(180deg, rgba(0, 0, 0, 0.08), var(--scene-vignette));
             transition: background 0.8s ease;
         }
 
@@ -176,19 +176,27 @@
 
         #news-panel {
             background:
-                linear-gradient(145deg, rgba(255, 255, 255, 0.052), rgba(var(--wall-rgb), 0.030) 48%, rgba(255, 255, 255, 0.018)),
-                rgba(255, 255, 255, 0.028);
-            border-color: rgba(255, 255, 255, 0.16);
+                linear-gradient(145deg, rgba(255, 255, 255, 0.038), rgba(var(--wall-rgb), 0.018) 48%, rgba(255, 255, 255, 0.010)),
+                rgba(255, 255, 255, 0.014);
+            border-color: rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(22px) saturate(155%) brightness(1.08);
+            -webkit-backdrop-filter: blur(22px) saturate(155%) brightness(1.08);
             box-shadow:
-                inset 0 1px 0 rgba(255, 255, 255, 0.25),
-                inset 0 0 0 1px rgba(255, 255, 255, 0.026),
-                inset 0 -14px 34px rgba(var(--wall-rgb), 0.036),
-                0 24px 60px var(--glass-shadow),
-                0 0 0 1px rgba(var(--wall-rgb), 0.038);
+                inset 0 1px 0 rgba(255, 255, 255, 0.20),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.018),
+                inset 0 -12px 28px rgba(var(--wall-rgb), 0.024),
+                0 18px 48px rgba(0, 0, 0, 0.24),
+                0 0 0 1px rgba(var(--wall-rgb), 0.026);
+            text-shadow: 0 1px 12px rgba(0, 0, 0, 0.44);
         }
 
         #news-panel::after {
-            opacity: 0.32;
+            opacity: 0.20;
+        }
+
+        html.glass-refract #news-panel {
+            backdrop-filter: blur(8px) saturate(170%) brightness(1.10) url(#glassDisplace);
+            -webkit-backdrop-filter: blur(8px) saturate(170%) brightness(1.10) url(#glassDisplace);
         }
 
         /* 真·玻璃折射：仅在 JS 检测到浏览器支持 url() backdrop-filter 时启用（加 .glass-refract）。
@@ -556,7 +564,7 @@
         <div id="sceneShade"></div>
 
         <!-- 动态天气滤镜层 -->
-        <div id="weatherOverlay" class="absolute inset-0 bg-black/40 transition-colors duration-1000 z-20"></div>
+        <div id="weatherOverlay" class="absolute inset-0 transition-colors duration-1000 z-20" style="background-color: rgba(0, 0, 0, 0.16);"></div>
 
         <!-- 时段自适应色调（很淡，soft-light 叠色） -->
         <div id="timeTint"></div>
@@ -906,20 +914,20 @@
                 let b = bSum / weightSum;
                 const avgLum = brightSum / weightSum;
                 let [h, s, l] = rgbToHsl(r, g, b);
-                s = Math.max(0.38, Math.min(0.78, s * 1.22));
-                l = Math.max(0.54, Math.min(0.72, avgLum < 0.34 ? l + 0.18 : l + 0.08));
+                s = Math.max(0.40, Math.min(0.82, s * 1.25));
+                l = Math.max(0.58, Math.min(0.78, avgLum < 0.34 ? l + 0.22 : l + 0.12));
                 [r, g, b] = hslToRgb(h, s, l);
 
                 const root = document.body;
                 root.style.setProperty('--wall-r', Math.round(r));
                 root.style.setProperty('--wall-g', Math.round(g));
                 root.style.setProperty('--wall-b', Math.round(b));
-                root.style.setProperty('--glass-fill', avgLum > 0.62 ? 'rgba(8, 15, 25, 0.13)' : 'rgba(255, 255, 255, 0.045)');
-                root.style.setProperty('--glass-fill-strong', avgLum > 0.62 ? 'rgba(12, 20, 32, 0.18)' : 'rgba(255, 255, 255, 0.075)');
-                root.style.setProperty('--glass-border', avgLum > 0.62 ? 'rgba(255, 255, 255, 0.26)' : 'rgba(255, 255, 255, 0.20)');
-                root.style.setProperty('--glass-shadow', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.50)' : 'rgba(0, 0, 0, 0.40)');
-                root.style.setProperty('--scene-shade', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.46)' : 'rgba(0, 0, 0, 0.32)');
-                root.style.setProperty('--scene-vignette', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.68)' : 'rgba(0, 0, 0, 0.54)');
+                root.style.setProperty('--glass-fill', avgLum > 0.62 ? 'rgba(8, 15, 25, 0.10)' : 'rgba(255, 255, 255, 0.040)');
+                root.style.setProperty('--glass-fill-strong', avgLum > 0.62 ? 'rgba(12, 20, 32, 0.14)' : 'rgba(255, 255, 255, 0.068)');
+                root.style.setProperty('--glass-border', avgLum > 0.62 ? 'rgba(255, 255, 255, 0.24)' : 'rgba(255, 255, 255, 0.18)');
+                root.style.setProperty('--glass-shadow', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.38)' : 'rgba(0, 0, 0, 0.30)');
+                root.style.setProperty('--scene-shade', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.34)' : 'rgba(0, 0, 0, 0.22)');
+                root.style.setProperty('--scene-vignette', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.52)' : 'rgba(0, 0, 0, 0.38)');
                 if (typeof moveTabIndicator === 'function') moveTabIndicator(currentFilter);
             } catch (e) {
                 console.warn('壁纸取色失败:', e);
@@ -1340,6 +1348,28 @@
             animationId = requestAnimationFrame(animateWeather);
         }
 
+        const WEATHER_PROFILES = {
+            rain: { overlay: 'rgba(38, 82, 130, 0.18)', particle: 'rain', ambiance: 'rain' },
+            sun: { overlay: 'rgba(255, 218, 128, 0.08)', particle: null, ambiance: 'sunny' },
+            snow: { overlay: 'rgba(104, 126, 158, 0.18)', particle: 'snow', ambiance: 'snow' },
+            cloudy: { overlay: 'rgba(108, 122, 142, 0.12)', particle: null, ambiance: 'none' },
+            none: { overlay: 'rgba(0, 0, 0, 0.12)', particle: null, ambiance: 'none' }
+        };
+
+        function weatherProfileFor(weatherKeyword) {
+            const text = String(weatherKeyword || '');
+            if (text.includes('🌧️') || text.includes('雨')) return WEATHER_PROFILES.rain;
+            if (text.includes('☀️') || text.includes('晴')) return WEATHER_PROFILES.sun;
+            if (text.includes('❄️') || text.includes('雪')) return WEATHER_PROFILES.snow;
+            if (/阴|云|雾|霾|霜|overcast|cloud|fog|haze/i.test(text)) return WEATHER_PROFILES.cloudy;
+            return WEATHER_PROFILES.none;
+        }
+
+        function setWeatherOverlay(overlay, profile) {
+            overlay.className = "absolute inset-0 transition-colors duration-1000 z-20";
+            overlay.style.backgroundColor = profile.overlay;
+        }
+
         function applyEnvironmentFilter(weatherKeyword) {
             const overlay = document.getElementById('weatherOverlay');
             cancelAnimationFrame(animationId);
@@ -1350,29 +1380,18 @@
             // 重置积雪厚度，避免切走再切回时残留旧雪
             uiBounds.forEach(b => b.snow = 0);
 
-            if (weatherKeyword.includes('🌧️') || weatherKeyword.includes('雨')) {
-                currentWeatherType = 'rain';
-                overlay.className = "absolute inset-0 bg-blue-900/30 transition-colors duration-1000 z-20";
-                const n = particleCountFor('rain');
-                for (let i = 0; i < n; i++) particles.push(new WeatherParticle('rain', true));
+            const profile = weatherProfileFor(weatherKeyword);
+            setWeatherOverlay(overlay, profile);
+
+            if (profile.particle) {
+                currentWeatherType = profile.particle;
+                const n = particleCountFor(profile.particle);
+                for (let i = 0; i < n; i++) particles.push(new WeatherParticle(profile.particle, true));
                 animateWeather();
-                setWeatherAmbient('rain');
-            } else if (weatherKeyword.includes('☀️') || weatherKeyword.includes('晴')) {
-                currentWeatherType = null;
-                overlay.className = "absolute inset-0 bg-amber-200/12 transition-colors duration-1000 z-20";
-                setWeatherAmbient('sunny');
-            } else if (weatherKeyword.includes('❄️') || weatherKeyword.includes('雪')) {
-                currentWeatherType = 'snow';
-                overlay.className = "absolute inset-0 bg-slate-800/40 transition-colors duration-1000 z-20";
-                const n = particleCountFor('snow');
-                for (let i = 0; i < n; i++) particles.push(new WeatherParticle('snow', true));
-                animateWeather();
-                setWeatherAmbient('snow');
             } else {
                 currentWeatherType = null;
-                overlay.className = "absolute inset-0 bg-black/30 transition-colors duration-1000 z-20";
-                setWeatherAmbient('none');
             }
+            setWeatherAmbient(profile.ambiance);
         }
 
         // 氛围桥接：天气引擎 → 视觉增强钩子（晴天 sunny→sun，光晕/星空/雷暴在 §7 内响应）
@@ -1384,12 +1403,12 @@
         }
 
         let realWeather = '';
-        const filterModes = ['auto', '晴', '雨', '雪'];
-        const filterIcons = ['✨', '☀️', '🌧️', '❄️'];
+        const filterModes = ['auto', '阴', '晴', '雨', '雪'];
+        const filterIcons = ['✨', '☁️', '☀️', '🌧️', '❄️'];
         let currentFilterIndex = 0;
 
         function toggleWeatherFilter() {
-            currentFilterIndex = (currentFilterIndex + 1) % 4;
+            currentFilterIndex = (currentFilterIndex + 1) % filterModes.length;
             const mode = filterModes[currentFilterIndex];
             document.getElementById('filterBtn').innerText = filterIcons[currentFilterIndex];
             if (mode === 'auto') applyEnvironmentFilter(realWeather);
@@ -1983,20 +2002,20 @@
                 let bg, opacity;
                 if (h >= 5 && h < 9) {
                     // 清晨：极淡的暖橘
-                    bg = 'linear-gradient(160deg, rgba(255,214,170,0.5), rgba(255,180,150,0.25))';
-                    opacity = '0.35';
+                    bg = 'linear-gradient(160deg, rgba(255,222,180,0.42), rgba(255,190,155,0.18))';
+                    opacity = '0.24';
                 } else if (h >= 9 && h < 17) {
                     // 白天：几乎中性，略微提亮
-                    bg = 'linear-gradient(160deg, rgba(255,250,235,0.35), rgba(220,235,255,0.2))';
-                    opacity = '0.22';
+                    bg = 'linear-gradient(160deg, rgba(255,252,240,0.32), rgba(225,240,255,0.16))';
+                    opacity = '0.14';
                 } else if (h >= 17 && h < 20) {
-                    // 黄昏：淡金紫
-                    bg = 'linear-gradient(160deg, rgba(255,190,140,0.5), rgba(170,140,200,0.3))';
-                    opacity = '0.4';
+                    // 傍晚：保留暖色，但不把阴天再压暗
+                    bg = 'linear-gradient(160deg, rgba(255,202,150,0.38), rgba(180,158,210,0.18))';
+                    opacity = '0.24';
                 } else {
-                    // 夜晚（用户主要使用时段）：冷蓝靛，营造沉静氛围
-                    bg = 'linear-gradient(160deg, rgba(90,120,180,0.55), rgba(40,60,110,0.4))';
-                    opacity = '0.5';
+                    // 夜晚：冷蓝靛，但保持壁纸和玻璃的层次
+                    bg = 'linear-gradient(160deg, rgba(95,125,185,0.40), rgba(46,66,112,0.26))';
+                    opacity = '0.34';
                 }
                 timeTint.style.background = bg;
                 timeTint.style.opacity = opacity;
