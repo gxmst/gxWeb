@@ -85,12 +85,12 @@ void main() {
         float dist = length(d);
         float radius = age * 0.42;               // 波前扩散速度
         float ring = dist - radius;
-        float env = exp(-age * 1.7) * exp(-dist * 3.0) * strength; // 时间+空间双衰减
-        float wave = sin(ring * 38.0) * env;
+        float env = exp(-age * 1.4) * exp(-dist * 2.6) * strength; // 时间+空间双衰减
+        float wave = sin(ring * 34.0) * env;
         if (dist > 0.0001) {
-            disp += (d / dist) * wave * 0.010;   // 沿径向位移（克制：1%）
+            disp += (d / dist) * wave * 0.020;   // 沿径向位移（克制但可见：2%）
         }
-        highlight += wave * 0.10;
+        highlight += wave * 0.16;
     }
 
     vec2 c0 = coverUv(texUv + disp, uRes, uTex0Res);
@@ -117,9 +117,13 @@ let ripples = [];                   // {x, y, t, strength}（y 已转为 0=底 1
 let rippleCursor = 0;
 let startTime = 0;
 let rafId = null;
+let running = false;               // 渲染循环是否在转——独立于 rafId，作为唯一真相来源。
+                                   // 不能用 rafId 兼任：若某帧抛异常，rafId 会停在旧值上，
+                                   // kick() 误判"还在转"而永不重启（旧 bug：动一下就再也不动）。
 let enabled = false;
 let lastInjectX = -1, lastInjectY = -1, lastInjectT = 0;
 let pendingFirstTexture = true;
+let lastWallpaperImg = null;       // 上下文丢失后恢复时，重新上传这张壁纸。
 
 function compileShader(type, src) {
     const sh = gl.createShader(type);
@@ -259,9 +263,13 @@ function hasLiveAnimation() {
     return false;
 }
 
-// 重新点燃渲染循环（若已停）。只有 injectRipple / setWallpaper 调用。
+// 重新点燃渲染循环（若已停）。injectRipple / setWallpaper / contextrestored 调用。
+// 关键：用独立的 running 标志判断"循环是否在转"，不再复用 rafId——
+// 旧版若某帧抛异常，rafId 会停在旧句柄上、永远非空，kick() 误以为还在转而永久卡死
+//（表现就是"第一次有一点点、之后鼠标再动也没反应，必须刷新"）。
 function kick() {
-    if (!enabled || rafId) return;
+    if (!enabled || running) return;
+    running = true;
     rafId = requestAnimationFrame(render);
 }
 
@@ -303,12 +311,21 @@ function drawFrame() {
 
 // 自停渲染循环：每帧画完后检查是否还有活动画，没有就停（画最后一帧定格），
 // 等下次 kick() 再启动。静止时 0 GPU 占用——这是弱设备能扛住 A+B 叠加的核心。
+// 任何一帧抛异常都必须复位 running（否则循环死了但 kick 以为还活着→永久卡死）。
 function render() {
-    drawFrame();
+    try {
+        drawFrame();
+    } catch (e) {
+        console.warn('[fluid] 渲染帧异常，停止循环（下次交互会重试）:', e);
+        running = false;
+        rafId = null;
+        return;
+    }
     if (hasLiveAnimation()) {
         rafId = requestAnimationFrame(render);
     } else {
-        rafId = null; // 定格在最后一帧，停止占用
+        running = false; // 定格在最后一帧，停止占用
+        rafId = null;
     }
 }
 
@@ -335,12 +352,30 @@ export function initFluid() {
     texSlots[1] = null;
     resize();
 
-    // 上下文丢失：停渲染并降级（canvas 透明，img 露出）。
+    // 上下文丢失：停渲染并降级（canvas 透明，底下静态壁纸 img 露出）。
+    // 必须复位 running，否则恢复后 kick() 以为循环还在转而拒绝重启。
     canvas.addEventListener('webglcontextlost', (e) => {
         e.preventDefault();
         if (rafId) cancelAnimationFrame(rafId);
         rafId = null;
+        running = false;
         canvas.style.opacity = '0';
+    });
+
+    // 上下文恢复：重建 program / uniform，丢弃旧纹理句柄（已随上下文失效），
+    // 等下一次 setWallpaper 重新上传。没有这段，弱 GPU 偶发丢上下文后 fluid 永久死亡。
+    canvas.addEventListener('webglcontextrestored', () => {
+        if (!buildProgram()) { gl = null; enabled = false; return; }
+        texSlots[0] = null;
+        texSlots[1] = null;
+        texRes = [[1, 1], [1, 1]];
+        pendingFirstTexture = true;
+        resize();
+        // 重新把当前壁纸交给 fluid：选当前可见（opacity≈1）的那张 bg 图。
+        const b1 = document.getElementById('bgImage1');
+        const b2 = document.getElementById('bgImage2');
+        const visible = (b2 && b2.style.opacity === '1') ? b2 : b1;
+        if (visible && visible.complete && visible.naturalWidth > 0) setWallpaper(visible);
     });
 
     enabled = true;
