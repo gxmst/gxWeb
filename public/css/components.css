@@ -1,0 +1,261 @@
+/* ============ 进场动画 ============ */
+@keyframes slideDown {
+    0% {
+        opacity: 0;
+        transform: translateY(-26px) scale(0.97);
+        background: rgba(56, 189, 248, 0.22);
+        box-shadow: inset 3px 0 0 rgba(56, 189, 248, 0.9);
+    }
+    55% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        background: rgba(56, 189, 248, 0.16);
+        box-shadow: inset 3px 0 0 rgba(56, 189, 248, 0.7);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        background: rgba(56, 189, 248, 0);
+        box-shadow: inset 3px 0 0 rgba(56, 189, 248, 0);
+    }
+}
+
+.animate-slide-down {
+    animation: slideDown 1.25s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+    border-radius: 0.4rem;
+}
+
+@keyframes subtleGlow {
+    from { background: rgba(250, 204, 21, 0.14); }
+    to   { background: rgba(250, 204, 21, 0); }
+}
+
+/* ============ 快讯：连续时间轴信息流 ============ */
+#newsList { position: relative; padding-left: 5px; }
+.news-feed-item {
+    position: relative;
+    padding-left: 1.15rem;
+    transition: background 0.2s ease;
+    border-radius: 0.5rem;
+}
+.news-feed-item::before {
+    content: "";
+    position: absolute;
+    left: 4px; top: 0; bottom: 0;
+    width: 1px;
+    background: linear-gradient(180deg, transparent, rgba(var(--wall-rgb), 0.32), rgba(255, 255, 255, 0.12), transparent);
+}
+.news-feed-item:first-child::before { top: 0.7rem; }
+.news-feed-item:last-child::before { bottom: auto; height: 0.7rem; }
+.news-feed-item::after {
+    content: "";
+    position: absolute;
+    left: 1px; top: 0.62rem;
+    width: 7px; height: 7px;
+    border-radius: 9999px;
+    background: rgba(var(--wall-rgb), 0.72);
+    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.52), 0 0 10px rgba(var(--wall-rgb), 0.38);
+    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+.news-feed-item:hover { background: rgba(255, 255, 255, 0.05); }
+.news-feed-item:hover::after {
+    background: rgba(var(--wall-rgb), 0.98);
+    transform: scale(1.25);
+}
+.news-feed-item.is-important::after {
+    background: rgba(248, 113, 113, 0.95);
+    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.55), 0 0 8px rgba(248, 113, 113, 0.6);
+}
+.news-feed-item.is-important {
+    background: linear-gradient(90deg, rgba(248, 113, 113, 0.08), rgba(248, 113, 113, 0));
+}
+
+/* 科技聚合块样式适配 */
+.tech-content br {
+    display: block;
+    margin-top: 0.5rem;
+    content: "";
+}
+.tech-content a {
+    color: rgb(var(--wall-rgb)) !important;
+    text-decoration: underline;
+    text-decoration-color: rgba(var(--wall-rgb), 0.58);
+    text-underline-offset: 0.18em;
+    text-shadow: 0 1px 10px rgba(8, 47, 73, 0.3);
+    transition: color 0.2s ease, text-decoration-color 0.2s ease, background-color 0.2s ease;
+    border-radius: 0.35rem;
+    padding: 0 0.1rem;
+    background: linear-gradient(180deg, rgba(var(--wall-rgb), 0.14), rgba(8, 47, 73, 0.02));
+}
+.tech-content a:hover {
+    color: #e0f2fe !important;
+    text-decoration-color: rgba(224, 242, 254, 0.9);
+    background: linear-gradient(180deg, rgba(var(--wall-rgb), 0.24), rgba(8, 47, 73, 0.08));
+}
+
+.news-link {
+    color: rgb(var(--wall-rgb));
+    text-decoration: underline;
+    text-decoration-color: rgba(var(--wall-rgb), 0.58);
+    text-underline-offset: 0.18em;
+    text-shadow: 0 1px 10px rgba(8, 47, 73, 0.3);
+    transition: color 0.2s ease, text-decoration-color 0.2s ease, background-color 0.2s ease;
+    border-radius: 0.35rem;
+    padding: 0 0.1rem;
+    background: linear-gradient(180deg, rgba(var(--wall-rgb), 0.14), rgba(8, 47, 73, 0.02));
+}
+.news-link:hover {
+    color: #bae6fd;
+    text-decoration-color: rgba(186, 230, 253, 0.9);
+    background: linear-gradient(180deg, rgba(var(--wall-rgb), 0.24), rgba(8, 47, 73, 0.08));
+}
+
+/* sparkline */
+.sparkline-svg { display: block; overflow: visible; }
+.sparkline-poly { fill: none; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
+.sparkline-poly.draw-in {
+    stroke-dasharray: var(--spark-len, 120);
+    stroke-dashoffset: var(--spark-len, 120);
+    animation: sparkDraw 0.9s ease-out forwards;
+}
+@keyframes sparkDraw { to { stroke-dashoffset: 0; } }
+
+/* ============ 进场错峰动画 ============ */
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+[data-enter] { opacity: 0; will-change: transform, opacity; }
+[data-enter].entered {
+    animation: fadeUp 0.62s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    animation-delay: var(--enter-delay, 0s);
+}
+
+/* ============ 玻璃面板鼠标光斑 ============ */
+.glass-spot { position: relative; }
+.glass-spot::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(140px circle at var(--mx, 50%) var(--my, -40%),
+                rgba(255, 255, 255, 0.16), transparent 60%);
+    opacity: var(--spot, 0);
+    transition: opacity 0.5s ease;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    z-index: 3;
+}
+.glass-spot::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: radial-gradient(200px circle at var(--mx, 50%) var(--my, -40%),
+                rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.12) 45%, transparent 70%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    opacity: var(--spot, 0);
+    transition: opacity 0.5s ease;
+    pointer-events: none;
+    z-index: 4;
+}
+
+/* ============ 指针视差 3D 倾斜 ============ */
+main, aside { perspective: 1400px; }
+[data-tilt] {
+    transform-style: preserve-3d;
+    transition: transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
+    will-change: transform;
+}
+[data-tilt].tilting { transition: transform 0.08s linear; }
+
+/* ============ Dock 磁吸 ============ */
+.dock-ico {
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.14), rgba(var(--wall-rgb), 0.10)),
+        rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.22);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.38),
+        inset 0 -10px 24px rgba(var(--wall-rgb), 0.08),
+        0 14px 30px rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(16px) saturate(170%);
+    -webkit-backdrop-filter: blur(16px) saturate(170%);
+    transition: transform 0.18s cubic-bezier(0.22, 0.61, 0.36, 1),
+                background 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    transform-origin: center center;
+    will-change: transform;
+}
+
+/* ============ Tab Bar ============ */
+.tab-btn {
+    color: rgba(255, 255, 255, 0.52);
+    transition: all 0.25s ease;
+}
+.tab-btn:hover {
+    color: rgba(255, 255, 255, 0.92);
+    background: rgba(255, 255, 255, 0.1);
+}
+.tab-btn-active {
+    color: #ffffff;
+    background: rgba(var(--wall-rgb), 0.18);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 10px 20px rgba(0, 0, 0, 0.22), 0 0 18px rgba(var(--wall-rgb), 0.18);
+}
+
+.tab-btn { color: rgba(255,255,255,0.42); font-weight: 500; }
+.tab-btn:hover { color: rgba(255,255,255,0.72); }
+.tab-btn.active { color: #fff; font-weight: 700; }
+.tab-badge {
+    font-size: 9px; line-height: 1; padding: 2px 5px; border-radius: 9999px;
+    background: rgba(var(--wall-rgb), 0.12); color: rgba(255,255,255,0.66);
+    font-variant-numeric: tabular-nums; transition: all .3s;
+}
+.tab-btn.active .tab-badge { background: rgba(var(--wall-rgb), 0.28); color: #fff; }
+.tab-badge:empty { display: none; }
+
+#tabBar {
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(var(--wall-rgb), 0.08)),
+        rgba(0, 0, 0, 0.20);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* 新闻项悬停优化 */
+.news-item-hover {
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+    border-radius: 0.5rem;
+}
+.news-item-hover:hover {
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+/* ============ View Transitions：新闻列表切 tab / 切字号时交叉淡入 ============ */
+/* 只给列表容器命名，整页过渡范围被限定在这块——动态壁纸/WebGL 不被卷进快照。 */
+#newsList {
+    view-transition-name: news-list;
+}
+
+/* 进出场都做淡入淡出 + 轻微纵向位移，比浏览器默认的纯 cross-fade 更有"翻页"感。
+   ::view-transition-old/new 是浏览器在过渡期生成的快照伪元素。 */
+@keyframes vt-news-out {
+    to { opacity: 0; transform: translateY(-6px); }
+}
+@keyframes vt-news-in {
+    from { opacity: 0; transform: translateY(8px); }
+}
+::view-transition-old(news-list) {
+    animation: vt-news-out 0.22s cubic-bezier(0.4, 0, 1, 1) both;
+}
+::view-transition-new(news-list) {
+    animation: vt-news-in 0.32s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    ::view-transition-old(news-list),
+    ::view-transition-new(news-list) { animation: none; }
+}

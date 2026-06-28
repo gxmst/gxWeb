@@ -1,0 +1,53 @@
+body {
+    font-family: "Inter", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    --wall-r: 125;
+    --wall-g: 211;
+    --wall-b: 252;
+    --wall-rgb: var(--wall-r), var(--wall-g), var(--wall-b);
+    --wall-accent: rgb(var(--wall-rgb));
+    --wall-accent-soft: rgba(var(--wall-rgb), 0.22);
+    --glass-fill: rgba(255, 255, 255, 0.045);
+    --glass-fill-strong: rgba(255, 255, 255, 0.075);
+    --glass-border: rgba(255, 255, 255, 0.22);
+    --glass-edge: rgba(var(--wall-rgb), 0.34);
+    --glass-shadow: rgba(0, 0, 0, 0.34);
+    --glass-text-shadow: rgba(0, 0, 0, 0.52);
+    --scene-shade: rgba(0, 0, 0, 0.24);
+    --scene-vignette: rgba(0, 0, 0, 0.42);
+}
+
+.numeric {
+    font-family: "JetBrains Mono", "SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", monospace;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1, "cv01" 1;
+}
+
+#clock {
+    font-feature-settings: "tnum" 1, "ss01" 1;
+    letter-spacing: -0.02em;
+    text-shadow:
+        0 4px 18px rgba(0, 0, 0, 0.62),
+        0 0 34px rgba(var(--wall-rgb), 0.22);
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+@keyframes shimmer {
+    0% { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+}
+.skeleton {
+    background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.04) 75%);
+    background-size: 400px 100%;
+    animation: shimmer 1.8s infinite linear;
+    border-radius: 0.375rem;
+}
+.skeleton-line { height: 0.75rem; margin-bottom: 0.5rem; }
+.skeleton-line-sm { height: 0.5rem; width: 40%; margin-bottom: 0.75rem; }

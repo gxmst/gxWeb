@@ -146,6 +146,7 @@ gxWeb/
 - `web` 容器挂载：
   - `./public:/usr/share/nginx/html`
   - `./nginx.conf:/etc/nginx/conf.d/default.conf:ro`
+  - `./security-headers.conf:/etc/nginx/conf.d/security-headers.conf:ro`（被 `nginx.conf` 各 location 用 `include` 引入，缺失会导致 nginx 启动失败）
 
 这意味着改 `spider.py` 或 `public/` 下的文件在 `git pull` 后就能直接被容器看到；但如果你改了依赖、镜像、启动方式，还是建议执行：
 

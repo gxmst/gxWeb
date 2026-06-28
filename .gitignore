@@ -5,6 +5,7 @@ public/*.jpg
 finance-news.json
 ticker.json
 weather.txt
+heartbeat.txt
 bg_*.jpg
 bing_bg.jpg
 
@@ -32,3 +33,4 @@ node_modules/
 .idea/
 .vscode/
 .history/
+webvps/

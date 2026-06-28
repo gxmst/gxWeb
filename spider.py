@@ -10,6 +10,7 @@ import feedparser
 import calendar
 import random
 import threading
+import logging
 from json import JSONDecodeError
 from datetime import datetime, timedelta, timezone
 from PIL import Image
@@ -18,6 +19,28 @@ from deep_translator import GoogleTranslator
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from urllib.parse import urlparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# ================= 日志 =================
+# 用标准 logging 取代 print，便于 `docker logs ... | grep ERROR` 过滤。
+# 保留消息里的 emoji 前缀作为视觉标记，由 log() 自动按前缀分级到对应 logging level。
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+_logger = logging.getLogger("spider")
+
+def log(msg):
+    """按 emoji 前缀自动分级：❌/🚨 → ERROR，⚠️ → WARNING，其它 → INFO。
+    保留 print 风格的调用现场，只把输出通道换成 logging。"""
+    s = str(msg).lstrip()
+    if s.startswith(("❌", "🚨")):
+        _logger.error(msg)
+    elif s.startswith("⚠️"):
+        _logger.warning(msg)
+    else:
+        _logger.info(msg)
 
 # ================= 配置与工具 =================
 USER_AGENTS = [
@@ -118,7 +141,7 @@ def atomic_save_json(path, data):
             json.dump(data, f, ensure_ascii=False, indent=2)
         os.replace(tmp_path, path)
     except Exception as e:
-        print(f"❌ [系统] 原子化保存失败 ({path}): {e}")
+        log(f"❌ [系统] 原子化保存失败 ({path}): {e}")
         if os.path.exists(tmp_path): os.remove(tmp_path)
 
 def atomic_load_json(path, default=None):
@@ -130,7 +153,7 @@ def atomic_load_json(path, default=None):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
-        print(f"⚠️ [系统] 读取缓存失败 ({path}): {e}")
+        log(f"⚠️ [系统] 读取缓存失败 ({path}): {e}")
         return default
 
 def get_beijing_time():
@@ -153,45 +176,155 @@ def sanitize_url(url):
         return ""
     return candidate
 
+TRANSLATE_CACHE_PATH = "./public/translate-cache.json"
+TRANSLATE_CACHE_MAX = 2000
 _translate_cache = {}
 _translate_lock = threading.Lock()
+_translate_dirty = False
+
+def _load_translate_cache():
+    """启动时从磁盘加载翻译缓存——避免容器重启后重新翻译已知文本。"""
+    global _translate_cache
+    data = atomic_load_json(TRANSLATE_CACHE_PATH, default={})
+    if isinstance(data, dict):
+        _translate_cache = data
+        log(f"✅ [翻译引擎] 从磁盘加载 {len(_translate_cache)} 条翻译缓存。")
+
+def _persist_translate_cache():
+    """把内存缓存落盘。由调用方在批量翻译结束后触发，避免每条都写盘。"""
+    global _translate_dirty
+    with _translate_lock:
+        if not _translate_dirty:
+            return
+        snapshot = dict(_translate_cache)
+        _translate_dirty = False
+    atomic_save_json(TRANSLATE_CACHE_PATH, snapshot)
 
 def translate_en_to_zh(text):
-    if not text: return ""
+    """单条翻译——保留旧签名用于零散调用。批量翻译用 translate_batch 性能更好。"""
+    if not text:
+        return ""
     cache_key = hashlib.md5(text.encode()).hexdigest()
     with _translate_lock:
         if cache_key in _translate_cache:
             return _translate_cache[cache_key]
     try:
-        # 网络请求与 sleep 放在锁外，避免长时间持锁阻塞其它线程。
         translated = GoogleTranslator(source='en', target='zh-CN').translate(text)
-        time.sleep(0.5)
-        with _translate_lock:
-            _translate_cache[cache_key] = translated
-            if len(_translate_cache) > 500:
-                keys = list(_translate_cache.keys())
-                for k in keys[:100]:
-                    del _translate_cache[k]
-        return translated
     except Exception as e:
-        print(f"⚠️ [翻译引擎] 失败: {e}")
+        log(f"⚠️ [翻译引擎] 失败: {e}")
         return text
+    global _translate_dirty
+    with _translate_lock:
+        _translate_cache[cache_key] = translated
+        _translate_dirty = True
+        if len(_translate_cache) > TRANSLATE_CACHE_MAX:
+            for k in list(_translate_cache.keys())[:200]:
+                del _translate_cache[k]
+    return translated
+
+def translate_batch(texts, max_workers=4):
+    """并发翻译一批文本，返回 {原文: 译文}。
+
+    旧实现每条 sleep 0.5s 串行，HN 10 条 + GitHub 20 条要 ~15s。
+    现改为 ThreadPoolExecutor 并发，命中缓存的不发请求；未命中的整体节流靠 max_workers 控制（默认 4 并发约等于 2 QPS）。
+    """
+    result = {}
+    pending = []
+    with _translate_lock:
+        for t in texts:
+            if not t:
+                result[t] = ""
+                continue
+            key = hashlib.md5(t.encode()).hexdigest()
+            cached = _translate_cache.get(key)
+            if cached is not None:
+                result[t] = cached
+            else:
+                pending.append((t, key))
+
+    if not pending:
+        return result
+
+    def _do(item):
+        text, key = item
+        try:
+            return key, text, GoogleTranslator(source='en', target='zh-CN').translate(text)
+        except Exception as e:
+            log(f"⚠️ [翻译引擎] 失败: {e}")
+            return key, text, text
+
+    global _translate_dirty
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        for fut in as_completed([ex.submit(_do, p) for p in pending]):
+            key, text, translated = fut.result()
+            result[text] = translated
+            with _translate_lock:
+                _translate_cache[key] = translated
+                _translate_dirty = True
+
+    with _translate_lock:
+        if len(_translate_cache) > TRANSLATE_CACHE_MAX:
+            for k in list(_translate_cache.keys())[:200]:
+                del _translate_cache[k]
+
+    return result
 
 # ================= 引擎 1：必应壁纸 =================
 def fetch_bing_wallpaper():
-    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][壁纸引擎] 正在检查今日必应壁纸...")
+    log(f"[{get_beijing_time().strftime('%H:%M:%S')}][壁纸引擎] 正在检查今日必应壁纸...")
     try:
         url = "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=5&mkt=zh-CN"
         headers = {"User-Agent": get_random_ua()}
         data = get_session().get(url, headers=headers, timeout=10).json()
-        for i in range(len(data["images"])):
-            img_url = "https://www.bing.com" + data["images"][i]["url"]
-            img_data = get_session().get(img_url, headers={"User-Agent": get_random_ua()}, timeout=15).content
+        images = data.get("images") or []
+        if not images:
+            log("⚠️ [壁纸引擎] 必应未返回图片列表，保留昨日壁纸不动。")
+            return
 
-            img = Image.open(io.BytesIO(img_data)).convert('RGB')
-            img.save(f"./public/bg_{i}.jpg", "JPEG", quality=82)
-            print(f"✅ [壁纸引擎] bg_{i}.jpg 下载并压缩成功。")
-    except Exception as e: print(f"❌ [壁纸引擎] 获取失败: {e}")
+        # 先把新图下到内存里全部就绪，再原子化替换旧文件——
+        # 防止下到一半失败时，磁盘上同时存在新旧两批 bg_*.jpg，wallpapers.json 误列。
+        new_images = []
+        for i, item in enumerate(images):
+            img_url = "https://www.bing.com" + item["url"]
+            img_data = get_session().get(img_url, headers={"User-Agent": get_random_ua()}, timeout=15).content
+            new_images.append((i, Image.open(io.BytesIO(img_data)).convert('RGB')))
+
+        # 原子化替换：先写 bg_N.jpg.tmp，全部 save 成功后再逐个 os.replace 就位。
+        # 这样即使 save 中途因磁盘满/权限失败，旧 bg_*.jpg 仍完好——避免"删了旧图又没写成新图"
+        # 导致 wallpapers.json 下一轮只剩收藏图。
+        tmp_paths = []
+        try:
+            for i, img in new_images:
+                tmp_path = f"./public/bg_{i}.jpg.tmp"
+                img.save(tmp_path, "JPEG", quality=82)
+                tmp_paths.append((i, tmp_path))
+        except Exception:
+            # 任一 save 失败：清掉已写的 .tmp，旧壁纸原样保留，本轮放弃更新。
+            for _, tmp_path in tmp_paths:
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+            raise
+
+        new_indices = {i for i, _ in tmp_paths}
+        for i, tmp_path in tmp_paths:
+            os.replace(tmp_path, f"./public/bg_{i}.jpg")
+            log(f"✅ [壁纸引擎] bg_{i}.jpg 下载并压缩成功。")
+
+        # 清理多余旧图（昨天 5 张今天 3 张时，bg_3/bg_4 需删除，否则被 wallpapers.json 误列）
+        for old in os.listdir("./public"):
+            if old.startswith("bg_") and old.endswith(".jpg"):
+                try:
+                    idx = int(old[len("bg_"):-len(".jpg")])
+                except ValueError:
+                    continue
+                if idx not in new_indices:
+                    try:
+                        os.remove(os.path.join("./public", old))
+                    except OSError as e:
+                        log(f"⚠️ [壁纸引擎] 清理旧壁纸 {old} 失败: {e}")
+    except Exception as e: log(f"❌ [壁纸引擎] 获取失败: {e}")
 
 def update_wallpaper_list():
     favorite_dir = "./public/favorite"
@@ -205,17 +338,17 @@ def update_wallpaper_list():
             if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
                 favorite_files.append(f"favorite/{f}")
     except Exception as e:
-        print(f"❌ [壁纸引擎] 扫描收藏夹失败: {e}")
+        log(f"❌ [壁纸引擎] 扫描收藏夹失败: {e}")
 
     bing_files = [f"bg_{i}.jpg" for i in range(5) if os.path.exists(f"./public/bg_{i}.jpg")]
     wallpapers = favorite_files + bing_files
 
     atomic_save_json("./public/wallpapers.json", wallpapers)
-    print(f"✅ [壁纸引擎] 已更新 wallpapers.json，共包含 {len(wallpapers)} 张壁纸。")
+    log(f"✅ [壁纸引擎] 已更新 wallpapers.json，共包含 {len(wallpapers)} 张壁纸。")
 
 # ================= 引擎 2：新浪快讯 =================
 def fetch_sina():
-    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][新浪引擎] 开始抓取...")
+    log(f"[{get_beijing_time().strftime('%H:%M:%S')}][新浪引擎] 开始抓取...")
     url = "https://zhibo.sina.com.cn/api/zhibo/feed?page=1&page_size=100&zhibo_id=152"
 
     news_list = []
@@ -254,20 +387,20 @@ def fetch_sina():
                         "category": "news",
                         "source": "sina"
                     })
-            print(f"✅ [新浪引擎] 成功抓取 {len(news_list)} 条。")
+            log(f"✅ [新浪引擎] 成功抓取 {len(news_list)} 条。")
             return news_list
         except Exception as e:
-            print(f"⚠️ [新浪引擎] 第 {attempt + 1} 次尝试失败: {e}")
+            log(f"⚠️ [新浪引擎] 第 {attempt + 1} 次尝试失败: {e}")
             if attempt < max_retries - 1:
                 time.sleep(2)
             else:
-                print(f"❌ [新浪引擎] 达到最大重试次数，抓取任务终止。")
+                log(f"❌ [新浪引擎] 达到最大重试次数，抓取任务终止。")
 
     return news_list
 
 # ================= 引擎 3：强化版 RSS 引擎 =================
 def fetch_rss_news():
-    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][RSS引擎] 开始抓取全球顶级媒体...")
+    log(f"[{get_beijing_time().strftime('%H:%M:%S')}][RSS引擎] 开始抓取全球顶级媒体...")
     rss_sources = [
         {"name": "华尔街日报", "url": "https://cn.wsj.com/zh-hans/rss"},
         {"name": "FT中文网", "url": "https://www.ftchinese.com/rss/feed"},
@@ -305,9 +438,9 @@ def fetch_rss_news():
                         "source": source["name"]
                     })
                 except Exception as e: continue
-            print(f"✅ [RSS引擎] {source['name']} 成功解析 {len(source_news)} 条")
+            log(f"✅ [RSS引擎] {source['name']} 成功解析 {len(source_news)} 条")
             all_rss_news.extend(source_news)
-        except Exception as e: print(f"❌ [RSS引擎] {source['name']} 失败: {e}")
+        except Exception as e: log(f"❌ [RSS引擎] {source['name']} 失败: {e}")
     return all_rss_news
 
 # ================= 引擎 4：科技趋势聚合 (V2EX, HN, GitHub) =================
@@ -332,15 +465,22 @@ def fetch_github_trends(days=7, limit=10):
     return data.get("items", [])[:limit]
 
 def build_github_html(sections):
+    # 先把所有需要翻译的 description 一次性 batch 翻译，避免逐条串行。
+    descs = []
+    for section in sections:
+        for repo in section["items"]:
+            descs.append((repo.get("description") or "No description")[:200])
+    translations = translate_batch(descs) if descs else {}
+
     github_html = '<div class="font-semibold text-white mb-3">GitHub Trends</div>'
     for section in sections:
         github_html += f'<div class="text-white/60 text-xs uppercase tracking-[0.2em] mt-4 mb-2">{escape_text(section["label"])}</div>'
         for i, repo in enumerate(section["items"]):
             name = escape_text(repo.get("full_name"))
             stars = int(repo.get("stargazers_count") or 0)
-            desc_en_raw = repo.get("description") or "No description"
+            desc_en_raw = (repo.get("description") or "No description")[:200]
             desc_en = escape_text(desc_en_raw)
-            desc_zh = escape_text(translate_en_to_zh(desc_en_raw[:200]))
+            desc_zh = escape_text(translations.get(desc_en_raw, desc_en_raw))
             repo_url = escape_text(sanitize_url(repo.get("html_url")))
             github_html += f'<div class="group mb-3 border-b border-white/5 pb-2 last:border-0">'
             github_html += f'<a href="{repo_url}" target="_blank" rel="noopener noreferrer" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {name} (STAR {stars})</a>'
@@ -380,7 +520,7 @@ def fetch_weather():
         if 71 <= code <= 77: emoji = "❄️"
         elif 51 <= code <= 67: emoji = "🌧️"
         with open("./public/weather.txt", "w", encoding="utf-8") as f: f.write(f"{emoji} {temp}°C")
-    except Exception as e: print(f"[天气引擎] 失败: {e}")
+    except Exception as e: log(f"[天气引擎] 失败: {e}")
 
 # ================= 引擎 6：行情条 (Sina) =================
 TICKER_FILE = "./public/ticker.json"
@@ -474,7 +614,7 @@ def _fetch_sina_all(configs):
                 pass
 
     except Exception as e:
-        print(f"  ⚠️ [行情引擎] Sina 抓取异常: {type(e).__name__}: {e}")
+        log(f"  ⚠️ [行情引擎] Sina 抓取异常: {type(e).__name__}: {e}")
 
     return result_map
 
@@ -525,14 +665,14 @@ def _fetch_tencent_all(configs):
                 pass
 
     except Exception as e:
-        print(f"  ⚠️ [行情引擎] Tencent 抓取异常: {type(e).__name__}: {e}")
+        log(f"  ⚠️ [行情引擎] Tencent 抓取异常: {type(e).__name__}: {e}")
 
     return result_map
 
 
 def fetch_ticker():
     ts_str = get_beijing_time().strftime('%H:%M:%S')
-    print(f"[{ts_str}][行情引擎] 开始同步行情...")
+    log(f"[{ts_str}][行情引擎] 开始同步行情...")
 
     total_count = len(MARKET_TICKERS)
     result_map = {}
@@ -599,14 +739,14 @@ def fetch_ticker():
             status = "degraded"
         else:
             status = "ok"
-        print(f"  ✅ [行情引擎] 本轮写入 {unique_count} 条 (阈值 {threshold}) 状态={status}")
+        log(f"  ✅ [行情引擎] 本轮写入 {unique_count} 条 (阈值 {threshold}) 状态={status}")
     else:
         if os.path.exists(TICKER_FILE):
             status = "failed"
-            print(f"  ⚠️ [行情引擎] 本轮仅 {unique_count} 条 (阈值 {threshold})，保留上次成功数据")
+            log(f"  ⚠️ [行情引擎] 本轮仅 {unique_count} 条 (阈值 {threshold})，保留上次成功数据")
         else:
             status = "failed"
-            print(f"  ⚠️ [行情引擎] 本轮仅 {unique_count} 条且无历史文件，跳过写入")
+            log(f"  ⚠️ [行情引擎] 本轮仅 {unique_count} 条且无历史文件，跳过写入")
 
     # 4. 写入状态文件
     status_payload = {
@@ -623,13 +763,13 @@ def fetch_ticker():
     atomic_save_json(TICKER_STATUS_FILE, status_payload)
 
     # 5. 日志汇总
-    print(f"  📊 [行情引擎] 总标的: {total_count} | Sina: {sina_count} | Tencent: {tencent_count} | 沿用旧值: {len(stale_used)} | 最终: {unique_count} | 状态: {status}")
+    log(f"  📊 [行情引擎] 总标的: {total_count} | Sina: {sina_count} | Tencent: {tencent_count} | 沿用旧值: {len(stale_used)} | 最终: {unique_count} | 状态: {status}")
     if stale_used:
-        print(f"  ℹ️ [行情引擎] 沿用旧值: {', '.join(stale_used)}")
+        log(f"  ℹ️ [行情引擎] 沿用旧值: {', '.join(stale_used)}")
 
 # ================= 科技趋势抓取 =================
 def fetch_tech_news():
-    print(f"[{get_beijing_time().strftime('%H:%M:%S')}][tech] fetching trend blocks...")
+    log(f"[{get_beijing_time().strftime('%H:%M:%S')}][tech] fetching trend blocks...")
     tech_blocks = []
     now_bj = get_beijing_time()
     ts = int(now_bj.timestamp())
@@ -652,24 +792,27 @@ def fetch_tech_news():
         }
         tech_blocks.append(tech_block)
         atomic_save_json(GITHUB_CACHE_PATH, tech_block)
-        print("[tech] GitHub block updated")
+        log("[tech] GitHub block updated")
     except Exception as e:
         cached_github = atomic_load_json(GITHUB_CACHE_PATH, default={})
         if cached_github:
             tech_blocks.append(cached_github)
-            print(f"[tech] GitHub request failed, using cached block: {e}")
+            log(f"⚠️ [tech] GitHub request failed, using cached block: {e}")
         else:
-            print(f"[tech] GitHub request failed: {e}")
+            log(f"❌ [tech] GitHub request failed: {e}")
 
     try:
         resp = get_session().get("https://hnrss.org/frontpage?points=50", headers={"User-Agent": get_random_ua()}, timeout=15)
         if resp.status_code == 200:
             feed = feedparser.parse(resp.text)
+            hn_entries = feed.entries[:10]
+            hn_titles = [entry.get("title", "").strip() for entry in hn_entries]
+            hn_zh_map = translate_batch(hn_titles)
             hn_html = "HN Trends"
-            for i, entry in enumerate(feed.entries[:10]):
-                title_en_raw = entry.get("title", "").strip()
+            for i, entry in enumerate(hn_entries):
+                title_en_raw = hn_titles[i]
                 title_en = escape_text(title_en_raw)
-                title_zh = escape_text(translate_en_to_zh(title_en_raw))
+                title_zh = escape_text(hn_zh_map.get(title_en_raw, title_en_raw))
                 entry_url = escape_text(sanitize_url(entry.get("link")))
                 hn_html += f'<div class="group mb-3 border-b border-white/5 pb-2 last:border-0">'
                 hn_html += f'<a href="{entry_url}" target="_blank" rel="noopener noreferrer" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {title_en}</a>'
@@ -685,9 +828,9 @@ def fetch_tech_news():
                 "source": "hn",
                 "format": "html"
             })
-            print("[tech] HN block updated")
+            log("[tech] HN block updated")
     except Exception as e:
-        print(f"[tech] HN request failed: {e}")
+        log(f"❌ [tech] HN request failed: {e}")
 
     try:
         hot_resp = get_session().get("https://www.v2ex.com/api/topics/hot.json", headers={"User-Agent": get_random_ua()}, timeout=15)
@@ -707,10 +850,12 @@ def fetch_tech_news():
                 "source": "v2ex",
                 "format": "html"
             })
-            print("[tech] V2EX block updated")
+            log("[tech] V2EX block updated")
     except Exception as e:
-        print(f"[tech] V2EX request failed: {e}")
+        log(f"❌ [tech] V2EX request failed: {e}")
 
+    # 批次结束后整体落盘——避免每条翻译都触发一次写盘 IO。
+    _persist_translate_cache()
     return tech_blocks
 
 # ================= 主循环控制 =================
@@ -751,14 +896,30 @@ class SpiderApp:
         # 优雅退出：给在途的原子写一点收尾时间（atomic_save_json 本身保证不会写出半截文件）。
         fast.join(timeout=5)
         slow.join(timeout=5)
-        print("🛑 已停止所有工作线程。")
+        log("🛑 已停止所有工作线程。")
+
+    def _touch_heartbeat(self):
+        """触摸 heartbeat 文件——只表明 fast loop 还在转，不代表数据新鲜。
+
+        与 finance-news.json 解耦：后者只在抓取到数据时被覆写，
+        所有源同时挂掉时它的 mtime 会冻结，旧版健康检查会判 unhealthy → 重启 → 再挂 → 死循环。
+        现在 healthcheck 探这个文件，"进程活着但数据陈旧"靠业务监控（ticker-status.json）发现。
+        """
+        try:
+            with open("./public/heartbeat.txt", "w", encoding="utf-8") as f:
+                f.write(str(int(time.time())))
+        except Exception as e:
+            log(f"⚠️ [系统] heartbeat 写入失败: {e}")
 
     def _fast_loop(self):
         """行情 + 新浪快讯，每轮约 60 秒。唯一写 finance-news.json / ticker*.json 的线程。"""
         while not self.shutdown:
             try:
                 now_bj = get_beijing_time()
-                print(f"\n--- [fast] {now_bj.strftime('%H:%M:%S')} 行情+快讯 ---")
+                log(f"\n--- [fast] {now_bj.strftime('%H:%M:%S')} 行情+快讯 ---")
+
+                # 心跳：无论本轮抓取结果如何，先证明 loop 还在转。
+                self._touch_heartbeat()
 
                 # 行情（内部自行写 ticker.json / ticker-status.json）
                 fetch_ticker()
@@ -788,10 +949,10 @@ class SpiderApp:
                         "news_list": final_news
                     }
                     atomic_save_json("./public/finance-news.json", output_data)
-                    print(f"✅ [fast] 更新完成：总库 {len(final_news)} 条 (新浪 {len(sina_1500)} / RSS {len(rss_snapshot)} / 科技 {len(tech_snapshot)})。")
+                    log(f"✅ [fast] 更新完成：总库 {len(final_news)} 条 (新浪 {len(sina_1500)} / RSS {len(rss_snapshot)} / 科技 {len(tech_snapshot)})。")
 
             except Exception as e:
-                print(f"🚨 [fast] 发生异常: {e}")
+                log(f"🚨 [fast] 发生异常: {e}")
 
             self._interruptible_sleep(60)
 
@@ -843,15 +1004,16 @@ class SpiderApp:
                     self.last_tech_time = now_ts
 
             except Exception as e:
-                print(f"🚨 [slow] 发生异常: {e}")
+                log(f"🚨 [slow] 发生异常: {e}")
 
             # 慢线程 30s 醒一次检查各任务是否到点，节奏由上面的时间判断控制。
             self._interruptible_sleep(30)
 
     def _handle_signal(self, signum, frame):
-        print(f"\n🛑 收到信号 {signum}，正在优雅退出...")
+        log(f"\n🛑 收到信号 {signum}，正在优雅退出...")
         self.shutdown = True
 
 if __name__ == "__main__":
+    _load_translate_cache()
     app = SpiderApp()
     app.run()

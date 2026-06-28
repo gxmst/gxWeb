@@ -1,0 +1,59 @@
+/* ============ 时段自适应色调层 ============ */
+#timeTint {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    mix-blend-mode: soft-light;
+    opacity: 0;
+    transition: background 2s ease, opacity 2s ease;
+    z-index: 15;
+}
+
+/* ============ 雷暴闪电 ============ */
+#lightningFlash {
+    background: rgba(225, 238, 255, 0.9);
+}
+#lightningFlash.flash { animation: lightningFlash 0.9s ease-out; }
+@keyframes lightningFlash {
+    0%   { opacity: 0; }
+    4%   { opacity: 0.55; }
+    8%   { opacity: 0.12; }
+    12%  { opacity: 0.68; }
+    22%  { opacity: 0; }
+    100% { opacity: 0; }
+}
+
+/* ============ 晴天光束光晕 ============ */
+#sunGlow {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 1.6s ease;
+    z-index: 14;
+    background:
+        radial-gradient(circle at 82% 14%, rgba(255, 244, 214, 0.5), rgba(255, 244, 214, 0) 38%),
+        conic-gradient(from 150deg at 82% 14%, rgba(255, 240, 200, 0) 0deg,
+            rgba(255, 238, 196, 0.16) 30deg, rgba(255, 240, 200, 0) 70deg);
+}
+#sunGlow.on { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+    [data-enter].entered { animation: none; opacity: 1; }
+    .sparkline-poly.draw-in { animation: none; stroke-dashoffset: 0; }
+    #tabIndicator { transition: none; }
+}
+
+/* ============ 骨架屏 ============ */
+@keyframes shimmer {
+    0%   { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+}
+.skeleton {
+    background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.04) 75%);
+    background-size: 400px 100%;
+    animation: shimmer 1.8s infinite linear;
+    border-radius: 0.375rem;
+}
+.skeleton-line { height: 0.75rem; margin-bottom: 0.5rem; }
+.skeleton-line-sm { height: 0.5rem; width: 40%; margin-bottom: 0.75rem; }

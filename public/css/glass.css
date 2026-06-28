@@ -1,0 +1,175 @@
+/* 核心：液态玻璃材质 —— 壁纸取色驱动边缘、填充和光泽 */
+.glass {
+    position: relative;
+    overflow: hidden;
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.22), rgba(var(--wall-rgb), 0.08) 48%, rgba(255, 255, 255, 0.05)),
+        var(--glass-fill-strong);
+    border: 1px solid var(--glass-border);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.42),
+        inset 0 -10px 28px rgba(var(--wall-rgb), 0.08),
+        0 12px 34px rgba(0, 0, 0, 0.32);
+}
+@supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
+    .glass {
+        background:
+            linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(var(--wall-rgb), 0.08) 54%, rgba(255, 255, 255, 0.04)),
+            var(--glass-fill);
+        backdrop-filter: blur(18px) saturate(180%) brightness(1.04);
+        -webkit-backdrop-filter: blur(18px) saturate(180%) brightness(1.04);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.48),
+            inset 0 -1px 0 rgba(var(--wall-rgb), 0.18),
+            inset 0 -12px 30px rgba(var(--wall-rgb), 0.08),
+            0 10px 30px rgba(0, 0, 0, 0.30);
+    }
+}
+
+.glass::after {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), transparent 30%, transparent 66%, rgba(var(--wall-rgb), 0.16));
+    opacity: 0.54;
+    mix-blend-mode: screen;
+}
+
+/* 壁纸驱动的场景遮罩 */
+#sceneShade {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 12;
+    background:
+        radial-gradient(circle at 50% 42%, rgba(0, 0, 0, 0.02), var(--scene-shade) 74%),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.20), transparent 38%, rgba(0, 0, 0, 0.30)),
+        linear-gradient(180deg, rgba(0, 0, 0, 0.08), var(--scene-vignette));
+    transition: background 0.8s ease;
+}
+
+.ambient-glow {
+    position: absolute;
+    border-radius: 9999px;
+    pointer-events: none;
+    filter: blur(112px);
+    opacity: 0.72;
+    transition: background 1s ease, opacity 1s ease, transform 1s ease;
+    z-index: 11;
+}
+
+.ambient-glow-main {
+    top: 9%;
+    right: -10%;
+    width: 560px;
+    height: 560px;
+    background: radial-gradient(circle, rgba(var(--wall-rgb), 0.42), transparent 68%);
+}
+
+.ambient-glow-low {
+    left: 28%;
+    bottom: -22%;
+    width: 620px;
+    height: 420px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.18), rgba(var(--wall-rgb), 0.20) 42%, transparent 72%);
+    opacity: 0.45;
+}
+
+/* 大面板统一玻璃质感 —— 真玻璃而非磨砂塑料。
+   关键修复："低透明度像毛玻璃"的根因是旧版 blur(28px) + 多层往里打白的 inset 阴影：
+   28px 把背景彻底糊成色块、inset 高光让整面发灰发实，于是看着像磨砂板。
+   真玻璃的视觉标志是「透光 + 边缘折射扭曲 + 棱边反光」，不是模糊。
+   故：blur 大幅降到 ~7px（背景细节透得出来），折射(见 html.glass-refract)扛起扭曲感，
+   inset 只保留顶部 1px 高光，削掉那几层把面板压实的 -18px 内阴影。
+   --glass-blur / --glass-sat 抽成变量，方便后续整体微调。 */
+.glass-panel {
+    --glass-blur: 7px;
+    --glass-sat: 165%;
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(var(--wall-rgb), 0.030) 48%, rgba(255, 255, 255, 0.018)),
+        var(--glass-fill);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(1.02);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(1.02);
+    box-shadow:
+        /* 顶沿亮线：光打在玻璃上缘 */
+        inset 0 1px 0 rgba(255, 255, 255, 0.45),
+        /* 极细内描边：勾出玻璃厚度，不往里泛白 */
+        inset 0 0 0 1px rgba(255, 255, 255, 0.035),
+        /* 投影：让面板浮起来 */
+        0 24px 60px var(--glass-shadow),
+        /* 壁纸色染边：一圈薄薄的环境色光 */
+        0 0 0 1px rgba(var(--wall-rgb), 0.06);
+    text-shadow: 0 1px 16px var(--glass-text-shadow);
+}
+
+.glass-panel:not(.fixed) {
+    position: relative;
+}
+
+.glass-panel::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+        linear-gradient(140deg, rgba(255, 255, 255, 0.20), transparent 22%, transparent 70%, rgba(var(--wall-rgb), 0.11)),
+        radial-gradient(900px circle at 18% 0%, rgba(255, 255, 255, 0.07), transparent 45%),
+        radial-gradient(700px circle at 100% 100%, rgba(var(--wall-rgb), 0.11), transparent 44%);
+    opacity: 0.46;
+    mix-blend-mode: screen;
+    z-index: 1;
+}
+
+.glass-panel > :not(.absolute):not(.fixed) {
+    position: relative;
+    z-index: 2;
+}
+
+.glass-panel > .absolute,
+.glass-panel > .fixed {
+    z-index: 4;
+}
+
+/* 新闻面板：要承载大量文字，可读性优先，所以比通用 glass-panel 稍微"实"一点点——
+   但仍是玻璃。手法不是加白frost（那会发灰），而是垫一层极淡的冷色暗调让文字浮起，
+   blur 同样降到 ~6px 让背景透出来。 */
+#news-panel {
+    --glass-blur: 6px;
+    --glass-sat: 150%;
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.030), rgba(var(--wall-rgb), 0.015) 48%, rgba(255, 255, 255, 0.008)),
+        rgba(10, 16, 28, 0.10);
+    border-color: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(1.05);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(1.05);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.22),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.015),
+        0 18px 48px rgba(0, 0, 0, 0.24),
+        0 0 0 1px rgba(var(--wall-rgb), 0.03);
+    text-shadow: 0 1px 12px rgba(0, 0, 0, 0.44);
+}
+
+#news-panel::after {
+    opacity: 0.20;
+}
+
+/* 真·玻璃折射：仅在 JS 检测到支持 url() backdrop-filter 时加 .glass-refract（见 interactions.js）。
+   关键：折射要"显形"靠的是位移幅度盖过模糊半径——所以这里 blur 压到 4px，
+   把"玻璃感"完全交给 #glassDisplace 的 feDisplacementMap（scale 已在 SVG 里提到 58）。
+   这是把"毛玻璃"变回"真玻璃"的核心：低模糊 + 强折射，背景透得出来、边缘在流动。 */
+html.glass-refract .glass-panel {
+    --glass-blur: 4px;
+    backdrop-filter: blur(var(--glass-blur)) saturate(185%) brightness(1.05) url(#glassDisplace);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(185%) brightness(1.05) url(#glassDisplace);
+}
+
+html.glass-refract #news-panel {
+    --glass-blur: 4px;
+    backdrop-filter: blur(var(--glass-blur)) saturate(150%) brightness(1.06) url(#glassDisplace);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%) brightness(1.06) url(#glassDisplace);
+}

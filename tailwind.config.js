@@ -3,6 +3,7 @@ module.exports = {
   // content 必须同时扫描前端 HTML 和 Python——spider.py 也在拼 Tailwind class（GitHub/HN/V2EX 块）。
   content: [
     "./public/index.html",
+    "./public/js/**/*.js",
     "./spider.py",
   ],
   theme: {
