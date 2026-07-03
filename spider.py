@@ -347,69 +347,81 @@ def update_wallpaper_list():
     log(f"✅ [壁纸引擎] 已更新 wallpapers.json，共包含 {len(wallpapers)} 张壁纸。")
 
 # ================= 引擎 2：新浪快讯 =================
-def fetch_sina():
-    log(f"[{get_beijing_time().strftime('%H:%M:%S')}][新浪引擎] 开始抓取...")
-    url = "https://zhibo.sina.com.cn/api/zhibo/feed?page=1&page_size=100&zhibo_id=152"
+SINA_PAGES = 3  # 该接口 page_size 上限 100/页，翻 3 页 ≈ 300 条
 
-    news_list = []
+def _fetch_sina_page(page):
+    """抓单页新浪快讯，返回解析后的 news dict 列表；失败自带重试。"""
+    url = f"https://zhibo.sina.com.cn/api/zhibo/feed?page={page}&page_size=100&zhibo_id=152"
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            headers = {
-                "User-Agent": get_random_ua()
-            }
+            headers = {"User-Agent": get_random_ua()}
             resp = get_session().get(url, headers=headers, timeout=15)
             data = resp.json()
             items = data.get("result", {}).get("data", {}).get("feed", {}).get("list", [])
 
+            page_news = []
             for item in items:
                 clean_txt = clean_html(item.get("rich_text", "").replace("<br>", ""))
-                if clean_txt:
-                    is_important = str(item.get("focus", "0")) == "1" or str(item.get("is_top", "0")) == "1"
-
-                    ts_val = item.get("create_time")
-                    try:
-                        if isinstance(ts_val, str):
-                            dt = datetime.strptime(ts_val, '%Y-%m-%d %H:%M:%S')
-                            ts = int(dt.timestamp())
-                            time_str = dt.strftime('%H:%M')
-                        else:
-                            ts = int(ts_val)
-                            time_str = (datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(timezone(timedelta(hours=8)))).strftime('%H:%M')
-                    except Exception as e:
-                        now = get_beijing_time(); ts = int(now.timestamp()); time_str = now.strftime('%H:%M')
-                    news_list.append({
-                        "time": time_str,
-                        "raw_time": ts,
-                        "content": f"【新浪】{clean_txt}",
-                        "url": "",
-                        "is_important": is_important,
-                        "category": "news",
-                        "source": "sina"
-                    })
-            log(f"✅ [新浪引擎] 成功抓取 {len(news_list)} 条。")
-            return news_list
+                if not clean_txt:
+                    continue
+                is_important = str(item.get("focus", "0")) == "1" or str(item.get("is_top", "0")) == "1"
+                ts_val = item.get("create_time")
+                try:
+                    if isinstance(ts_val, str):
+                        dt = datetime.strptime(ts_val, '%Y-%m-%d %H:%M:%S')
+                        ts = int(dt.timestamp())
+                        time_str = dt.strftime('%H:%M')
+                    else:
+                        ts = int(ts_val)
+                        time_str = (datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(timezone(timedelta(hours=8)))).strftime('%H:%M')
+                except Exception:
+                    now = get_beijing_time(); ts = int(now.timestamp()); time_str = now.strftime('%H:%M')
+                page_news.append({
+                    "time": time_str,
+                    "raw_time": ts,
+                    "content": f"【新浪】{clean_txt}",
+                    "url": "",
+                    "is_important": is_important,
+                    "category": "news",
+                    "source": "sina"
+                })
+            return page_news
         except Exception as e:
-            log(f"⚠️ [新浪引擎] 第 {attempt + 1} 次尝试失败: {e}")
+            log(f"⚠️ [新浪引擎] 第 {page} 页第 {attempt + 1} 次尝试失败: {e}")
             if attempt < max_retries - 1:
                 time.sleep(2)
-            else:
-                log(f"❌ [新浪引擎] 达到最大重试次数，抓取任务终止。")
+    log(f"❌ [新浪引擎] 第 {page} 页达到最大重试次数，跳过。")
+    return []
 
+def fetch_sina():
+    log(f"[{get_beijing_time().strftime('%H:%M:%S')}][新浪引擎] 开始抓取（{SINA_PAGES} 页）...")
+    news_list = []
+    for page in range(1, SINA_PAGES + 1):
+        news_list.extend(_fetch_sina_page(page))
+    log(f"✅ [新浪引擎] 成功抓取 {len(news_list)} 条。")
     return news_list
 
 # ================= 引擎 3：强化版 RSS 引擎 =================
 def fetch_rss_news():
     log(f"[{get_beijing_time().strftime('%H:%M:%S')}][RSS引擎] 开始抓取全球顶级媒体...")
+    # lang="en" 的源：标题会被批量翻成中文写入 display_content（前端优先展示 display_content）。
+    # 中文源不带 lang，原样展示。新增 5 个英文源均为长期稳定的标准 RSS 端点；
+    # 某个源不可达时由下方 try/except 跳过，不影响其它源。
     rss_sources = [
         {"name": "华尔街日报", "url": "https://cn.wsj.com/zh-hans/rss"},
         {"name": "FT中文网", "url": "https://www.ftchinese.com/rss/feed"},
         {"name": "纽约时报", "url": "https://cn.nytimes.com/rss/"},
         {"name": "BBC", "url": "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml"},
         {"name": "联合早报", "url": "https://www.zaobao.com.sg/realtime/world/rss"},
-        {"name": "Yahoo", "url": "https://finance.yahoo.com/news/rssindex"},
-        {"name": "CNBC", "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?id=10000664"},
-        {"name": "FT", "url": "https://www.ft.com/?format=rss"}
+        {"name": "Yahoo", "url": "https://finance.yahoo.com/news/rssindex", "lang": "en"},
+        {"name": "CNBC", "url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?id=10000664", "lang": "en"},
+        {"name": "FT", "url": "https://www.ft.com/?format=rss", "lang": "en"},
+        {"name": "卫报", "url": "https://www.theguardian.com/world/rss", "lang": "en"},
+        {"name": "半岛电视台", "url": "https://www.aljazeera.com/xml/rss/all.xml", "lang": "en"},
+        {"name": "NPR", "url": "https://feeds.npr.org/1004/rss.xml", "lang": "en"},
+        {"name": "德国之声", "url": "https://rss.dw.com/rdf/rss-en-all", "lang": "en"},
+        {"name": "法广", "url": "https://www.france24.com/en/rss", "lang": "en"}
     ]
     all_rss_news = []
     for source in rss_sources:
@@ -419,7 +431,7 @@ def fetch_rss_news():
             resp = get_session().get(source["url"], headers=headers, timeout=15)
             if resp.status_code != 200: continue
             feed = feedparser.parse(resp.text)
-            for entry in feed.entries[:20]:
+            for entry in feed.entries[:40]:
                 try:
                     title = entry.get("title", "").strip()
                     link = entry.get("link", "")
@@ -435,12 +447,30 @@ def fetch_rss_news():
                         "url": sanitize_url(link),
                         "is_important": False,
                         "category": "foreign",
-                        "source": source["name"]
+                        "source": source["name"],
+                        "_lang": source.get("lang", "zh"),
+                        "_title": title
                     })
                 except Exception as e: continue
             log(f"✅ [RSS引擎] {source['name']} 成功解析 {len(source_news)} 条")
             all_rss_news.extend(source_news)
         except Exception as e: log(f"❌ [RSS引擎] {source['name']} 失败: {e}")
+
+    # 英文源标题批量翻译 → display_content（命中缓存零开销；失败回退原标题）。
+    en_titles = [n["_title"] for n in all_rss_news if n.get("_lang") == "en" and n.get("_title")]
+    if en_titles:
+        translations = translate_batch(en_titles)
+        for n in all_rss_news:
+            if n.get("_lang") == "en":
+                zh = translations.get(n["_title"], "").strip()
+                if zh and zh != n["_title"]:
+                    n["display_content"] = f"【{n['source']}】{zh}"
+        log(f"✅ [RSS引擎] 英文源标题翻译 {len(en_titles)} 条完成")
+
+    # 清理内部临时字段，保持 finance-news.json 干净
+    for n in all_rss_news:
+        n.pop("_lang", None)
+        n.pop("_title", None)
     return all_rss_news
 
 # ================= 引擎 4：科技趋势聚合 (V2EX, HN, GitHub) =================
@@ -933,7 +963,7 @@ class SpiderApp:
                     if content_hash not in seen_sina:
                         unique_sina.append(item)
                         seen_sina.add(content_hash)
-                sina_1500 = unique_sina[:1500]
+                sina_1500 = unique_sina[:800]
 
                 # 取慢线程数据的快照（持锁极短，仅复制引用）
                 with self._data_lock:

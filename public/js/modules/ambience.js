@@ -82,20 +82,36 @@ export function initAmbience() {
     let lightningTimer = null;
     function scheduleLightning() {
         if (!lightning) return;
-        const delay = 18000 + Math.random() * 30000; // 18~48s 一次
+        const amb = window.__weatherAmbiance;
+        const isStorm = amb === 'storm';
+        // 雷暴：5~12s 一次、更亮、偶发双闪；普通雨：18~48s 一次、柔和
+        const delay = isStorm ? (5000 + Math.random() * 7000) : (18000 + Math.random() * 30000);
         lightningTimer = setTimeout(() => {
-            if (window.__weatherAmbiance === 'rain' && !reduceMotion) {
+            const a = window.__weatherAmbiance;
+            if ((a === 'rain' || a === 'storm') && !reduceMotion) {
+                const strong = a === 'storm';
+                lightning.classList.toggle('strong', strong);
                 lightning.classList.remove('flash');
                 void lightning.offsetWidth; // 重排以重启动画
                 lightning.classList.add('flash');
+                // 雷暴偶发双闪：首闪后 120~260ms 再补一道
+                if (strong && Math.random() < 0.4) {
+                    setTimeout(() => {
+                        if (window.__weatherAmbiance !== 'storm') return;
+                        lightning.classList.remove('flash');
+                        void lightning.offsetWidth;
+                        lightning.classList.add('flash');
+                    }, 120 + Math.random() * 140);
+                }
             }
             scheduleLightning();
         }, delay);
     }
     lightning && lightning.addEventListener('animationend', () => lightning.classList.remove('flash'));
 
-    // ---- 夜晚星空：缓慢闪烁的星点 ----
+    // ---- 夜晚星空：缓慢闪烁的星点 + 偶发流星 ----
     let stars = [], starAnimId = null, starCtx = null;
+    let meteors = [], nextMeteorAt = 0; // 流星：晴朗夜晚偶发划过
     function initStars() {
         if (!starCanvas) return;
         starCtx = starCanvas.getContext('2d');
@@ -115,6 +131,21 @@ export function initAmbience() {
             });
         }
     }
+    function spawnMeteor() {
+        // 从上方偏左随机点出发，向右下方斜划（符合常见流星观感）
+        const startX = Math.random() * starCanvas.width * 0.7;
+        const startY = Math.random() * starCanvas.height * 0.35;
+        const ang = (Math.PI / 5) + Math.random() * (Math.PI / 10); // 36°~54° 下斜
+        const speed = 9 + Math.random() * 6;
+        meteors.push({
+            x: startX, y: startY,
+            vx: Math.cos(ang) * speed,
+            vy: Math.sin(ang) * speed,
+            len: 90 + Math.random() * 70,   // 拖尾长度
+            life: 0,
+            maxLife: 60 + Math.random() * 30 // 帧数：约 1~1.5s
+        });
+    }
     function animateStars() {
         if (!starCtx) return;
         starCtx.clearRect(0, 0, starCanvas.width, starCanvas.height);
@@ -126,6 +157,39 @@ export function initAmbience() {
             starCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
             starCtx.fill();
         }
+
+        // ---- 流星：偶发生成，斜划带渐隐拖尾 ----
+        const now = performance.now();
+        if (nextMeteorAt === 0) nextMeteorAt = now + 8000 + Math.random() * 12000;
+        if (now >= nextMeteorAt) {
+            spawnMeteor();
+            nextMeteorAt = now + 8000 + Math.random() * 16000; // 8~24s 一颗
+        }
+        for (let i = meteors.length - 1; i >= 0; i--) {
+            const m = meteors[i];
+            m.x += m.vx; m.y += m.vy; m.life++;
+            // 头尾淡入淡出：进场 15% / 退场 30%
+            const p = m.life / m.maxLife;
+            let alpha = 1;
+            if (p < 0.15) alpha = p / 0.15;
+            else if (p > 0.7) alpha = Math.max(0, (1 - p) / 0.3);
+            const tailX = m.x - m.vx / Math.hypot(m.vx, m.vy) * m.len;
+            const tailY = m.y - m.vy / Math.hypot(m.vx, m.vy) * m.len;
+            const grad = starCtx.createLinearGradient(m.x, m.y, tailX, tailY);
+            grad.addColorStop(0, `rgba(255, 255, 255, ${(0.9 * alpha).toFixed(3)})`);
+            grad.addColorStop(0.3, `rgba(215, 232, 255, ${(0.5 * alpha).toFixed(3)})`);
+            grad.addColorStop(1, 'rgba(215, 232, 255, 0)');
+            starCtx.strokeStyle = grad;
+            starCtx.lineWidth = 1.6;
+            starCtx.lineCap = 'round';
+            starCtx.beginPath();
+            starCtx.moveTo(m.x, m.y);
+            starCtx.lineTo(tailX, tailY);
+            starCtx.stroke();
+            if (m.life >= m.maxLife || m.x > starCanvas.width + m.len || m.y > starCanvas.height + m.len) {
+                meteors.splice(i, 1);
+            }
+        }
         starAnimId = requestAnimationFrame(animateStars);
     }
     function refreshStarVisibility() {
@@ -133,7 +197,9 @@ export function initAmbience() {
         const isNight = document.body.dataset.daypart === 'night';
         // 雨/雪氛围下不显示星空，避免画面杂乱
         const ambiance = window.__weatherAmbiance;
-        const show = isNight && !reduceMotion && ambiance !== 'rain' && ambiance !== 'snow';
+        // 雨/雷暴/雪/雾 下不显示星空，避免画面杂乱
+        const hideFor = ['rain', 'storm', 'snow', 'fog'];
+        const show = isNight && !reduceMotion && !hideFor.includes(ambiance);
         if (show) {
             if (!stars.length) initStars();
             if (!starAnimId) animateStars();
@@ -141,6 +207,9 @@ export function initAmbience() {
         } else {
             starCanvas.style.opacity = '0';
             if (starAnimId) { cancelAnimationFrame(starAnimId); starAnimId = null; }
+            // 清空在途流星并重置计时，避免再次显示时残留半途流星突然出现
+            meteors = [];
+            nextMeteorAt = 0;
         }
     }
     window.addEventListener('resize', () => {
@@ -149,10 +218,16 @@ export function initAmbience() {
 
     // ---- 暴露给天气引擎调用的氛围切换钩子 ----
     window.__setAmbiance = function (ambiance) {
-        window.__weatherAmbiance = ambiance; // 'rain' | 'snow' | 'sun' | 'none'
+        window.__weatherAmbiance = ambiance; // 'rain' | 'storm' | 'snow' | 'sun' | 'fog' | 'cloudy' | 'none'
         const sunGlow = document.getElementById('sunGlow');
         if (sunGlow) sunGlow.classList.toggle('on', ambiance === 'sun');
-        if (ambiance === 'rain') { if (!lightningTimer) scheduleLightning(); }
+        // 雾气层：仅 fog 显示；云影层：仅 cloudy 显示
+        const fogLayer = document.getElementById('fogLayer');
+        if (fogLayer) fogLayer.classList.toggle('on', ambiance === 'fog');
+        const cloudLayer = document.getElementById('cloudLayer');
+        if (cloudLayer) cloudLayer.classList.toggle('on', ambiance === 'cloudy');
+        // 雷暴与普通雨都跑闪电调度（内部按 storm/rain 区分频率与强度）
+        if (ambiance === 'rain' || ambiance === 'storm') { if (!lightningTimer) scheduleLightning(); }
         refreshStarVisibility();
     };
 

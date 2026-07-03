@@ -267,18 +267,24 @@ function animateWeather() {
 
 const WEATHER_PROFILES = {
     rain: { overlay: 'rgba(38, 82, 130, 0.18)', particle: 'rain', ambiance: 'rain' },
+    storm: { overlay: 'rgba(28, 52, 92, 0.28)', particle: 'rain', ambiance: 'storm', heavy: true },
     sun: { overlay: 'rgba(255, 218, 128, 0.08)', particle: null, ambiance: 'sunny' },
     snow: { overlay: 'rgba(104, 126, 158, 0.18)', particle: 'snow', ambiance: 'snow' },
-    cloudy: { overlay: 'rgba(108, 122, 142, 0.12)', particle: null, ambiance: 'none' },
+    fog: { overlay: 'rgba(150, 158, 170, 0.16)', particle: null, ambiance: 'fog' },
+    cloudy: { overlay: 'rgba(108, 122, 142, 0.12)', particle: null, ambiance: 'cloudy' },
     none: { overlay: 'rgba(0, 0, 0, 0.12)', particle: null, ambiance: 'none' }
 };
 
+// 匹配优先按爬虫真实输出的 emoji，再兜底中英文关键字。
+// 顺序有讲究：雷暴(⛈️含雨意)先于雨；雾/多云放最后避免误吞。
 function weatherProfileFor(weatherKeyword) {
     const text = String(weatherKeyword || '');
+    if (text.includes('⛈️') || text.includes('雷')) return WEATHER_PROFILES.storm;
     if (text.includes('🌧️') || text.includes('雨')) return WEATHER_PROFILES.rain;
-    if (text.includes('☀️') || text.includes('晴')) return WEATHER_PROFILES.sun;
     if (text.includes('❄️') || text.includes('雪')) return WEATHER_PROFILES.snow;
-    if (/阴|云|雾|霾|霜|overcast|cloud|fog|haze/i.test(text)) return WEATHER_PROFILES.cloudy;
+    if (text.includes('☀️') || text.includes('晴')) return WEATHER_PROFILES.sun;
+    if (text.includes('🌫️') || /雾|霾|mist|fog|haze/i.test(text)) return WEATHER_PROFILES.fog;
+    if (text.includes('☁️') || /阴|云|霜|overcast|cloud/i.test(text)) return WEATHER_PROFILES.cloudy;
     return WEATHER_PROFILES.none;
 }
 
@@ -302,7 +308,8 @@ function applyEnvironmentFilter(weatherKeyword) {
 
     if (profile.particle) {
         currentWeatherType = profile.particle;
-        const n = particleCountFor(profile.particle);
+        let n = particleCountFor(profile.particle);
+        if (profile.heavy) n = Math.min(420, Math.round(n * 1.6)); // 雷暴：雨量更大
         for (let i = 0; i < n; i++) particles.push(new WeatherParticle(profile.particle, true));
         animateWeather();
     } else {
@@ -311,17 +318,17 @@ function applyEnvironmentFilter(weatherKeyword) {
     setWeatherAmbient(profile.ambiance);
 }
 
-// 氛围桥接：天气引擎 → 视觉增强钩子（晴天 sunny→sun，光晕/星空/雷暴在 ambience 内响应）
+// 氛围桥接：天气引擎 → 视觉增强钩子。ambience 认识的类型：
+// 'rain' | 'storm' | 'snow' | 'sun' | 'fog' | 'cloudy' | 'none'（sunny 归一到 sun）
 function setWeatherAmbient(kind) {
-    const map = { rain: 'rain', snow: 'snow', sunny: 'sun', none: 'none' };
-    const ambiance = map[kind] || 'none';
+    const ambiance = kind === 'sunny' ? 'sun' : (kind || 'none');
     if (typeof window.__setAmbiance === 'function') window.__setAmbiance(ambiance);
     else window.__weatherAmbiance = ambiance; // ambience 尚未就绪时暂存，初始化后会自行校准
 }
 
 let realWeather = '';
-const filterModes = ['auto', '阴', '晴', '雨', '雪'];
-const filterIcons = ['✨', '☁️', '☀️', '🌧️', '❄️'];
+const filterModes = ['auto', '晴', '阴', '雾', '雨', '雷', '雪'];
+const filterIcons = ['✨', '☀️', '☁️', '🌫️', '🌧️', '⛈️', '❄️'];
 let currentFilterIndex = 0;
 
 function toggleWeatherFilter() {
