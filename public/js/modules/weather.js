@@ -329,6 +329,10 @@ function applyEnvironmentFilter(weatherKeyword) {
     setWeatherOverlay(overlay, profile);
 
     currentWeatherType = profile.particle;
+    // 全屏雨雪粒子运行时暂停 WebGL 涟漪，避免两套高频背景动画争抢 GPU。
+    window.dispatchEvent(new CustomEvent('gx:weather-motion', {
+        detail: { active: Boolean(currentWeatherType) },
+    }));
     if (profile.particle && !reduceMotion) {
         let n = particleCountFor(profile.particle);
         if (profile.heavy) n = Math.min(420, Math.round(n * 1.6)); // 雷暴：雨量更大
