@@ -3,15 +3,21 @@
 
 const canvas = document.getElementById('weatherCanvas');
 const ctx = canvas.getContext('2d');
+const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
 let particles = [];
 let animationId = null;
 let uiBounds = [];
 let currentWeatherType = null;   // 'rain' | 'snow' | null
 let canvasFade = 0;              // 切换天气时的画布淡入 (0→1)
+let reduceMotion = motionPreference.matches;
+let weatherPollTimer = null;
+let weatherRequestInFlight = false;
+const WEATHER_POLL_INTERVAL = 600000;
 
 // 鼠标气流场：粒子在光标附近被推开/打旋
 const mouse = { x: -9999, y: -9999, vx: 0, vy: 0, active: false, lastMove: 0 };
 window.addEventListener('pointermove', (e) => {
+    if (reduceMotion || document.hidden) return;
     mouse.vx = e.clientX - mouse.x;
     mouse.vy = e.clientY - mouse.y;
     mouse.x = e.clientX;
@@ -251,7 +257,23 @@ function drawSnowLedges() {
 }
 
 let _uiBoundsFrame = 0;
+function shouldAnimateWeather() {
+    return !reduceMotion && !document.hidden && Boolean(currentWeatherType) && particles.length > 0;
+}
+
+function stopWeatherAnimation() {
+    if (animationId !== null) cancelAnimationFrame(animationId);
+    animationId = null;
+}
+
+function startWeatherAnimation() {
+    if (!shouldAnimateWeather() || animationId !== null) return;
+    animationId = requestAnimationFrame(animateWeather);
+}
+
 function animateWeather() {
+    animationId = null;
+    if (!shouldAnimateWeather()) return;
     _uiBoundsFrame++;
     if (_uiBoundsFrame % 60 === 0) _uiBoundsDirty = true;
     updateUIBounds();
@@ -295,7 +317,7 @@ function setWeatherOverlay(overlay, profile) {
 
 function applyEnvironmentFilter(weatherKeyword) {
     const overlay = document.getElementById('weatherOverlay');
-    cancelAnimationFrame(animationId);
+    stopWeatherAnimation();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     particles = [];
     canvasFade = 0;
@@ -306,14 +328,12 @@ function applyEnvironmentFilter(weatherKeyword) {
     const profile = weatherProfileFor(weatherKeyword);
     setWeatherOverlay(overlay, profile);
 
-    if (profile.particle) {
-        currentWeatherType = profile.particle;
+    currentWeatherType = profile.particle;
+    if (profile.particle && !reduceMotion) {
         let n = particleCountFor(profile.particle);
         if (profile.heavy) n = Math.min(420, Math.round(n * 1.6)); // 雷暴：雨量更大
         for (let i = 0; i < n; i++) particles.push(new WeatherParticle(profile.particle, true));
-        animateWeather();
-    } else {
-        currentWeatherType = null;
+        startWeatherAnimation();
     }
     setWeatherAmbient(profile.ambiance);
 }
@@ -341,7 +361,7 @@ function toggleWeatherFilter() {
 
 async function fetchWeather() {
     try {
-        const response = await fetch('./weather.txt?t=' + Date.now());
+        const response = await fetch('./weather.txt', { cache: 'no-cache' });
         if (!response.ok) throw new Error();
         const text = await response.text();
         if (!text.includes('失败')) {
@@ -353,9 +373,38 @@ async function fetchWeather() {
 }
 
 export function initWeather() {
-    fetchWeather();
-    setInterval(fetchWeather, 600000);
-}
+    document.getElementById('filterBtn')?.addEventListener('click', toggleWeatherFilter);
+    const currentKeyword = () => filterModes[currentFilterIndex] === 'auto'
+        ? realWeather
+        : filterModes[currentFilterIndex];
 
-// onclick="toggleWeatherFilter()" 内联引用
-window.toggleWeatherFilter = toggleWeatherFilter;
+    const poll = async () => {
+        if (document.hidden || weatherRequestInFlight) return;
+        weatherRequestInFlight = true;
+        try {
+            await fetchWeather();
+        } finally {
+            weatherRequestInFlight = false;
+            if (!document.hidden) weatherPollTimer = window.setTimeout(poll, WEATHER_POLL_INTERVAL);
+        }
+    };
+    document.addEventListener('visibilitychange', () => {
+        window.clearTimeout(weatherPollTimer);
+        weatherPollTimer = null;
+        if (document.hidden) stopWeatherAnimation();
+        else {
+            startWeatherAnimation();
+            poll();
+        }
+    });
+    const handleMotionPreference = event => {
+        reduceMotion = event.matches;
+        applyEnvironmentFilter(currentKeyword());
+    };
+    if (typeof motionPreference.addEventListener === 'function') {
+        motionPreference.addEventListener('change', handleMotionPreference);
+    } else {
+        motionPreference.addListener(handleMotionPreference);
+    }
+    poll();
+}

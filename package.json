@@ -5,9 +5,15 @@
   "description": "Tailwind 静态预编译工具链（仅开发期使用，产物 public/vendor/app.css 随仓库提交，VPS 无需构建）",
   "scripts": {
     "build:css": "tailwindcss -c tailwind.config.js -i build/tailwind-input.css -o public/vendor/app.css --minify",
-    "watch:css": "tailwindcss -c tailwind.config.js -i build/tailwind-input.css -o public/vendor/app.css --watch"
+    "watch:css": "tailwindcss -c tailwind.config.js -i build/tailwind-input.css -o public/vendor/app.css --watch",
+    "vendor:sync": "node .github/scripts/sync-vendor.mjs",
+    "vendor:check": "node .github/scripts/sync-vendor.mjs --check",
+    "check:css": "node .github/scripts/check-css.mjs",
+    "check:js": "node .github/scripts/check-js.mjs",
+    "check": "npm run vendor:check && npm run check:css && npm run check:js"
   },
   "devDependencies": {
+    "dompurify": "3.4.12",
     "tailwindcss": "3.4.17"
   }
 }

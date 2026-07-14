@@ -1,4 +1,5 @@
-requests>=2.31,<3
-feedparser>=6.0,<7
-Pillow>=10.0,<12
-deep-translator>=1.11,<2
+# Production direct dependencies are exact-pinned so image rebuilds do not
+# silently move to a different direct dependency release.
+requests==2.34.2
+feedparser==6.0.12
+Pillow==12.3.0

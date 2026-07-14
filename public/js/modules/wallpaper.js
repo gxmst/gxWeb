@@ -166,8 +166,10 @@ export function toggleWallpaper() {
 }
 
 export async function initWallpapers() {
+    document.getElementById('wallpaperBtn')?.addEventListener('click', toggleWallpaper);
     try {
-        const resp = await fetch('./wallpapers.json?t=' + Date.now());
+        const resp = await fetch('./wallpapers.json', { cache: 'no-cache' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         wallpapersArray = await resp.json();
         if (wallpapersArray && wallpapersArray.length > 0) {
             const lastIndex = Number.parseInt(safeStorageGet('lastWallpaperIndex', '-1'), 10);
@@ -191,6 +193,7 @@ export async function initWallpapers() {
             }
             // 列表加载成功后激活切换按钮
             const btn = document.getElementById('wallpaperBtn');
+            btn.disabled = false;
             btn.style.opacity = '1';
             btn.style.pointerEvents = 'auto';
         }
@@ -198,6 +201,3 @@ export async function initWallpapers() {
         console.error("加载壁纸列表失败:", e);
     }
 }
-
-// 内联 onclick 引用的全局函数
-window.toggleWallpaper = toggleWallpaper;

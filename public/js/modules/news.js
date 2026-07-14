@@ -2,13 +2,19 @@
 let allNewsData = [];
 let hasLoadedNews = false;
 let currentFilter = 'all';
-let lastFirstNewsHash = '';
+let lastNewsSignature = '';
 let currentFontSize = 'sm';
+let newsPollTimer = null;
+let newsRequestInFlight = false;
+
+const NEWS_POLL_INTERVAL = 30000;
+const MAX_NEWS_ITEMS = 400;
 
 // 供 wallpaper.js 取色后重新对齐指示器读取当前分类
 export function getCurrentFilter() { return currentFilter; }
 
 function simpleHash(str) {
+    str = String(str || '');
     let h = 0;
     for (let i = 0; i < str.length; i++) {
         h = ((h << 5) - h + str.charCodeAt(i)) | 0;
@@ -16,18 +22,99 @@ function simpleHash(str) {
     return h;
 }
 
-// 统一渲染函数：根据当前数据和过滤条件，全量重绘列表
-function renderNewsList() {
+function newsIdentity(news) {
+    const explicitId = news.id ?? news.news_id ?? news.feed_id;
+    if (explicitId !== undefined && explicitId !== null && explicitId !== '') return `id-${explicitId}`;
+    return `item-${simpleHash([
+        news.category, news.source, news.raw_time, news.time, news.url, news.content
+    ].join('\u241f')) >>> 0}`;
+}
+
+function assignClientKeys(newsList) {
+    const occurrences = new Map();
+    return newsList.slice(0, MAX_NEWS_ITEMS).map(news => {
+        const base = newsIdentity(news);
+        const occurrence = occurrences.get(base) || 0;
+        occurrences.set(base, occurrence + 1);
+        return { ...news, _clientKey: occurrence ? `${base}-${occurrence}` : base };
+    });
+}
+
+function newsRenderSignature(news) {
+    return String(simpleHash(JSON.stringify([
+        news._clientKey, news.time, news.display_content, news.content, news.url,
+        news.category, news.format, Boolean(news.is_important), currentFontSize
+    ])) >>> 0);
+}
+
+function datasetSignature(newsList) {
+    return String(simpleHash(JSON.stringify(newsList.map(news => [
+        news._clientKey, news.time, news.display_content, news.content, news.url,
+        news.category, news.format, Boolean(news.is_important)
+    ]))) >>> 0);
+}
+
+function formatLastUpdated(timestamp, fallback) {
+    const value = Number(timestamp);
+    if (!Number.isFinite(value) || value <= 0) return fallback || '刚刚';
+    return new Date(value * 1000).toLocaleTimeString('zh-CN', {
+        hour: '2-digit', minute: '2-digit', hour12: false
+    });
+}
+
+function setNewsStatus(kind) {
+    const status = document.getElementById('newsHeartbeatStatus');
+    const text = document.getElementById('newsStatusText');
+    const ping = document.getElementById('newsStatusPing');
+    const dot = document.getElementById('newsStatusDot');
+    if (!status || !text || !ping || !dot) return;
+    const offline = kind === 'offline';
+    text.textContent = offline ? '断连' : 'LIVE';
+    text.className = `text-[10px] font-bold ${offline ? 'text-red-400' : 'text-green-400'}`;
+    ping.className = offline
+        ? 'hidden'
+        : 'animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75';
+    dot.className = `relative inline-flex rounded-full h-2 w-2 ${offline ? 'bg-red-500' : 'bg-green-500'}`;
+    status.title = offline ? '快讯连接失败，保留上次成功数据' : '快讯连接正常';
+}
+
+function emptyMessage(text) {
+    const empty = document.createElement('div');
+    empty.className = 'text-center text-white/30 mt-10 text-sm';
+    empty.textContent = text;
+    return empty;
+}
+
+// 使用稳定 key 对齐、更新、重排和删除节点；服务端删掉的条目不会留在 DOM 中。
+function renderNewsList(newKeys = new Set(), preserveScroll = false) {
     const listContainer = document.getElementById('newsList');
     const filtered = allNewsData.filter(applyFilter);
 
     updateTabCounts();
+    listContainer.setAttribute('aria-labelledby', `tab-${currentFilter}`);
     if (!hasLoadedNews && allNewsData.length === 0) return;
-    listContainer.innerHTML = '';
+    const oldScroll = listContainer.scrollTop;
+    const oldHeight = listContainer.scrollHeight;
+    const existing = new Map(
+        Array.from(listContainer.querySelectorAll('[data-news-key]'))
+            .map(element => [element.dataset.newsKey, element])
+    );
+    const fragment = document.createDocumentFragment();
     if (filtered.length === 0) {
-        listContainer.innerHTML = '<div class="text-center text-white/30 mt-10 text-sm">暂无对应快讯</div>';
+        fragment.appendChild(emptyMessage('暂无对应快讯'));
     } else {
-        filtered.forEach(n => listContainer.appendChild(createNewsElement(n)));
+        filtered.forEach(news => {
+            const signature = newsRenderSignature(news);
+            let element = existing.get(news._clientKey);
+            if (!element || element.dataset.newsSignature !== signature) {
+                element = createNewsElement(news, newKeys.has(news._clientKey));
+            }
+            fragment.appendChild(element);
+        });
+    }
+    listContainer.replaceChildren(fragment);
+    if (preserveScroll && oldScroll > 10) {
+        listContainer.scrollTop = Math.max(0, oldScroll + listContainer.scrollHeight - oldHeight);
     }
 }
 
@@ -45,11 +132,13 @@ function withViewTransition(mutate) {
 
 // 字体切换 (0 延时本地秒切)
 export function setFontSize(size) {
+    if (!['sm', 'base', 'lg'].includes(size)) return;
     currentFontSize = size;
     ['sm', 'base', 'lg'].forEach(s => {
         const btn = document.getElementById('fs-' + s);
         if (s === size) { btn.classList.add('bg-white/20', 'text-white'); btn.classList.remove('text-white/50'); }
         else { btn.classList.remove('bg-white/20', 'text-white'); btn.classList.add('text-white/50'); }
+        btn.setAttribute('aria-pressed', String(s === size));
     });
     withViewTransition(renderNewsList);
 }
@@ -93,10 +182,16 @@ function updateTabCounts() {
 
 // 切换分类 Tab
 export function setFilter(filter) {
+    if (!['all', 'news', 'foreign', 'tech'].includes(filter)) return;
     currentFilter = filter;
     ['all', 'news', 'foreign', 'tech'].forEach(t => {
         const btn = document.getElementById('tab-' + t);
-        if (btn) btn.classList.toggle('active', t === filter);
+        if (btn) {
+            const active = t === filter;
+            btn.classList.toggle('active', active);
+            btn.setAttribute('aria-selected', String(active));
+            btn.tabIndex = active ? 0 : -1;
+        }
     });
     moveTabIndicator(filter);
     withViewTransition(renderNewsList);
@@ -132,6 +227,8 @@ function createNewsElement(news, isNew = false) {
     const importantClass = news.is_important ? ' is-important' : '';
 
     item.className = `news-feed-item${importantClass} py-2.5 [&_a]:text-blue-400 [&_a]:underline [&_a]:hover:text-blue-300` + (isNew ? ' animate-slide-down' : '');
+    item.dataset.newsKey = news._clientKey;
+    item.dataset.newsSignature = newsRenderSignature(news);
 
     header.className = 'text-[11px] text-white/40 font-mono mb-0.5 flex items-center';
     header.append(document.createTextNode(news.time || ''));
@@ -184,11 +281,11 @@ function applyFilter(n) {
 
 async function fetchRealNews() {
     try {
-        const response = await fetch('./finance-news.json?t=' + Date.now());
+        const response = await fetch('./finance-news.json', { cache: 'no-cache' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
 
-        const newsList = (data.news_list || []).map(item => {
+        const newsList = assignClientKeys((data.news_list || []).map(item => {
             const normalized = { ...item };
             if (!normalized.category) {
                 if ((normalized.content || '').includes('GitHub') || (normalized.content || '').includes('HN') || (normalized.content || '').includes('V2EX')) normalized.category = 'tech';
@@ -197,11 +294,12 @@ async function fetchRealNews() {
             }
             if (!normalized.format) normalized.format = normalized.category === 'tech' && !normalized.url ? 'html' : 'text';
             return normalized;
-        });
+        }));
+        setNewsStatus('online');
         if (!newsList || newsList.length === 0) {
             hasLoadedNews = true;
             allNewsData = [];
-            lastFirstNewsHash = '';
+            lastNewsSignature = datasetSignature([]);
             document.getElementById('lastUpdateTime').innerText = '暂无数据';
             const sk = document.getElementById('newsSkeleton');
             if (sk) sk.remove();
@@ -209,60 +307,29 @@ async function fetchRealNews() {
             return;
         }
 
-        const listContainer = document.getElementById('newsList');
+        const nextSignature = datasetSignature(newsList);
+        const previousKeys = new Set(allNewsData.map(news => news._clientKey));
+        const newKeys = new Set(newsList.filter(news => !previousKeys.has(news._clientKey)).map(news => news._clientKey));
+        const firstLoad = !hasLoadedNews;
+        hasLoadedNews = true;
+        document.getElementById('lastUpdateTime').textContent = formatLastUpdated(data.last_updated, newsList[0].time);
+        const sk = document.getElementById('newsSkeleton');
+        if (sk) sk.remove();
 
-        // 首次加载：初始化数据并全量渲染
-        if (allNewsData.length === 0) {
-            hasLoadedNews = true;
+        // 比较整个有界数据集，而不是只看第一条；重要置顶不再遮蔽普通新闻更新。
+        if (firstLoad || nextSignature !== lastNewsSignature) {
             allNewsData = newsList;
-            lastFirstNewsHash = simpleHash(newsList[0].content);
-            document.getElementById('lastUpdateTime').innerText = `${newsList[0].time}`;
-            const sk = document.getElementById('newsSkeleton');
-            if (sk) sk.remove();
-            renderNewsList();
-            return;
-        }
-
-        // 增量同步：发现新数据时，执行平滑插入
-        const newFirstHash = simpleHash(newsList[0].content);
-        if (newFirstHash !== lastFirstNewsHash) {
-            const newItems = [];
-            for (let n of newsList) {
-                if (simpleHash(n.content) === lastFirstNewsHash) break;
-                if (applyFilter(n)) newItems.push(n);
-            }
-
-            allNewsData = newsList;
-            document.getElementById('lastUpdateTime').innerText = `${newsList[0].time}`;
-            updateTabCounts();
-
-            if (newItems.length > 0) {
-                const currentScroll = listContainer.scrollTop;
-                const oldHeight = listContainer.scrollHeight;
-
-                newItems.reverse().forEach(n => {
-                    listContainer.prepend(createNewsElement(n, true));
-                });
-
-                if (currentScroll > 10) {
-                    listContainer.scrollTop = currentScroll + (listContainer.scrollHeight - oldHeight);
-                }
-            } else {
-                renderNewsList();
-            }
-            lastFirstNewsHash = newFirstHash;
+            renderNewsList(firstLoad ? new Set() : newKeys, !firstLoad);
+            lastNewsSignature = nextSignature;
         }
     } catch (e) {
         console.error("快讯同步失败:", e);
-        document.getElementById('statusText').innerText = '断连';
-        document.getElementById('statusText').className = 'text-[10px] font-bold text-red-400';
-        document.getElementById('statusPing').className = 'hidden';
-        document.getElementById('statusDot').className = 'relative inline-flex rounded-full h-2 w-2 bg-red-500';
+        setNewsStatus('offline');
         if (!hasLoadedNews) {
             hasLoadedNews = true;
             const listContainer = document.getElementById('newsList');
             if (listContainer) {
-                listContainer.innerHTML = '<div class="text-center text-white/30 mt-10 text-sm">快讯暂不可用</div>';
+                listContainer.replaceChildren(emptyMessage('快讯暂不可用'));
             }
             document.getElementById('lastUpdateTime').innerText = '连接失败';
         }
@@ -271,12 +338,40 @@ async function fetchRealNews() {
 
 export function initNews() {
     setFilter('all');                  // 初始化激活态 + 滑动指示器定位
-    fetchRealNews();
-    setInterval(fetchRealNews, 30000);
+    document.querySelectorAll('[data-font-size]').forEach(button => {
+        button.addEventListener('click', () => setFontSize(button.dataset.fontSize));
+    });
+    const tabs = Array.from(document.querySelectorAll('[role="tab"][data-filter]'));
+    tabs.forEach(button => button.addEventListener('click', () => setFilter(button.dataset.filter)));
+    document.getElementById('tabBar')?.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const activeIndex = tabs.findIndex(button => button.dataset.filter === currentFilter);
+        let nextIndex = activeIndex;
+        if (event.key === 'Home') nextIndex = 0;
+        else if (event.key === 'End') nextIndex = tabs.length - 1;
+        else nextIndex = (activeIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+        setFilter(tabs[nextIndex].dataset.filter);
+        tabs[nextIndex].focus();
+    });
+
+    const poll = async () => {
+        if (document.hidden || newsRequestInFlight) return;
+        newsRequestInFlight = true;
+        try {
+            await fetchRealNews();
+        } finally {
+            newsRequestInFlight = false;
+            if (!document.hidden) newsPollTimer = window.setTimeout(poll, NEWS_POLL_INTERVAL);
+        }
+    };
+    const handleVisibility = () => {
+        window.clearTimeout(newsPollTimer);
+        newsPollTimer = null;
+        if (!document.hidden) poll();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    poll();
     // 窗口尺寸变化时重新对齐指示器（tab 宽度会随之变化）
     window.addEventListener('resize', () => moveTabIndicator(currentFilter));
 }
-
-// HTML 内联 onclick 引用的全局函数（setFilter('all') / setFontSize('sm')）
-window.setFilter = setFilter;
-window.setFontSize = setFontSize;

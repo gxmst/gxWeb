@@ -21,11 +21,14 @@ export function initInteractions() {
     const newsListEl = document.getElementById('newsList');
     const bttBtn = document.getElementById('backToTop');
     newsListEl.addEventListener('scroll', () => {
-        if (newsListEl.scrollTop > 300) { bttBtn.classList.remove('opacity-0', 'pointer-events-none'); bttBtn.classList.add('opacity-100'); }
-        else { bttBtn.classList.add('opacity-0', 'pointer-events-none'); bttBtn.classList.remove('opacity-100'); }
+        const visible = newsListEl.scrollTop > 300;
+        bttBtn.classList.toggle('opacity-0', !visible);
+        bttBtn.classList.toggle('pointer-events-none', !visible);
+        bttBtn.classList.toggle('opacity-100', visible);
+        bttBtn.disabled = !visible;
+        bttBtn.setAttribute('aria-hidden', String(!visible));
     });
-    // onclick="scrollToTop()" 内联引用，挂到 window
-    window.scrollToTop = function scrollToTop() { newsListEl.scrollTo({ top: 0, behavior: 'smooth' }); };
+    bttBtn.addEventListener('click', () => newsListEl.scrollTo({ top: 0, behavior: 'smooth' }));
 
     // 侧边栏拖拽拉伸
     const aside = document.querySelector('aside');

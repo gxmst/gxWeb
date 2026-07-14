@@ -15,7 +15,6 @@ from json import JSONDecodeError
 from datetime import datetime, timedelta, timezone
 from PIL import Image
 import io
-from deep_translator import GoogleTranslator
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from urllib.parse import urlparse
@@ -80,10 +79,12 @@ def get_random_ua():
 
 def build_http_session():
     retry = Retry(
-        total=3,
-        connect=3,
-        read=3,
-        backoff_factor=1,
+        # 每个请求最多 3 次（首次 + 2 次重试）。调用方不再叠加手工重试，
+        # 避免故障时一次抓取被放大成十几次请求并拖垮调度周期。
+        total=2,
+        connect=2,
+        read=2,
+        backoff_factor=0.5,
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["GET"],
         raise_on_status=False
@@ -134,15 +135,35 @@ def build_ticker_entry(config, price, previous_close, source=None):
         "source": source or "Sina"
     }
 
-def atomic_save_json(path, data):
-    tmp_path = f"{path}.tmp"
+def _atomic_write(path, write_callback):
+    """先写同目录临时文件再替换目标；失败时保留旧文件并向上抛出。"""
+    tmp_path = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
     try:
         with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+            write_callback(f)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp_path, path)
     except Exception as e:
         log(f"❌ [系统] 原子化保存失败 ({path}): {e}")
-        if os.path.exists(tmp_path): os.remove(tmp_path)
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except OSError as cleanup_error:
+            log(f"⚠️ [系统] 清理临时文件失败 ({tmp_path}): {cleanup_error}")
+        raise
+    return True
+
+def atomic_save_json(path, data):
+    """原子写 JSON。成功返回 True，失败记录日志并抛出原始异常。"""
+    return _atomic_write(
+        path,
+        lambda f: json.dump(data, f, ensure_ascii=False, indent=2)
+    )
+
+def atomic_save_text(path, text):
+    """原子写纯文本，语义与 atomic_save_json 一致。"""
+    return _atomic_write(path, lambda f: f.write(text))
 
 def atomic_load_json(path, default=None):
     if default is None:
@@ -178,9 +199,37 @@ def sanitize_url(url):
 
 TRANSLATE_CACHE_PATH = "./public/translate-cache.json"
 TRANSLATE_CACHE_MAX = 2000
+try:
+    TRANSLATE_API_TIMEOUT = max(
+        1.0, float(os.getenv("TRANSLATE_API_TIMEOUT", "15"))
+    )
+except ValueError:
+    TRANSLATE_API_TIMEOUT = 15.0
 _translate_cache = {}
 _translate_lock = threading.Lock()
 _translate_dirty = False
+
+def _translate_text(text):
+    """通过 Google Translate 公共 HTTP 端点翻译，避免引入无修复版本的第三方安装包。"""
+    response = get_session().get(
+        "https://translate.googleapis.com/translate_a/single",
+        params={"client": "gtx", "sl": "en", "tl": "zh-CN", "dt": "t", "q": text},
+        headers={"User-Agent": get_random_ua()},
+        timeout=(5, TRANSLATE_API_TIMEOUT),
+    )
+    response.raise_for_status()
+    payload = parse_json_response(response, "翻译服务")
+    segments = payload[0] if isinstance(payload, list) and payload else None
+    if not isinstance(segments, list):
+        raise ValueError("翻译服务返回格式无效")
+    translated = "".join(
+        str(segment[0])
+        for segment in segments
+        if isinstance(segment, list) and segment and segment[0]
+    ).strip()
+    if not translated:
+        raise ValueError("翻译服务返回空结果")
+    return translated
 
 def _load_translate_cache():
     """启动时从磁盘加载翻译缓存——避免容器重启后重新翻译已知文本。"""
@@ -195,10 +244,15 @@ def _persist_translate_cache():
     global _translate_dirty
     with _translate_lock:
         if not _translate_dirty:
-            return
+            return False
         snapshot = dict(_translate_cache)
-        _translate_dirty = False
+    # 写盘失败会抛出；dirty 保持 True，下一批仍会重试。
     atomic_save_json(TRANSLATE_CACHE_PATH, snapshot)
+    with _translate_lock:
+        # 保存期间若有新翻译写入，不可把新变化误标为已落盘。
+        if _translate_cache == snapshot:
+            _translate_dirty = False
+    return True
 
 def translate_en_to_zh(text):
     """单条翻译——保留旧签名用于零散调用。批量翻译用 translate_batch 性能更好。"""
@@ -209,9 +263,12 @@ def translate_en_to_zh(text):
         if cache_key in _translate_cache:
             return _translate_cache[cache_key]
     try:
-        translated = GoogleTranslator(source='en', target='zh-CN').translate(text)
+        translated = _translate_text(text)
     except Exception as e:
         log(f"⚠️ [翻译引擎] 失败: {e}")
+        return text
+    if not translated:
+        log("⚠️ [翻译引擎] 返回空结果，使用原文且不写入缓存。")
         return text
     global _translate_dirty
     with _translate_lock:
@@ -230,6 +287,7 @@ def translate_batch(texts, max_workers=4):
     """
     result = {}
     pending = []
+    pending_keys = set()
     with _translate_lock:
         for t in texts:
             if not t:
@@ -239,8 +297,9 @@ def translate_batch(texts, max_workers=4):
             cached = _translate_cache.get(key)
             if cached is not None:
                 result[t] = cached
-            else:
+            elif key not in pending_keys:
                 pending.append((t, key))
+                pending_keys.add(key)
 
     if not pending:
         return result
@@ -248,19 +307,24 @@ def translate_batch(texts, max_workers=4):
     def _do(item):
         text, key = item
         try:
-            return key, text, GoogleTranslator(source='en', target='zh-CN').translate(text)
+            translated = _translate_text(text)
+            if not translated:
+                raise ValueError("翻译服务返回空结果")
+            return key, text, translated, True
         except Exception as e:
             log(f"⚠️ [翻译引擎] 失败: {e}")
-            return key, text, text
+            return key, text, text, False
 
     global _translate_dirty
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         for fut in as_completed([ex.submit(_do, p) for p in pending]):
-            key, text, translated = fut.result()
+            key, text, translated, succeeded = fut.result()
             result[text] = translated
-            with _translate_lock:
-                _translate_cache[key] = translated
-                _translate_dirty = True
+            # 原文只是本轮展示降级，不代表一次成功翻译；失败结果不能污染持久缓存。
+            if succeeded:
+                with _translate_lock:
+                    _translate_cache[key] = translated
+                    _translate_dirty = True
 
     with _translate_lock:
         if len(_translate_cache) > TRANSLATE_CACHE_MAX:
@@ -275,18 +339,21 @@ def fetch_bing_wallpaper():
     try:
         url = "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=5&mkt=zh-CN"
         headers = {"User-Agent": get_random_ua()}
-        data = get_session().get(url, headers=headers, timeout=10).json()
+        metadata_resp = get_session().get(url, headers=headers, timeout=10)
+        metadata_resp.raise_for_status()
+        data = metadata_resp.json()
         images = data.get("images") or []
         if not images:
-            log("⚠️ [壁纸引擎] 必应未返回图片列表，保留昨日壁纸不动。")
-            return
+            raise ValueError("必应未返回图片列表")
 
         # 先把新图下到内存里全部就绪，再原子化替换旧文件——
         # 防止下到一半失败时，磁盘上同时存在新旧两批 bg_*.jpg，wallpapers.json 误列。
         new_images = []
         for i, item in enumerate(images):
             img_url = "https://www.bing.com" + item["url"]
-            img_data = get_session().get(img_url, headers={"User-Agent": get_random_ua()}, timeout=15).content
+            img_resp = get_session().get(img_url, headers={"User-Agent": get_random_ua()}, timeout=15)
+            img_resp.raise_for_status()
+            img_data = img_resp.content
             new_images.append((i, Image.open(io.BytesIO(img_data)).convert('RGB')))
 
         # 原子化替换：先写 bg_N.jpg.tmp，全部 save 成功后再逐个 os.replace 就位。
@@ -324,12 +391,14 @@ def fetch_bing_wallpaper():
                         os.remove(os.path.join("./public", old))
                     except OSError as e:
                         log(f"⚠️ [壁纸引擎] 清理旧壁纸 {old} 失败: {e}")
-    except Exception as e: log(f"❌ [壁纸引擎] 获取失败: {e}")
+        return len(new_images)
+    except Exception as e:
+        log(f"❌ [壁纸引擎] 获取失败: {e}")
+        raise
 
 def update_wallpaper_list():
     favorite_dir = "./public/favorite"
-    if not os.path.exists(favorite_dir):
-        os.makedirs(favorite_dir)
+    os.makedirs(favorite_dir, exist_ok=True)
 
     favorite_files = []
     try:
@@ -339,67 +408,71 @@ def update_wallpaper_list():
                 favorite_files.append(f"favorite/{f}")
     except Exception as e:
         log(f"❌ [壁纸引擎] 扫描收藏夹失败: {e}")
+        # 扫描失败时不能把现有收藏列表覆盖成空。
+        raise
 
     bing_files = [f"bg_{i}.jpg" for i in range(5) if os.path.exists(f"./public/bg_{i}.jpg")]
     wallpapers = favorite_files + bing_files
 
-    atomic_save_json("./public/wallpapers.json", wallpapers)
-    log(f"✅ [壁纸引擎] 已更新 wallpapers.json，共包含 {len(wallpapers)} 张壁纸。")
+    if atomic_save_json("./public/wallpapers.json", wallpapers):
+        log(f"✅ [壁纸引擎] 已更新 wallpapers.json，共包含 {len(wallpapers)} 张壁纸。")
+    return len(wallpapers)
 
 # ================= 引擎 2：新浪快讯 =================
 SINA_PAGES = 3  # 该接口 page_size 上限 100/页，翻 3 页 ≈ 300 条
 
 def _fetch_sina_page(page):
-    """抓单页新浪快讯，返回解析后的 news dict 列表；失败自带重试。"""
+    """抓单页新浪快讯；连接与状态码重试统一交给 Session 的 Retry。"""
     url = f"https://zhibo.sina.com.cn/api/zhibo/feed?page={page}&page_size=100&zhibo_id=152"
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            headers = {"User-Agent": get_random_ua()}
-            resp = get_session().get(url, headers=headers, timeout=15)
-            data = resp.json()
-            items = data.get("result", {}).get("data", {}).get("feed", {}).get("list", [])
+    headers = {"User-Agent": get_random_ua()}
+    resp = get_session().get(url, headers=headers, timeout=15)
+    resp.raise_for_status()
+    data = parse_json_response(resp, f"新浪快讯第 {page} 页")
+    items = data.get("result", {}).get("data", {}).get("feed", {}).get("list", [])
 
-            page_news = []
-            for item in items:
-                clean_txt = clean_html(item.get("rich_text", "").replace("<br>", ""))
-                if not clean_txt:
-                    continue
-                is_important = str(item.get("focus", "0")) == "1" or str(item.get("is_top", "0")) == "1"
-                ts_val = item.get("create_time")
-                try:
-                    if isinstance(ts_val, str):
-                        dt = datetime.strptime(ts_val, '%Y-%m-%d %H:%M:%S')
-                        ts = int(dt.timestamp())
-                        time_str = dt.strftime('%H:%M')
-                    else:
-                        ts = int(ts_val)
-                        time_str = (datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(timezone(timedelta(hours=8)))).strftime('%H:%M')
-                except Exception:
-                    now = get_beijing_time(); ts = int(now.timestamp()); time_str = now.strftime('%H:%M')
-                page_news.append({
-                    "time": time_str,
-                    "raw_time": ts,
-                    "content": f"【新浪】{clean_txt}",
-                    "url": "",
-                    "is_important": is_important,
-                    "category": "news",
-                    "source": "sina"
-                })
-            return page_news
-        except Exception as e:
-            log(f"⚠️ [新浪引擎] 第 {page} 页第 {attempt + 1} 次尝试失败: {e}")
-            if attempt < max_retries - 1:
-                time.sleep(2)
-    log(f"❌ [新浪引擎] 第 {page} 页达到最大重试次数，跳过。")
-    return []
+    page_news = []
+    for item in items:
+        clean_txt = clean_html(item.get("rich_text", "").replace("<br>", ""))
+        if not clean_txt:
+            continue
+        is_important = str(item.get("focus", "0")) == "1" or str(item.get("is_top", "0")) == "1"
+        ts_val = item.get("create_time")
+        try:
+            if isinstance(ts_val, str):
+                # 新浪返回北京时间但不带时区；显式附加 UTC+8，避免容器使用 UTC 时 raw_time 偏 8 小时。
+                dt = datetime.strptime(ts_val, '%Y-%m-%d %H:%M:%S').replace(
+                    tzinfo=timezone(timedelta(hours=8))
+                )
+                ts = int(dt.timestamp())
+                time_str = dt.strftime('%H:%M')
+            else:
+                ts = int(ts_val)
+                time_str = (datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(timezone(timedelta(hours=8)))).strftime('%H:%M')
+        except Exception:
+            now = get_beijing_time(); ts = int(now.timestamp()); time_str = now.strftime('%H:%M')
+        page_news.append({
+            "time": time_str,
+            "raw_time": ts,
+            "content": f"【新浪】{clean_txt}",
+            "url": "",
+            "is_important": is_important,
+            "category": "news",
+            "source": "sina"
+        })
+    return page_news
 
 def fetch_sina():
     log(f"[{get_beijing_time().strftime('%H:%M:%S')}][新浪引擎] 开始抓取（{SINA_PAGES} 页）...")
     news_list = []
     for page in range(1, SINA_PAGES + 1):
-        news_list.extend(_fetch_sina_page(page))
-    log(f"✅ [新浪引擎] 成功抓取 {len(news_list)} 条。")
+        try:
+            news_list.extend(_fetch_sina_page(page))
+        except Exception as e:
+            log(f"⚠️ [新浪引擎] 第 {page} 页失败，继续其它页: {e}")
+    if news_list:
+        log(f"✅ [新浪引擎] 成功抓取 {len(news_list)} 条。")
+    else:
+        log("⚠️ [新浪引擎] 本轮未抓到数据，将保留上次成功结果。")
     return news_list
 
 # ================= 引擎 3：强化版 RSS 引擎 =================
@@ -542,15 +615,23 @@ def fetch_weather():
     try:
         url = "https://api.open-meteo.com/v1/forecast?latitude=41.80&longitude=123.43&current_weather=true"
         headers = {"User-Agent": get_random_ua()}
-        resp = get_session().get(url, headers=headers, timeout=10).json()
-        curr = resp.get("current_weather", {})
+        response = get_session().get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        payload = response.json()
+        curr = payload.get("current_weather", {})
         temp, code = curr.get("temperature"), curr.get("weathercode")
+        if temp is None or code is None:
+            raise ValueError("天气接口缺少 temperature/weathercode")
         emoji_map = {0: "☀️", 1: "☁️", 2: "☁️", 3: "☁️", 45: "🌫️", 48: "🌫️", 51: "🌧️", 53: "🌧️", 55: "🌧️", 61: "🌧️", 63: "🌧️", 65: "🌧️", 71: "❄️", 73: "❄️", 75: "❄️", 95: "⛈️"}
         emoji = emoji_map.get(code, "☁️")
         if 71 <= code <= 77: emoji = "❄️"
         elif 51 <= code <= 67: emoji = "🌧️"
-        with open("./public/weather.txt", "w", encoding="utf-8") as f: f.write(f"{emoji} {temp}°C")
-    except Exception as e: log(f"[天气引擎] 失败: {e}")
+        atomic_save_text("./public/weather.txt", f"{emoji} {temp}°C")
+        log("✅ [天气引擎] 天气数据已更新。")
+        return 1
+    except Exception as e:
+        log(f"❌ [天气引擎] 失败: {e}")
+        raise
 
 # ================= 引擎 6：行情条 (Sina) =================
 TICKER_FILE = "./public/ticker.json"
@@ -763,7 +844,8 @@ def fetch_ticker():
             pass
 
     # 3. 状态判定与写入
-    if unique_count >= threshold:
+    fresh_count = sina_count + tencent_count
+    if unique_count >= threshold and fresh_count > 0:
         atomic_save_json(TICKER_FILE, list(result_map.values()))
         if len(stale_used) > 0:
             status = "degraded"
@@ -773,7 +855,10 @@ def fetch_ticker():
     else:
         if os.path.exists(TICKER_FILE):
             status = "failed"
-            log(f"  ⚠️ [行情引擎] 本轮仅 {unique_count} 条 (阈值 {threshold})，保留上次成功数据")
+            log(
+                f"  ⚠️ [行情引擎] 本轮新鲜数据 {fresh_count} 条、最终 {unique_count} 条 "
+                f"(阈值 {threshold})，保留上次成功数据"
+            )
         else:
             status = "failed"
             log(f"  ⚠️ [行情引擎] 本轮仅 {unique_count} 条且无历史文件，跳过写入")
@@ -796,6 +881,7 @@ def fetch_ticker():
     log(f"  📊 [行情引擎] 总标的: {total_count} | Sina: {sina_count} | Tencent: {tencent_count} | 沿用旧值: {len(stale_used)} | 最终: {unique_count} | 状态: {status}")
     if stale_used:
         log(f"  ℹ️ [行情引擎] 沿用旧值: {', '.join(stale_used)}")
+    return status_payload
 
 # ================= 科技趋势抓取 =================
 def fetch_tech_news():
@@ -820,8 +906,8 @@ def fetch_tech_news():
             "source": "github",
             "format": "html"
         }
-        tech_blocks.append(tech_block)
         atomic_save_json(GITHUB_CACHE_PATH, tech_block)
+        tech_blocks.append(tech_block)
         log("[tech] GitHub block updated")
     except Exception as e:
         cached_github = atomic_load_json(GITHUB_CACHE_PATH, default={})
@@ -885,12 +971,34 @@ def fetch_tech_news():
         log(f"❌ [tech] V2EX request failed: {e}")
 
     # 批次结束后整体落盘——避免每条翻译都触发一次写盘 IO。
-    _persist_translate_cache()
+    try:
+        _persist_translate_cache()
+    except Exception as e:
+        # 缓存只是优化项，失败不能丢弃本轮已经抓到的科技内容；dirty 会保留待下轮重试。
+        log(f"⚠️ [翻译引擎] 缓存落盘失败，将在下轮重试: {e}")
     return tech_blocks
 
 # ================= 主循环控制 =================
+PIPELINE_STATUS_FILE = "./public/pipeline-status.json"
+PIPELINE_JOBS = (
+    "heartbeat", "ticker", "sina", "finance_news",
+    "wallpaper", "weather", "wallpaper_list", "rss", "tech"
+)
+try:
+    PIPELINE_JOB_TIMEOUT_SECONDS = max(
+        1.0, float(os.getenv("PIPELINE_JOB_TIMEOUT_SECONDS", "1800"))
+    )
+except ValueError:
+    PIPELINE_JOB_TIMEOUT_SECONDS = 1800.0
+
+
+class SpiderWorkerFailure(RuntimeError):
+    """工作线程死亡或任务超时时触发的进程级故障。"""
+
+
 class SpiderApp:
     def __init__(self):
+        self.sina_news = []
         self.rss_news = []
         self.tech_news = []
         self.last_wallpaper_date = None
@@ -899,151 +1007,398 @@ class SpiderApp:
         self.last_tech_time = 0
         self.last_wallpaper_list_time = 0
         self.shutdown = False
-        # 保护快/慢线程共享的 rss_news / tech_news。
-        # 慢线程整体替换列表引用，快线程在锁内取快照引用，持锁极短。
+        self._shutdown_event = threading.Event()
+        self.job_timeout_seconds = PIPELINE_JOB_TIMEOUT_SECONDS
+
+        # 保护快/慢线程共享的新闻快照。
         self._data_lock = threading.Lock()
+        self._status_lock = threading.Lock()
+        self._status_write_lock = threading.Lock()
+        self._pipeline_status = {
+            "updated_at": int(time.time()),
+            "jobs": {
+                name: {
+                    "last_attempt": None,
+                    "last_success": None,
+                    "last_error": None,
+                    "duration": None,
+                    "count": 0,
+                    "running": False,
+                }
+                for name in PIPELINE_JOBS
+            },
+        }
+        self._load_pipeline_status()
+        self._load_last_known_news()
+
+    @staticmethod
+    def _dedupe_news(items, limit, *, newest_first=False):
+        """过滤损坏项并按 content 去重，避免坏缓存让工作线程退出。"""
+        seen = set()
+        unique = []
+        for item in items or []:
+            if not isinstance(item, dict):
+                continue
+            content = item.get("content")
+            if not isinstance(content, str) or not content:
+                continue
+            content_hash = hashlib.md5(content.encode()).hexdigest()
+            if content_hash in seen:
+                continue
+            seen.add(content_hash)
+            unique.append(item)
+        if newest_first:
+            unique.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
+        return unique[:limit]
+
+    def _load_last_known_news(self):
+        """从最终发布文件恢复有界快照，容器重启后不必先清空慢源数据。"""
+        cached = atomic_load_json("./public/finance-news.json", default={})
+        if not isinstance(cached, dict) or not isinstance(cached.get("news_list"), list):
+            return
+        items = cached["news_list"]
+        self.sina_news = self._dedupe_news(
+            [item for item in items if isinstance(item, dict) and item.get("source") == "sina"],
+            800,
+        )
+        self.rss_news = self._dedupe_news(
+            [item for item in items if isinstance(item, dict) and item.get("category") == "foreign"],
+            500,
+            newest_first=True,
+        )
+        self.tech_news = self._dedupe_news(
+            [item for item in items if isinstance(item, dict) and item.get("category") == "tech"],
+            100,
+        )
+        recovered = len(self.sina_news) + len(self.rss_news) + len(self.tech_news)
+        if recovered:
+            log(f"✅ [系统] 从 finance-news.json 恢复 {recovered} 条 last-known-good 数据。")
+
+    def _load_pipeline_status(self):
+        cached = atomic_load_json(PIPELINE_STATUS_FILE, default={})
+        if not isinstance(cached, dict) or not isinstance(cached.get("jobs"), dict):
+            return
+        for name in PIPELINE_JOBS:
+            old = cached["jobs"].get(name)
+            if not isinstance(old, dict):
+                continue
+            state = self._pipeline_status["jobs"][name]
+            for field in ("last_attempt", "last_success", "last_error", "duration", "count"):
+                if field in old:
+                    state[field] = old[field]
+            # 重启时不存在仍在运行的旧任务。
+            state["running"] = False
+
+    def _persist_pipeline_status(self):
+        """串行化两个工作线程的状态写入；状态盘失败不影响业务任务本身。"""
+        try:
+            with self._status_write_lock:
+                with self._status_lock:
+                    self._pipeline_status["updated_at"] = int(time.time())
+                    snapshot = {
+                        "updated_at": self._pipeline_status["updated_at"],
+                        "jobs": {
+                            name: dict(state)
+                            for name, state in self._pipeline_status["jobs"].items()
+                        },
+                    }
+                atomic_save_json(PIPELINE_STATUS_FILE, snapshot)
+            return True
+        except Exception as e:
+            log(f"⚠️ [系统] pipeline-status.json 写入失败: {e}")
+            return False
+
+    def _start_job(self, name, started_at):
+        with self._status_lock:
+            state = self._pipeline_status["jobs"][name]
+            state.update({
+                "last_attempt": int(started_at),
+                "last_error": None,
+                "duration": None,
+                "running": True,
+            })
+        self._persist_pipeline_status()
+
+    def _finish_job(self, name, started_at, *, succeeded, count=0, error=None):
+        finished_at = time.time()
+        with self._status_lock:
+            state = self._pipeline_status["jobs"][name]
+            state["duration"] = round(max(0.0, time.monotonic() - started_at[1]), 3)
+            state["count"] = int(count or 0)
+            state["running"] = False
+            state["last_error"] = None if succeeded else str(error or "unknown error")[:500]
+            if succeeded:
+                state["last_success"] = int(finished_at)
+        self._persist_pipeline_status()
+
+    def _run_job(self, name, callback, *, count_fn=None, success_if=None, failure_message=None):
+        """执行一个隔离任务并更新统一状态；Exception 不会阻断同线程其它任务。"""
+        started_wall = time.time()
+        started = (started_wall, time.monotonic())
+        self._start_job(name, started_wall)
+        result = None
+        count = 0
+        try:
+            result = callback()
+            if count_fn is not None:
+                count = count_fn(result)
+            elif isinstance(result, (list, tuple, set, dict)):
+                count = len(result)
+            elif isinstance(result, (int, float)):
+                count = int(result)
+            elif result is not None:
+                count = 1
+
+            if success_if is not None and not success_if(result):
+                error = failure_message or "任务返回无效结果"
+                self._finish_job(name, started, succeeded=False, count=count, error=error)
+                log(f"⚠️ [{name}] {error}")
+                return False, result
+        except Exception as e:
+            error = f"{type(e).__name__}: {e}"
+            self._finish_job(name, started, succeeded=False, count=count, error=error)
+            log(f"❌ [{name}] 任务失败: {error}")
+            return False, None
+
+        self._finish_job(name, started, succeeded=True, count=count)
+        return True, result
+
+    def _mark_stalled_job(self, now=None):
+        """返回首个超时任务；同时把超时原因写入 pipeline 状态。"""
+        now = time.time() if now is None else now
+        stalled = None
+        with self._status_lock:
+            for name, state in self._pipeline_status["jobs"].items():
+                attempted = state.get("last_attempt")
+                if not state.get("running") or not isinstance(attempted, (int, float)):
+                    continue
+                elapsed = max(0.0, now - attempted)
+                if elapsed <= self.job_timeout_seconds:
+                    continue
+                state["running"] = False
+                state["duration"] = round(elapsed, 3)
+                state["last_error"] = (
+                    f"任务运行超过 {self.job_timeout_seconds:g} 秒，触发进程重启"
+                )
+                stalled = (name, elapsed)
+                break
+        if stalled is not None:
+            self._persist_pipeline_status()
+        return stalled
 
     def _interruptible_sleep(self, seconds):
-        for _ in range(int(seconds)):
-            if self.shutdown:
-                return
-            time.sleep(1)
+        if self.shutdown:
+            return
+        self._shutdown_event.wait(max(0.0, seconds))
 
     def run(self):
-        signal.signal(signal.SIGTERM, self._handle_signal)
-        signal.signal(signal.SIGINT, self._handle_signal)
+        if threading.current_thread() is threading.main_thread():
+            signal.signal(signal.SIGTERM, self._handle_signal)
+            signal.signal(signal.SIGINT, self._handle_signal)
 
-        # 快线程：行情 + 新浪快讯 + 合并写盘，稳定 60s 节奏，不被慢任务拖累。
-        # 慢线程：壁纸 / 天气 / RSS / 科技，各自节奏，慢就慢，只更新内存列表。
-        fast = threading.Thread(target=self._fast_loop, name="fast", daemon=True)
-        slow = threading.Thread(target=self._slow_loop, name="slow", daemon=True)
-        fast.start()
-        slow.start()
+        # 快线程：行情 + 新浪快讯 + 合并写盘；慢线程：壁纸 / 天气 / RSS / 科技。
+        workers = {
+            "fast": threading.Thread(target=self._fast_loop, name="fast", daemon=True),
+            "slow": threading.Thread(target=self._slow_loop, name="slow", daemon=True),
+        }
+        for worker in workers.values():
+            worker.start()
 
+        failed_worker = None
         while not self.shutdown:
-            time.sleep(0.5)
+            for name, worker in workers.items():
+                if not worker.is_alive():
+                    failed_worker = name
+                    log(f"🚨 [系统] {name} 工作线程意外退出，主进程将退出以触发容器重启。")
+                    self.shutdown = True
+                    self._shutdown_event.set()
+                    break
+            if failed_worker is None:
+                stalled = self._mark_stalled_job()
+                if stalled is not None:
+                    job_name, elapsed = stalled
+                    failed_worker = f"{job_name} job"
+                    log(
+                        f"🚨 [系统] {job_name} 任务已运行 {elapsed:.1f}s，超过 "
+                        f"{self.job_timeout_seconds:g}s，看门狗将退出主进程。"
+                    )
+                    self.shutdown = True
+                    self._shutdown_event.set()
+            self._shutdown_event.wait(0.5)
 
-        # 优雅退出：给在途的原子写一点收尾时间（atomic_save_json 本身保证不会写出半截文件）。
-        fast.join(timeout=5)
-        slow.join(timeout=5)
+        for worker in workers.values():
+            worker.join(timeout=5)
         log("🛑 已停止所有工作线程。")
 
-    def _touch_heartbeat(self):
-        """触摸 heartbeat 文件——只表明 fast loop 还在转，不代表数据新鲜。
+        if failed_worker is not None:
+            raise SpiderWorkerFailure(f"{failed_worker} worker exited unexpectedly")
 
-        与 finance-news.json 解耦：后者只在抓取到数据时被覆写，
-        所有源同时挂掉时它的 mtime 会冻结，旧版健康检查会判 unhealthy → 重启 → 再挂 → 死循环。
-        现在 healthcheck 探这个文件，"进程活着但数据陈旧"靠业务监控（ticker-status.json）发现。
-        """
-        try:
-            with open("./public/heartbeat.txt", "w", encoding="utf-8") as f:
-                f.write(str(int(time.time())))
-        except Exception as e:
-            log(f"⚠️ [系统] heartbeat 写入失败: {e}")
+    def _touch_heartbeat(self):
+        """原子更新 heartbeat；写盘失败由任务状态记录。"""
+        atomic_save_text("./public/heartbeat.txt", str(int(time.time())))
+        return 1
+
+    def _merge_by_source(self, old_items, new_items, limit, *, newest_first=False):
+        """新结果缺少某个来源时沿用该来源旧块，避免部分故障造成内容抖动。"""
+        fresh_sources = {
+            item.get("source") for item in new_items
+            if isinstance(item, dict) and item.get("source")
+        }
+        retained = [
+            item for item in old_items
+            if isinstance(item, dict) and item.get("source") not in fresh_sources
+        ]
+        return self._dedupe_news(
+            list(new_items) + retained,
+            limit,
+            newest_first=newest_first,
+        )
+
+    def _publish_finance_news(self):
+        with self._data_lock:
+            sina_snapshot = list(self.sina_news)
+            rss_snapshot = list(self.rss_news)
+            tech_snapshot = list(self.tech_news)
+
+        final_news = sina_snapshot + rss_snapshot + tech_snapshot
+        final_news.sort(
+            key=lambda x: (x.get("is_important", False), x.get("raw_time", 0)),
+            reverse=True,
+        )
+        if not final_news:
+            return []
+
+        output_data = {
+            "last_updated": int(get_beijing_time().timestamp()),
+            "news_list": final_news,
+        }
+        atomic_save_json("./public/finance-news.json", output_data)
+        log(
+            f"✅ [fast] 更新完成：总库 {len(final_news)} 条 "
+            f"(新浪 {len(sina_snapshot)} / RSS {len(rss_snapshot)} / 科技 {len(tech_snapshot)})。"
+        )
+        return final_news
 
     def _fast_loop(self):
-        """行情 + 新浪快讯，每轮约 60 秒。唯一写 finance-news.json / ticker*.json 的线程。"""
+        """行情 + 新浪快讯；按单调时钟对齐 60 秒周期，不叠加抓取耗时。"""
+        interval = 60.0
+        next_run = time.monotonic()
         while not self.shutdown:
-            try:
-                now_bj = get_beijing_time()
-                log(f"\n--- [fast] {now_bj.strftime('%H:%M:%S')} 行情+快讯 ---")
+            now_bj = get_beijing_time()
+            log(f"\n--- [fast] {now_bj.strftime('%H:%M:%S')} 行情+快讯 ---")
 
-                # 心跳：无论本轮抓取结果如何，先证明 loop 还在转。
-                self._touch_heartbeat()
+            self._run_job("heartbeat", self._touch_heartbeat)
+            self._run_job(
+                "ticker",
+                fetch_ticker,
+                count_fn=lambda result: result.get("final_count", 0),
+                success_if=lambda result: result.get("status") != "failed",
+                failure_message="行情有效数据不足，已保留上次成功文件",
+            )
 
-                # 行情（内部自行写 ticker.json / ticker-status.json）
-                fetch_ticker()
-
-                # 新浪快讯
-                sina_news_raw = fetch_sina()
-                seen_sina = set()
-                unique_sina = []
-                for item in sina_news_raw:
-                    content_hash = hashlib.md5(item["content"].encode()).hexdigest()
-                    if content_hash not in seen_sina:
-                        unique_sina.append(item)
-                        seen_sina.add(content_hash)
-                sina_1500 = unique_sina[:800]
-
-                # 取慢线程数据的快照（持锁极短，仅复制引用）
+            sina_ok, sina_news_raw = self._run_job(
+                "sina",
+                fetch_sina,
+                success_if=bool,
+                failure_message="本轮为空，已保留上次新浪快讯",
+            )
+            if sina_ok:
                 with self._data_lock:
-                    rss_snapshot = self.rss_news
-                    tech_snapshot = self.tech_news
+                    self.sina_news = self._dedupe_news(sina_news_raw, 800)
 
-                final_news = sina_1500 + rss_snapshot + tech_snapshot
-                final_news.sort(key=lambda x: (x.get("is_important", False), x.get("raw_time", 0)), reverse=True)
+            self._run_job(
+                "finance_news",
+                self._publish_finance_news,
+                success_if=bool,
+                failure_message="没有可发布新闻，未覆盖现有文件",
+            )
 
-                if final_news:
-                    output_data = {
-                        "last_updated": int(now_bj.timestamp()),
-                        "news_list": final_news
-                    }
-                    atomic_save_json("./public/finance-news.json", output_data)
-                    log(f"✅ [fast] 更新完成：总库 {len(final_news)} 条 (新浪 {len(sina_1500)} / RSS {len(rss_snapshot)} / 科技 {len(tech_snapshot)})。")
-
-            except Exception as e:
-                log(f"🚨 [fast] 发生异常: {e}")
-
-            self._interruptible_sleep(60)
+            next_run += interval
+            now_mono = time.monotonic()
+            while next_run <= now_mono:
+                next_run += interval
+            self._interruptible_sleep(next_run - now_mono)
 
     def _slow_loop(self):
-        """壁纸 / 天气 / RSS / 科技，各自独立节奏。只更新内存共享列表，不写 finance-news.json。"""
+        """慢任务独立记时与报错；抓取为空时保留内存中的 last-known-good。"""
+        intervals = {"weather": 1800.0, "wallpaper_list": 300.0, "rss": 1800.0, "tech": 1800.0}
+        next_due = {name: 0.0 for name in intervals}
+        wallpaper_retry_due = 0.0
+
         while not self.shutdown:
-            try:
-                now_ts = time.time()
-                now_bj = get_beijing_time()
+            now_mono = time.monotonic()
+            today = get_beijing_time().strftime('%Y-%m-%d')
 
-                # 1. 壁纸 (每天一次)
-                if now_bj.strftime('%Y-%m-%d') != self.last_wallpaper_date or not os.path.exists("./public/bg_0.jpg"):
-                    fetch_bing_wallpaper()
-                    self.last_wallpaper_date = now_bj.strftime('%Y-%m-%d')
+            if now_mono >= wallpaper_retry_due and (
+                today != self.last_wallpaper_date or not os.path.exists("./public/bg_0.jpg")
+            ):
+                wallpaper_ok, _ = self._run_job(
+                    "wallpaper",
+                    fetch_bing_wallpaper,
+                    success_if=lambda count: bool(count),
+                    failure_message="本轮未获取壁纸，稍后重试",
+                )
+                if wallpaper_ok:
+                    self.last_wallpaper_date = today
+                # 失败后 5 分钟再试，避免每 30 秒轰击上游；成功后条件本身会阻止当天重复抓取。
+                wallpaper_retry_due = time.monotonic() + 300.0
 
-                # 2. 天气 (每 30 分钟)
-                if now_ts - self.last_weather_time >= 1800:
-                    fetch_weather()
-                    self.last_weather_time = now_ts
+            if now_mono >= next_due["weather"]:
+                self.last_weather_time = time.time()
+                self._run_job("weather", fetch_weather)
+                next_due["weather"] = time.monotonic() + intervals["weather"]
 
-                # 3. 扫描壁纸列表 (每 5 分钟)
-                if now_ts - self.last_wallpaper_list_time >= 300:
-                    update_wallpaper_list()
-                    self.last_wallpaper_list_time = now_ts
+            if now_mono >= next_due["wallpaper_list"]:
+                self.last_wallpaper_list_time = time.time()
+                self._run_job("wallpaper_list", update_wallpaper_list)
+                next_due["wallpaper_list"] = time.monotonic() + intervals["wallpaper_list"]
 
-                # 4. RSS (每 30 分钟；首轮 rss_news 为空时立即抓)
-                if now_ts - self.last_rss_time >= 1800 or not self.rss_news:
-                    rss_news_raw = fetch_rss_news()
-                    seen_rss = set(); unique_rss = []
-                    for item in rss_news_raw:
-                        content_hash = hashlib.md5(item["content"].encode()).hexdigest()
-                        if content_hash not in seen_rss:
-                            unique_rss.append(item); seen_rss.add(content_hash)
-                    unique_rss.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
+            if now_mono >= next_due["rss"]:
+                self.last_rss_time = time.time()
+                rss_ok, rss_news_raw = self._run_job(
+                    "rss",
+                    fetch_rss_news,
+                    success_if=bool,
+                    failure_message="本轮为空，已保留上次 RSS 数据",
+                )
+                if rss_ok:
                     with self._data_lock:
-                        self.rss_news = unique_rss[:500]
-                    self.last_rss_time = now_ts
+                        self.rss_news = self._merge_by_source(
+                            self.rss_news, rss_news_raw, 500, newest_first=True
+                        )
+                next_due["rss"] = time.monotonic() + intervals["rss"]
 
-                # 5. 科技 (每 30 分钟；首轮 tech_news 为空时立即抓)
-                if now_ts - self.last_tech_time >= 1800 or not self.tech_news:
-                    tech_news_raw = fetch_tech_news()
-                    seen_tech = set(); unique_tech = []
-                    for item in tech_news_raw:
-                        content_hash = hashlib.md5(item["content"].encode()).hexdigest()
-                        if content_hash not in seen_tech:
-                            unique_tech.append(item); seen_tech.add(content_hash)
+            if now_mono >= next_due["tech"]:
+                self.last_tech_time = time.time()
+                tech_ok, tech_news_raw = self._run_job(
+                    "tech",
+                    fetch_tech_news,
+                    success_if=bool,
+                    failure_message="本轮为空，已保留上次科技数据",
+                )
+                if tech_ok:
                     with self._data_lock:
-                        self.tech_news = unique_tech[:100]
-                    self.last_tech_time = now_ts
+                        self.tech_news = self._merge_by_source(
+                            self.tech_news, tech_news_raw, 100
+                        )
+                next_due["tech"] = time.monotonic() + intervals["tech"]
 
-            except Exception as e:
-                log(f"🚨 [slow] 发生异常: {e}")
-
-            # 慢线程 30s 醒一次检查各任务是否到点，节奏由上面的时间判断控制。
             self._interruptible_sleep(30)
 
     def _handle_signal(self, signum, frame):
         log(f"\n🛑 收到信号 {signum}，正在优雅退出...")
         self.shutdown = True
+        self._shutdown_event.set()
 
 if __name__ == "__main__":
     _load_translate_cache()
     app = SpiderApp()
-    app.run()
+    try:
+        app.run()
+    except SpiderWorkerFailure as e:
+        # ThreadPoolExecutor 会在解释器退出时 join 翻译线程；若它正是卡死来源，
+        # 普通 raise/SystemExit 仍可能永远退不出去。状态已落盘且 join 已等待 5 秒，
+        # 此处硬退出确保 Docker restart 策略确实能接管。
+        log(f"🚨 [系统] 致命工作线程故障: {e}")
+        logging.shutdown()
+        os._exit(1)

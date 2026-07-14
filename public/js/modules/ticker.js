@@ -3,6 +3,9 @@
 // （由 ambience 模块初始化时挂载，未就绪时各调用点自带降级）。
 
 const SPARKLINE_MIN_POINTS = 3;
+const TICKER_POLL_INTERVAL = 20000;
+let tickerPollTimer = null;
+let tickerRequestInFlight = false;
 
 function buildSparklineSVG(history, isUp) {
     if (!history || history.length < 2) return '';
@@ -20,13 +23,16 @@ function buildSparklineSVG(history, isUp) {
 
 async function fetchTickerData() {
     try {
-        const response = await fetch('./ticker.json?t=' + Date.now());
+        const response = await fetch('./ticker.json', { cache: 'no-cache' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const items = await response.json();
         const container = document.getElementById('tickerContent');
         if (!items || items.length === 0) return;
 
-        // 优化：如果后端增删了行情条目（数量不一致），则清空重绘，确保列表同步
-        if (container.children.length !== items.length) container.innerHTML = '';
+        // 数量相同但 symbol 已替换时也必须重绘，避免新条目找不到旧节点。
+        const currentSymbols = Array.from(container.children).map(element => element.dataset.symbol || '');
+        const nextSymbols = items.map(item => String(item.symbol || ''));
+        if (currentSymbols.join('\u241f') !== nextSymbols.join('\u241f')) container.replaceChildren();
 
         if (container.children.length === 0) {
             items.forEach(item => {
@@ -66,7 +72,7 @@ async function fetchTickerData() {
         }
 
         items.forEach(item => {
-            const el = container.querySelector(`[data-symbol="${item.symbol}"]`);
+            const el = Array.from(container.children).find(element => element.dataset.symbol === String(item.symbol));
             if (el) {
                 const nameEl = el.querySelector('.name-val');
                 if (nameEl) nameEl.innerText = item.name;
@@ -90,53 +96,69 @@ async function fetchTickerData() {
                 }
             }
         });
-    } catch { console.error("行情同步异常"); }
+    } catch (error) { console.error("行情同步异常:", error); }
+}
+
+function setTickerStatus(kind, label, title) {
+    const status = document.getElementById('tickerHeartbeatStatus');
+    const statusText = document.getElementById('tickerStatusText');
+    const statusPing = document.getElementById('tickerStatusPing');
+    const statusDot = document.getElementById('tickerStatusDot');
+    if (!status || !statusText || !statusPing || !statusDot) return;
+    const colors = kind === 'online'
+        ? { text: 'text-green-400', ping: 'bg-green-400', dot: 'bg-green-500' }
+        : kind === 'degraded'
+            ? { text: 'text-amber-400', ping: 'bg-amber-400', dot: 'bg-amber-500' }
+            : { text: 'text-red-400', ping: '', dot: 'bg-red-500' };
+    statusText.textContent = label;
+    statusText.className = `text-[10px] font-bold ${colors.text}`;
+    statusPing.className = kind === 'offline'
+        ? 'hidden'
+        : `animate-ping absolute inline-flex h-full w-full rounded-full ${colors.ping} opacity-75`;
+    statusDot.className = `relative inline-flex rounded-full h-2 w-2 ${colors.dot}`;
+    status.title = title;
 }
 
 async function fetchTickerStatus() {
     try {
-        const resp = await fetch('./ticker-status.json?t=' + Date.now());
+        const resp = await fetch('./ticker-status.json', { cache: 'no-cache' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const ts = await resp.json();
         if (!ts || !ts.status) return;
-        const statusText = document.getElementById('statusText');
-        const statusPing = document.getElementById('statusPing');
-        const statusDot = document.getElementById('statusDot');
 
         const ageMinutes = ts.updated_at ? (Date.now() / 1000 - ts.updated_at) / 60 : 0;
         if (ageMinutes > 5) {
-            statusText.innerText = '离线';
-            statusText.className = 'text-[10px] font-bold text-red-400';
-            statusPing.className = 'hidden';
-            statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-red-500';
-            statusDot.parentElement.parentElement.title = '行情数据超过5分钟未更新';
+            setTickerStatus('offline', '离线', '行情数据超过5分钟未更新');
             return;
         }
 
         if (ts.status === 'failed') {
-            statusText.innerText = '行情失败';
-            statusText.className = 'text-[10px] font-bold text-red-400';
-            statusPing.className = 'hidden';
-            statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-red-500';
-            statusDot.parentElement.parentElement.title = '行情源失败，当前显示上次成功数据';
+            setTickerStatus('offline', '失败', '行情源失败，当前显示上次成功数据');
         } else if (ts.status === 'degraded') {
-            statusText.innerText = '降级';
-            statusText.className = 'text-[10px] font-bold text-amber-400';
-            statusPing.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75';
-            statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500';
-            statusDot.parentElement.parentElement.title = '行情源降级，部分使用备用源';
+            setTickerStatus('degraded', '降级', '行情源降级，部分使用备用源');
         } else {
-            statusText.innerText = 'LIVE';
-            statusText.className = 'text-[10px] font-bold text-green-400';
-            statusPing.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75';
-            statusDot.className = 'relative inline-flex rounded-full h-2 w-2 bg-green-500';
-            statusDot.parentElement.parentElement.title = '行情源正常';
+            setTickerStatus('online', 'LIVE', '行情源正常');
         }
-    } catch { /* ticker-status 不可用时保持原状 */ }
+    } catch {
+        setTickerStatus('offline', '断连', '行情状态接口不可用');
+    }
 }
 
 export function initTicker() {
-    fetchTickerData();
-    setInterval(fetchTickerData, 20000);
-    fetchTickerStatus();
-    setInterval(fetchTickerStatus, 20000);
+    const poll = async () => {
+        if (document.hidden || tickerRequestInFlight) return;
+        tickerRequestInFlight = true;
+        try {
+            await Promise.allSettled([fetchTickerData(), fetchTickerStatus()]);
+        } finally {
+            tickerRequestInFlight = false;
+            if (!document.hidden) tickerPollTimer = window.setTimeout(poll, TICKER_POLL_INTERVAL);
+        }
+    };
+    document.addEventListener('visibilitychange', () => {
+        window.clearTimeout(tickerPollTimer);
+        tickerPollTimer = null;
+        if (!document.hidden) poll();
+    });
+    poll();
 }

@@ -37,10 +37,11 @@ export function setSearchEngine(engine) {
             btn.style.color = '';
             btn.className = 'px-3 py-1 rounded-full text-white/60 hover:text-white transition-all shrink-0 hover:bg-white/10';
         }
+        btn.setAttribute('aria-pressed', String(key === engine));
     });
 }
 
-export function handleSearch(event) {
+export function handleSearch() {
     const query = document.getElementById('searchInput').value.trim();
     const engine = engines[currentEngine] || engines.bing;
     if (query) {
@@ -58,9 +59,13 @@ export function initUI() {
     setInterval(updateClock, 1000);
     updateClock();
     setSearchEngine(currentEngine);
+    document.getElementById('searchInput').addEventListener('keydown', event => {
+        if (event.key === 'Enter') handleSearch();
+    });
+    document.querySelectorAll('[data-engine]').forEach(button => {
+        button.addEventListener('click', () => setSearchEngine(button.dataset.engine));
+    });
+    document.querySelectorAll('[data-ticker-scroll]').forEach(button => {
+        button.addEventListener('click', () => scrollTicker(Number(button.dataset.tickerScroll) || 0));
+    });
 }
-
-// 内联 onclick 引用的全局函数
-window.setSearchEngine = setSearchEngine;
-window.handleSearch = handleSearch;
-window.scrollTicker = scrollTicker;

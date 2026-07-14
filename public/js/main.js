@@ -8,9 +8,7 @@
 // 关键顺序约束：
 //   1. initAmbience() 必须在 initWeather() 之前——它定义 window.__setAmbiance 钩子，
 //      天气引擎切换氛围时会调用它（否则首帧 ambiance 落空，要等下次校准）。
-//   2. HTML 内联 onclick 所需的全局函数（toggleWallpaper / setSearchEngine /
-//      handleSearch / setFontSize / setFilter / scrollToTop / scrollTicker /
-//      toggleWeatherFilter）由各模块在自身文件内 `window.xxx = xxx` 暴露。
+//   2. 所有控件事件由各模块在 initXxx() 内绑定，不依赖内联处理器或额外全局函数。
 
 import { initUI } from './modules/ui.js';
 import { initAmbience } from './modules/ambience.js';
@@ -21,15 +19,36 @@ import { initTicker } from './modules/ticker.js';
 import { initNews } from './modules/news.js';
 import { initInteractions } from './modules/interactions.js';
 
+// 只有完整模块图加载成功后才隐藏待进场元素；脚本被禁用或模块加载失败时，
+// 页面内容保持可见，避免核心界面永久停在 opacity: 0。
+document.documentElement.classList.add('js-motion');
+
+function reportInitFailure(name, error) {
+    console.error(`[app] ${name} 初始化失败:`, error);
+    if (name === 'ambience') document.documentElement.classList.remove('js-motion');
+}
+
+function runInitializer(name, initializer) {
+    try {
+        const result = initializer();
+        if (result && typeof result.catch === 'function') {
+            result.catch(error => reportInitFailure(name, error));
+        }
+    } catch (error) {
+        reportInitFailure(name, error);
+    }
+}
+
 function init() {
-    initUI();           // 时钟 / 搜索引擎（依赖 storage）
-    initAmbience();     // 视觉增强 + 暴露 __setAmbiance/__animateNumber/__drawInSparkline，须早于 weather
-    initFluid();        // WebGL 流体涟漪壁纸（暴露 __fluidSetWallpaper），须早于 wallpaper 首次取色
-    initWallpapers();   // 壁纸引擎 + 取色（异步拉取壁纸列表）
-    initWeather();      // 天气粒子物理引擎（首拉 weather.txt + 轮询）
-    initTicker();       // 底部行情条 + 心跳状态（首拉 + 轮询）
-    initNews();         // 新闻流：setFilter('all') + 首拉 + 轮询 + resize 重对齐指示器
-    initInteractions(); // 快捷键、回到顶部、resizer 拖拽、玻璃折射、3D 倾斜
+    // 单个模块失败不会阻断其余功能；顺序仍满足 ambience/fluid 的桥接约束。
+    runInitializer('ui', initUI);
+    runInitializer('ambience', initAmbience);
+    runInitializer('fluid', initFluid);
+    runInitializer('wallpapers', initWallpapers);
+    runInitializer('weather', initWeather);
+    runInitializer('ticker', initTicker);
+    runInitializer('news', initNews);
+    runInitializer('interactions', initInteractions);
 }
 
 if (document.readyState === 'loading') {

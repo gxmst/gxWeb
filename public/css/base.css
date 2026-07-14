@@ -19,6 +19,16 @@ body {
     --scene-vignette: rgba(0, 0, 0, 0.42);
 }
 
+:where(button, a, input, [tabindex]):focus-visible {
+    outline: 2px solid rgba(var(--wall-rgb), 0.95) !important;
+    outline-offset: 3px !important;
+    box-shadow: 0 0 0 4px rgba(var(--wall-rgb), 0.24);
+}
+
+#bottom-ticker button:focus-visible {
+    opacity: 1;
+}
+
 .numeric {
     font-family: "JetBrains Mono", "SFMono-Regular", "Consolas", "Liberation Mono", "Menlo", monospace;
     font-variant-numeric: tabular-nums;

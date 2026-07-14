@@ -99,6 +99,9 @@
 
 @media (prefers-reduced-motion: reduce) {
     [data-enter].entered { animation: none; opacity: 1; }
+    .animate-slide-down, .animate-pulse, .animate-ping, .skeleton {
+        animation: none !important;
+    }
     .sparkline-poly.draw-in { animation: none; stroke-dashoffset: 0; }
     #tabIndicator { transition: none; }
     /* 云影/雾停止飘动，保留静态叠色 */

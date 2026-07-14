@@ -1,17 +1,26 @@
 services:
   # 后台爬虫服务
   spider:
-    build: .
+    build:
+      context: .
+      args:
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
     container_name: workspace-spider
     restart: always
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    security_opt:
+      - no-new-privileges:true
     volumes:
-      - ./spider.py:/app/spider.py
-      - ./requirements.txt:/app/requirements.txt
+      - ./spider.py:/app/spider.py:ro
+      - ./requirements.txt:/app/requirements.txt:ro
       - ./public:/app/public
     environment:
       - TZ=Asia/Shanghai
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - GITHUB_API_TIMEOUT=${GITHUB_API_TIMEOUT:-20}
+      - TRANSLATE_API_TIMEOUT=${TRANSLATE_API_TIMEOUT:-15}
+      - PIPELINE_JOB_TIMEOUT_SECONDS=${PIPELINE_JOB_TIMEOUT_SECONDS:-1800}
     logging:
       driver: "json-file"
       options:
@@ -19,7 +28,8 @@ services:
         max-file: "3"
     # 健康检查：探 heartbeat 文件（_fast_loop 每轮无条件 touch），证明工作线程还在转。
     # 不再探 finance-news.json，因为所有数据源同时挂掉时它不会更新——
-    # 会导致 unhealthy → restart → 再挂 的死循环。数据新鲜度由 ticker-status.json 等业务文件单独监控。
+    # Docker 只会标记 unhealthy，不会仅因 health 状态自动重启容器。
+    # 数据新鲜度由 ticker-status.json 等业务文件单独监控。
     healthcheck:
       test: ["CMD", "python", "-c", "import os,time,sys; p='/app/public/heartbeat.txt'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p) < 300 else 1)"]
       interval: 60s
@@ -35,7 +45,7 @@ services:
     ports:
       - "1881:80"
     volumes:
-      - ./public:/usr/share/nginx/html
+      - ./public:/usr/share/nginx/html:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./security-headers.conf:/etc/nginx/conf.d/security-headers.conf:ro
     environment:

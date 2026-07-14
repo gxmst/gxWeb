@@ -27,6 +27,11 @@ dist/
 # Node（仅前端构建期使用；产物 public/vendor/app.css 需提交，故不忽略）
 node_modules/
 
+# Local runtime configuration and secrets. Keep only the documented template.
+.env
+.env.*
+!.env.example
+
 # 日志与临时文件
 *.log
 .DS_Store
