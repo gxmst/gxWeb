@@ -1,6 +1,6 @@
 // ============ 壁纸收藏夹引擎 + 壁纸取色驱动主题 ============
 import { safeStorageGet, safeStorageSet } from './storage.js';
-import { moveTabIndicator, getCurrentFilter } from './news.js';
+import { moveTabIndicator, getCurrentFilter } from './news.js?v=settings-20260716a';
 
 let wallpapersArray = [];
 let currentBgIndex = 0;

@@ -99,6 +99,68 @@ class TranslationCacheTests(unittest.TestCase):
         self.assertFalse(spider._translate_dirty)
 
 
+class NewsImportanceTests(unittest.TestCase):
+    def test_sina_parser_publishes_score_and_reason_from_current_fields(self):
+        response = mock.Mock()
+        response.json.return_value = {
+            "result": {
+                "data": {
+                    "feed": {
+                        "list": [
+                            {
+                                "rich_text": "焦点快讯",
+                                "create_time": "2026-07-16 20:00:00",
+                                "is_focus": 1,
+                                "top_value": 0,
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+        session = mock.Mock()
+        session.get.return_value = response
+
+        with mock.patch.object(spider, "get_session", return_value=session):
+            news = spider._fetch_sina_page(1)
+
+        self.assertTrue(news[0]["is_important"])
+        self.assertEqual(news[0]["importance_score"], 100)
+        self.assertEqual(news[0]["importance_reason"], "新浪焦点")
+
+    def test_current_sina_focus_field_marks_news_important(self):
+        score, reason = spider.classify_news_importance(
+            "普通快讯文本", {"is_focus": 1, "top_value": 0}
+        )
+
+        self.assertEqual(score, 100)
+        self.assertEqual(reason, "新浪焦点")
+
+    def test_current_sina_top_value_marks_news_important(self):
+        score, reason = spider.classify_news_importance(
+            "普通快讯文本", {"is_focus": 0, "top_value": "20"}
+        )
+
+        self.assertEqual(score, 95)
+        self.assertEqual(reason, "新浪置顶")
+
+    def test_high_confidence_rule_returns_explainable_score(self):
+        score, reason = spider.classify_news_importance(
+            "美联储宣布降息25个基点，基准利率降至4.25%。"
+        )
+
+        self.assertGreaterEqual(score, spider.IMPORTANCE_THRESHOLD)
+        self.assertEqual(reason, "央行与利率决议")
+
+    def test_routine_market_move_is_not_marked_important(self):
+        score, reason = spider.classify_news_importance(
+            "纳斯达克指数期货跌幅扩大，最新下跌1%。"
+        )
+
+        self.assertEqual(score, 0)
+        self.assertEqual(reason, "")
+
+
 class LastKnownGoodTests(unittest.TestCase):
     def test_startup_recovers_bounded_news_snapshots(self):
         finance_data = {
@@ -158,6 +220,13 @@ class LastKnownGoodTests(unittest.TestCase):
 
 
 class RuntimeReliabilityTests(unittest.TestCase):
+    def test_weather_coordinates_fall_back_when_environment_is_invalid(self):
+        with mock.patch.dict(
+            os.environ,
+            {"WEATHER_LATITUDE": "north", "WEATHER_LONGITUDE": "999"},
+        ):
+            self.assertEqual(spider.get_weather_coordinates(), (41.80, 123.43))
+
     def test_weather_atomic_write_failure_is_not_swallowed(self):
         response = mock.Mock()
         response.json.return_value = {
@@ -171,6 +240,10 @@ class RuntimeReliabilityTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(OSError, "no space"):
                 spider.fetch_weather()
+
+        _, kwargs = session.get.call_args
+        self.assertEqual(kwargs["params"]["latitude"], 41.80)
+        self.assertEqual(kwargs["params"]["longitude"], 123.43)
 
     def test_dead_worker_makes_run_raise_for_nonzero_process_exit(self):
         class DeadThread:

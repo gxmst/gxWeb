@@ -1,5 +1,6 @@
 // ================== 天气与粒子物理引擎 ==================
 // 氛围切换通过 window.__setAmbiance 钩子桥接到 ambience 模块（含未就绪降级）。
+import { getSettings } from './settings-store.js';
 
 const canvas = document.getElementById('weatherCanvas');
 const ctx = canvas.getContext('2d');
@@ -37,8 +38,9 @@ function resizeCanvas() {
 // 按视口面积缩放粒子数，避免大屏太稀、小屏太密
 function particleCountFor(type) {
     const area = window.innerWidth * window.innerHeight;
-    if (type === 'snow') return Math.max(120, Math.min(380, Math.round(area / 9000)));
-    return Math.max(90, Math.min(300, Math.round(area / 12000)));   // rain
+    const compact = window.innerWidth < 768;
+    if (type === 'snow') return Math.max(compact ? 55 : 120, Math.min(compact ? 150 : 380, Math.round(area / 9000)));
+    return Math.max(compact ? 40 : 90, Math.min(compact ? 120 : 300, Math.round(area / 12000)));   // rain
 }
 
 let _uiBoundsDirty = true;
@@ -325,7 +327,9 @@ function applyEnvironmentFilter(weatherKeyword) {
     // 重置积雪厚度，避免切走再切回时残留旧雪
     uiBounds.forEach(b => b.snow = 0);
 
-    const profile = weatherProfileFor(weatherKeyword);
+    const appearance = getSettings().appearance;
+    const effectsAllowed = appearance.weatherEffects && !appearance.powerSaving;
+    const profile = effectsAllowed ? weatherProfileFor(weatherKeyword) : WEATHER_PROFILES.none;
     setWeatherOverlay(overlay, profile);
 
     currentWeatherType = profile.particle;
@@ -364,6 +368,32 @@ function toggleWeatherFilter() {
 }
 
 async function fetchWeather() {
+    const settings = getSettings();
+    if (settings.weather.mode === 'city') {
+        try {
+            const url = new URL('https://api.open-meteo.com/v1/forecast');
+            url.searchParams.set('latitude', String(settings.weather.latitude));
+            url.searchParams.set('longitude', String(settings.weather.longitude));
+            url.searchParams.set('current_weather', 'true');
+            const response = await fetch(url, { cache: 'no-cache' });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const payload = await response.json();
+            const current = payload.current_weather || {};
+            const code = Number(current.weathercode);
+            const temperature = Number(current.temperature);
+            if (!Number.isFinite(code) || !Number.isFinite(temperature)) throw new Error('invalid weather payload');
+            const emojiMap = { 0: '☀️', 1: '☁️', 2: '☁️', 3: '☁️', 45: '🌫️', 48: '🌫️', 51: '🌧️', 53: '🌧️', 55: '🌧️', 61: '🌧️', 63: '🌧️', 65: '🌧️', 71: '❄️', 73: '❄️', 75: '❄️', 95: '⛈️' };
+            const emoji = emojiMap[code] || (code >= 71 && code <= 77 ? '❄️' : code >= 51 && code <= 67 ? '🌧️' : '☁️');
+            const city = String(settings.weather.city || '').split(' · ')[0] || '当前城市';
+            const text = `${city} · ${emoji} ${temperature}°C`;
+            realWeather = text;
+            document.getElementById('weatherInfo').innerText = text;
+            if (filterModes[currentFilterIndex] === 'auto') applyEnvironmentFilter(realWeather);
+            return;
+        } catch (error) {
+            console.warn('指定城市天气获取失败，回退服务器天气:', error);
+        }
+    }
     try {
         const response = await fetch('./weather.txt', { cache: 'no-cache' });
         if (!response.ok) throw new Error();
@@ -399,6 +429,16 @@ export function initWeather() {
         else {
             startWeatherAnimation();
             poll();
+        }
+    });
+    window.addEventListener('gx:settings-changed', event => {
+        if (event.detail?.section === 'weather' || event.detail?.section === 'all') {
+            window.clearTimeout(weatherPollTimer);
+            weatherPollTimer = null;
+            poll();
+        }
+        if (event.detail?.section === 'appearance' || event.detail?.section === 'all') {
+            applyEnvironmentFilter(currentKeyword());
         }
     });
     const handleMotionPreference = event => {

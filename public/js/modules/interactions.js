@@ -1,5 +1,5 @@
 // ================== 辅助交互与快捷键 ==================
-import { safeStorageGet, safeStorageSet } from './storage.js';
+import { getSettings, updateSettings } from './settings-store.js';
 
 export function initInteractions() {
     // 全局快捷键监听
@@ -20,18 +20,26 @@ export function initInteractions() {
     // 回到顶部悬浮按钮
     const newsListEl = document.getElementById('newsList');
     const bttBtn = document.getElementById('backToTop');
-    newsListEl.addEventListener('scroll', () => {
-        const visible = newsListEl.scrollTop > 300;
+    const aside = document.querySelector('aside');
+    const updateBackToTop = () => {
+        const mobile = window.innerWidth < 768;
+        const progress = mobile ? window.scrollY - aside.offsetTop : newsListEl.scrollTop;
+        const visible = progress > 300;
         bttBtn.classList.toggle('opacity-0', !visible);
         bttBtn.classList.toggle('pointer-events-none', !visible);
         bttBtn.classList.toggle('opacity-100', visible);
         bttBtn.disabled = !visible;
         bttBtn.setAttribute('aria-hidden', String(!visible));
+    };
+    newsListEl.addEventListener('scroll', updateBackToTop, { passive: true });
+    window.addEventListener('scroll', updateBackToTop, { passive: true });
+    window.addEventListener('resize', updateBackToTop);
+    bttBtn.addEventListener('click', () => {
+        if (window.innerWidth < 768) window.scrollTo({ top: aside.offsetTop, behavior: 'smooth' });
+        else newsListEl.scrollTo({ top: 0, behavior: 'smooth' });
     });
-    bttBtn.addEventListener('click', () => newsListEl.scrollTo({ top: 0, behavior: 'smooth' }));
 
     // 侧边栏拖拽拉伸
-    const aside = document.querySelector('aside');
     const resizer = document.getElementById('resizer');
     let isResizing = false;
 
@@ -44,11 +52,16 @@ export function initInteractions() {
         return Math.min(Math.max(width, min), max);
     }
 
-    const savedWidth = safeStorageGet('newsPanelWidth');
-    if (savedWidth && window.innerWidth >= 768) {
-        const restoredWidth = clampNewsPanelWidth(savedWidth);
-        if (restoredWidth) aside.style.width = `${restoredWidth}px`;
+    function applySavedPanelWidth(settings = getSettings()) {
+        if (window.innerWidth < 768) {
+            aside.style.width = '';
+            return;
+        }
+        const restoredWidth = clampNewsPanelWidth(settings.layout.newsPanelWidth);
+        aside.style.width = restoredWidth ? `${restoredWidth}px` : '';
     }
+
+    applySavedPanelWidth();
 
     resizer.addEventListener('mousedown', () => { if (window.innerWidth < 768) return; isResizing = true; document.body.style.cursor = 'ew-resize'; aside.classList.add('select-none'); });
     resizer.addEventListener('touchstart', (e) => { if (window.innerWidth < 768) return; isResizing = true; aside.classList.add('select-none'); }, { passive: true });
@@ -69,7 +82,7 @@ export function initInteractions() {
     }, { passive: true });
     window.addEventListener('mouseup', () => {
         if (isResizing) {
-            safeStorageSet('newsPanelWidth', aside.offsetWidth);
+            updateSettings('layout', { newsPanelWidth: aside.offsetWidth });
         }
         isResizing = false;
         document.body.style.cursor = 'default';
@@ -77,49 +90,90 @@ export function initInteractions() {
     });
     window.addEventListener('touchend', () => {
         if (isResizing) {
-            safeStorageSet('newsPanelWidth', aside.offsetWidth);
+            updateSettings('layout', { newsPanelWidth: aside.offsetWidth });
         }
         isResizing = false;
         aside.classList.remove('select-none');
     });
 
     // 玻璃折射：仅在浏览器支持 url() backdrop-filter、非省电模式、且非窄屏时启用
-    (function enableGlassRefraction() {
-        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const wide = window.innerWidth >= 768;
-        const supported = (window.CSS && CSS.supports &&
+    const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const glassSupported = Boolean(window.CSS && CSS.supports &&
             (CSS.supports('backdrop-filter', 'url(#glassDisplace)') ||
              CSS.supports('-webkit-backdrop-filter', 'url(#glassDisplace)')));
-        if (supported && !reduce && wide) {
-            document.documentElement.classList.add('glass-refract');
-        }
-    })();
+
+    function syncGlassRefraction(settings = getSettings()) {
+        const enabled = glassSupported && !motionPreference.matches &&
+            window.innerWidth >= 768 && !settings.appearance.powerSaving;
+        document.documentElement.classList.toggle('glass-refract', enabled);
+    }
+
+    syncGlassRefraction();
 
     // 指针视差 3D 倾斜：玻璃面板随光标做小角度立体翻转（桌面 + 非省电才启用）
-    (function enableTilt() {
-        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (reduce || window.innerWidth < 768) return;
-        const els = Array.from(document.querySelectorAll('[data-tilt]'));
-        els.forEach(el => {
+    const tiltElements = Array.from(document.querySelectorAll('[data-tilt]'));
+    const tiltFrames = new WeakMap();
+
+    function canTilt() {
+        const appearance = getSettings().appearance;
+        return appearance.tilt && !appearance.powerSaving &&
+            !motionPreference.matches && window.innerWidth >= 768;
+    }
+
+    function clearTilt() {
+        tiltElements.forEach(el => {
+            const frame = tiltFrames.get(el);
+            if (frame) cancelAnimationFrame(frame);
+            tiltFrames.delete(el);
+            el.classList.remove('tilting');
+            el.style.transform = '';
+        });
+    }
+
+    tiltElements.forEach(el => {
             const max = parseFloat(el.dataset.tilt) || 5;
-            let raf = null;
             el.addEventListener('pointermove', (e) => {
+                if (!canTilt()) return;
                 const r = el.getBoundingClientRect();
                 const px = (e.clientX - r.left) / r.width - 0.5;   // -0.5 ~ 0.5
                 const py = (e.clientY - r.top) / r.height - 0.5;
-                if (raf) cancelAnimationFrame(raf);
-                raf = requestAnimationFrame(() => {
+                const previousFrame = tiltFrames.get(el);
+                if (previousFrame) cancelAnimationFrame(previousFrame);
+                tiltFrames.set(el, requestAnimationFrame(() => {
                     el.classList.add('tilting');
                     // 光标在右→绕 Y 正转；在下→绕 X 负转，符合实体板直觉
                     el.style.transform =
                         `rotateX(${(-py * max).toFixed(2)}deg) rotateY(${(px * max).toFixed(2)}deg)`;
-                });
+                    tiltFrames.delete(el);
+                }));
             });
             el.addEventListener('pointerleave', () => {
-                if (raf) cancelAnimationFrame(raf);
+                const frame = tiltFrames.get(el);
+                if (frame) cancelAnimationFrame(frame);
+                tiltFrames.delete(el);
                 el.classList.remove('tilting');
                 el.style.transform = '';
             });
-        });
-    })();
+    });
+
+    const syncEffects = (settings = getSettings()) => {
+        syncGlassRefraction(settings);
+        if (!canTilt()) clearTilt();
+    };
+    window.addEventListener('resize', () => {
+        applySavedPanelWidth();
+        syncEffects();
+    });
+    window.addEventListener('gx:settings-changed', event => {
+        const section = event.detail?.section;
+        const settings = event.detail?.settings || getSettings();
+        if (section === 'layout' || section === 'all') applySavedPanelWidth(settings);
+        if (section === 'appearance' || section === 'all') syncEffects(settings);
+    });
+    const handleMotionPreference = () => syncEffects();
+    if (typeof motionPreference.addEventListener === 'function') {
+        motionPreference.addEventListener('change', handleMotionPreference);
+    } else if (typeof motionPreference.addListener === 'function') {
+        motionPreference.addListener(handleMotionPreference);
+    }
 }

@@ -74,6 +74,87 @@ MARKET_TICKERS = [
     {"symbol": "as51", "name": "澳洲200", "category": "亚太", "decimals": 2, "sina": "b_AS51"},
 ]
 
+IMPORTANCE_THRESHOLD = 75
+
+# 只匹配高确定性的事件。规则宁可漏报，也不把普通行情播报染成“重要”。
+IMPORTANCE_RULES = (
+    (
+        90,
+        "央行与利率决议",
+        re.compile(
+            r"(?:美联储|联邦储备|中国人民银行|欧洲央行|日本央行|英国央行|央行|"
+            r"Federal Reserve|\bFed\b|\bECB\b|\bBOJ\b).{0,32}"
+            r"(?:加息|降息|利率决议|基准利率|维持.{0,8}利率|量化宽松|缩表|"
+            r"rate (?:cut|hike|decision))|"
+            r"(?:加息|降息|利率决议).{0,32}"
+            r"(?:美联储|中国人民银行|欧洲央行|日本央行|英国央行|央行)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        85,
+        "核心经济数据",
+        re.compile(
+            r"(?:非农|消费者价格指数|\bCPI\b|\bPCE\b|国内生产总值|\bGDP\b).{0,36}"
+            r"(?:公布|录得|同比|环比|升至|降至|增长|下降|超预期|不及预期|"
+            r"rose|fell|unexpected)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        85,
+        "市场异常波动",
+        re.compile(
+            r"(?:熔断|闪崩|暂停交易|触发临停|暴涨|暴跌|"
+            r"(?:涨幅|跌幅)扩大至\s*(?:[5-9]|[1-9]\d)(?:\.\d+)?%)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        80,
+        "重大政策或地缘事件",
+        re.compile(
+            r"(?:宣战|进入战争状态|发动空袭|发射导弹|核试验|全国进入紧急状态|"
+            r"实施全面制裁|重大制裁|主权评级.{0,10}下调)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        75,
+        "重大公司风险",
+        re.compile(
+            r"(?:申请破产保护|正式退市|暂停所有交易|债务违约|接管.{0,16}(?:银行|券商))",
+            re.IGNORECASE,
+        ),
+    ),
+)
+
+
+def _is_positive_flag(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    try:
+        return float(value) > 0
+    except (TypeError, ValueError):
+        return str(value).strip().lower() in {"true", "yes", "on"}
+
+
+def classify_news_importance(text, upstream=None):
+    """返回可解释的重要性分数和原因；兼容新浪新旧字段。"""
+    upstream = upstream or {}
+    if _is_positive_flag(upstream.get("is_focus")) or _is_positive_flag(upstream.get("focus")):
+        return 100, "新浪焦点"
+    if _is_positive_flag(upstream.get("top_value")) or _is_positive_flag(upstream.get("is_top")):
+        return 95, "新浪置顶"
+
+    normalized = clean_html(str(text or ""))
+    for score, reason, pattern in IMPORTANCE_RULES:
+        if pattern.search(normalized):
+            return score, reason
+    return 0, ""
+
 def get_random_ua():
     return random.choice(USER_AGENTS)
 
@@ -435,7 +516,7 @@ def _fetch_sina_page(page):
         clean_txt = clean_html(item.get("rich_text", "").replace("<br>", ""))
         if not clean_txt:
             continue
-        is_important = str(item.get("focus", "0")) == "1" or str(item.get("is_top", "0")) == "1"
+        importance_score, importance_reason = classify_news_importance(clean_txt, item)
         ts_val = item.get("create_time")
         try:
             if isinstance(ts_val, str):
@@ -455,7 +536,9 @@ def _fetch_sina_page(page):
             "raw_time": ts,
             "content": f"【新浪】{clean_txt}",
             "url": "",
-            "is_important": is_important,
+            "is_important": importance_score >= IMPORTANCE_THRESHOLD,
+            "importance_score": importance_score,
+            "importance_reason": importance_reason,
             "category": "news",
             "source": "sina"
         })
@@ -519,6 +602,8 @@ def fetch_rss_news():
                         "content": f"【{source['name']}】{title}",
                         "url": sanitize_url(link),
                         "is_important": False,
+                        "importance_score": 0,
+                        "importance_reason": "",
                         "category": "foreign",
                         "source": source["name"],
                         "_lang": source.get("lang", "zh"),
@@ -542,6 +627,11 @@ def fetch_rss_news():
 
     # 清理内部临时字段，保持 finance-news.json 干净
     for n in all_rss_news:
+        importance_text = " ".join(filter(None, [n.get("content"), n.get("display_content")]))
+        importance_score, importance_reason = classify_news_importance(importance_text)
+        n["importance_score"] = importance_score
+        n["importance_reason"] = importance_reason
+        n["is_important"] = importance_score >= IMPORTANCE_THRESHOLD
         n.pop("_lang", None)
         n.pop("_title", None)
     return all_rss_news
@@ -611,11 +701,31 @@ def build_v2ex_html(hot_topics, new_topics):
     return v2ex_html
 
 # ================= 引擎 5：稳定天气 (Open-Meteo) =================
+def get_weather_coordinates():
+    def parse_coordinate(name, default, minimum, maximum):
+        try:
+            value = float(os.getenv(name, str(default)))
+        except (TypeError, ValueError):
+            return default
+        return value if minimum <= value <= maximum else default
+
+    return (
+        parse_coordinate("WEATHER_LATITUDE", 41.80, -90, 90),
+        parse_coordinate("WEATHER_LONGITUDE", 123.43, -180, 180),
+    )
+
+
 def fetch_weather():
     try:
-        url = "https://api.open-meteo.com/v1/forecast?latitude=41.80&longitude=123.43&current_weather=true"
+        latitude, longitude = get_weather_coordinates()
+        url = "https://api.open-meteo.com/v1/forecast"
         headers = {"User-Agent": get_random_ua()}
-        response = get_session().get(url, headers=headers, timeout=10)
+        response = get_session().get(
+            url,
+            params={"latitude": latitude, "longitude": longitude, "current_weather": "true"},
+            headers=headers,
+            timeout=10,
+        )
         response.raise_for_status()
         payload = response.json()
         curr = payload.get("current_weather", {})
@@ -1261,10 +1371,8 @@ class SpiderApp:
             tech_snapshot = list(self.tech_news)
 
         final_news = sina_snapshot + rss_snapshot + tech_snapshot
-        final_news.sort(
-            key=lambda x: (x.get("is_important", False), x.get("raw_time", 0)),
-            reverse=True,
-        )
+        # 时间线保持严格倒序；重要项由前端样式和“只看重要”筛选突出。
+        final_news.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
         if not final_news:
             return []
 

@@ -1,5 +1,5 @@
 // ============ 基础 UI 控制：时钟 / 搜索引擎 / 行情条翻页 ============
-import { safeStorageGet, safeStorageSet } from './storage.js';
+import { getSettings, updateSettings } from './settings-store.js';
 
 // ---- 实时时钟 ----
 const clockEl = document.getElementById('clock');
@@ -20,25 +20,23 @@ const engines = {
     google: { name: '谷歌', url: 'https://www.google.com/search?q=', color: '#EA4335' },
     duck: { name: 'Duck', url: 'https://duckduckgo.com/?q=', color: '#DE5833' }
 };
-const storedEngine = safeStorageGet('preferredEngine', 'bing');
+const storedEngine = getSettings().search.engine;
 let currentEngine = engines[storedEngine] ? storedEngine : 'bing';
 
-export function setSearchEngine(engine) {
+export function setSearchEngine(engine, persist = true) {
     if (!engines[engine]) engine = 'bing';
     currentEngine = engine;
-    safeStorageSet('preferredEngine', engine);
+    if (persist && getSettings().search.engine !== engine) updateSettings('search', { engine });
     document.getElementById('searchInput').placeholder = `在 ${engines[engine].name} 上搜索...`;
     Object.keys(engines).forEach(key => {
         const btn = document.getElementById('eng-' + key);
-        if (key === engine) {
-            btn.style.color = engines[key].color;
-            btn.className = 'px-3 py-1 rounded-full bg-white/20 text-white font-bold shadow-lg transition-all shrink-0 scale-105 border border-white/20';
-        } else {
-            btn.style.color = '';
-            btn.className = 'px-3 py-1 rounded-full text-white/60 hover:text-white transition-all shrink-0 hover:bg-white/10';
-        }
+        if (!btn) return;
+        btn.style.setProperty('--engine-color', engines[key].color);
+        btn.classList.toggle('active', key === engine);
         btn.setAttribute('aria-pressed', String(key === engine));
     });
+    const mobileSelect = document.getElementById('searchEngineSelect');
+    if (mobileSelect) mobileSelect.value = engine;
 }
 
 export function handleSearch() {
@@ -64,6 +62,13 @@ export function initUI() {
     });
     document.querySelectorAll('[data-engine]').forEach(button => {
         button.addEventListener('click', () => setSearchEngine(button.dataset.engine));
+    });
+    document.getElementById('searchEngineSelect')?.addEventListener('change', event => {
+        setSearchEngine(event.target.value);
+    });
+    window.addEventListener('gx:settings-changed', event => {
+        const engine = event.detail?.settings?.search?.engine;
+        if (engine && engine !== currentEngine) setSearchEngine(engine, false);
     });
     document.querySelectorAll('[data-ticker-scroll]').forEach(button => {
         button.addEventListener('click', () => scrollTicker(Number(button.dataset.tickerScroll) || 0));

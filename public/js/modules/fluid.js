@@ -1,4 +1,4 @@
-import { safeStorageGet, safeStorageSet } from './storage.js';
+import { getSettings, updateSettings } from './settings-store.js';
 
 // ================== WebGL 轻量涟漪壁纸 ==================
 // 在壁纸图层之上叠一块 WebGL canvas（z-[3]，氛围光/遮罩之下），采样当前壁纸做
@@ -21,7 +21,6 @@ const MAX_RENDER_PIXELS = 1920 * 1080;
 const RIPPLE_MIN_DIST = 32;     // 轨迹需要同时满足距离与时间条件，避免密集覆盖
 const RIPPLE_MIN_INTERVAL = 110;
 const RIPPLE_LIFETIME = 0.9;
-const FLUID_MODE_KEY = 'fluidRippleMode';
 const MODE_OFF = 'off';
 const MODE_LIGHT = 'light';
 
@@ -152,6 +151,7 @@ let requestedMode = MODE_OFF;
 let unavailable = false;
 let weatherMotionActive = false;
 let reduceMotion = false;
+let powerSaving = false;
 let listenersAttached = false;
 let lastInjectX = -1, lastInjectY = -1, lastInjectT = 0;
 let lastWallpaperImg = null;       // 上下文丢失后恢复时，重新上传这张壁纸。
@@ -512,7 +512,7 @@ function render(frameTime) {
 function updateControl() {
     if (!controlButton) return;
     const preferred = requestedMode === MODE_LIGHT;
-    const actuallyAvailable = preferred && !reduceMotion && !unavailable && !contextLost && window.innerWidth >= 768;
+    const actuallyAvailable = preferred && !powerSaving && !reduceMotion && !unavailable && !contextLost && window.innerWidth >= 768;
     controlButton.setAttribute('aria-pressed', String(actuallyAvailable));
     controlButton.setAttribute('aria-label', '背景涟漪');
     controlButton.disabled = reduceMotion || unavailable;
@@ -522,6 +522,7 @@ function updateControl() {
 
     if (unavailable) controlButton.title = '当前浏览器不支持背景涟漪';
     else if (reduceMotion) controlButton.title = '系统已启用减少动态效果';
+    else if (powerSaving && preferred) controlButton.title = '省电模式下背景涟漪已暂停';
     else if (contextLost && preferred) controlButton.title = '背景涟漪正在恢复（点击关闭）';
     else if (preferred) controlButton.title = weatherMotionActive ? '关闭背景涟漪（天气动画期间已暂停）' : '关闭背景涟漪';
     else controlButton.title = '开启轻量背景涟漪';
@@ -588,7 +589,7 @@ function stopFluidRuntime() {
 }
 
 function reconcileFluidState() {
-    const shouldEnable = requestedMode === MODE_LIGHT && !reduceMotion && !unavailable && window.innerWidth >= 768;
+    const shouldEnable = requestedMode === MODE_LIGHT && !powerSaving && !reduceMotion && !unavailable && window.innerWidth >= 768;
     if (!shouldEnable) {
         stopFluidRuntime();
         updateControl();
@@ -597,7 +598,7 @@ function reconcileFluidState() {
 
     if (!ensureInitialized()) {
         requestedMode = MODE_OFF;
-        safeStorageSet(FLUID_MODE_KEY, MODE_OFF);
+        if (getSettings().appearance.ripple) updateSettings('appearance', { ripple: false });
         stopFluidRuntime();
         updateControl();
         return;
@@ -615,16 +616,18 @@ function reconcileFluidState() {
 }
 
 function setRequestedMode(mode) {
-    requestedMode = mode === MODE_LIGHT ? MODE_LIGHT : MODE_OFF;
-    safeStorageSet(FLUID_MODE_KEY, requestedMode);
-    reconcileFluidState();
+    const ripple = mode === MODE_LIGHT;
+    requestedMode = ripple ? MODE_LIGHT : MODE_OFF;
+    updateSettings('appearance', { ripple });
 }
 
 export function initFluid() {
     controlButton = document.getElementById('rippleBtn');
     const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
     reduceMotion = motionPreference.matches;
-    requestedMode = safeStorageGet(FLUID_MODE_KEY, MODE_OFF) === MODE_LIGHT ? MODE_LIGHT : MODE_OFF;
+    const appearance = getSettings().appearance;
+    requestedMode = appearance.ripple ? MODE_LIGHT : MODE_OFF;
+    powerSaving = appearance.powerSaving;
 
     // 即使默认关闭，也要记录 wallpaper 模块后续送来的当前图片，首次开启才能立即接管。
     window.__fluidSetWallpaper = rememberWallpaper;
@@ -653,6 +656,13 @@ export function initFluid() {
         syncCanvasVisibility();
         if (!weatherMotionActive) kick();
         updateControl();
+    });
+    window.addEventListener('gx:settings-changed', event => {
+        if (!['appearance', 'all'].includes(event.detail?.section)) return;
+        const next = event.detail?.settings?.appearance || getSettings().appearance;
+        requestedMode = next.ripple ? MODE_LIGHT : MODE_OFF;
+        powerSaving = Boolean(next.powerSaving);
+        reconcileFluidState();
     });
     document.addEventListener('visibilitychange', () => {
         resetLoopState();

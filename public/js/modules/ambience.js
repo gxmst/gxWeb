@@ -1,8 +1,11 @@
+import { getSettings } from './settings-store.js';
+
 // ================== 视觉增强：进场 / 光斑 / 磁吸 / 时段 / 雷暴 / 星空 / 数字滚动 ==================
 // 暴露给其它模块的钩子：window.__setAmbiance / __animateNumber / __drawInSparkline
 
 export function initAmbience() {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let powerSaving = getSettings().appearance.powerSaving;
 
     // ---- 进场错峰动画：逐个触发 .entered ----
     const enterEls = Array.from(document.querySelectorAll('[data-enter]'));
@@ -18,6 +21,7 @@ export function initAmbience() {
     const spotEls = Array.from(document.querySelectorAll('.glass-spot'));
     spotEls.forEach(el => {
         el.addEventListener('pointermove', (e) => {
+            if (powerSaving) return;
             const r = el.getBoundingClientRect();
             el.style.setProperty('--mx', ((e.clientX - r.left) / r.width * 100).toFixed(1) + '%');
             el.style.setProperty('--my', ((e.clientY - r.top) / r.height * 100).toFixed(1) + '%');
@@ -29,10 +33,10 @@ export function initAmbience() {
     // ---- Dock 图标磁吸放大：靠近指针的图标按距离放大 ----
     const dockRow = document.getElementById('dockRow');
     if (dockRow && !reduceMotion) {
-        const icos = Array.from(dockRow.querySelectorAll('.dock-ico'));
         const MAX = 1.32, RANGE = 110; // 最大放大倍率 / 影响半径(px)
         dockRow.addEventListener('pointermove', (e) => {
-            icos.forEach(ico => {
+            if (powerSaving) return;
+            dockRow.querySelectorAll('.dock-ico').forEach(ico => {
                 const r = ico.getBoundingClientRect();
                 const cx = r.left + r.width / 2;
                 const d = Math.abs(e.clientX - cx);
@@ -42,7 +46,7 @@ export function initAmbience() {
             });
         });
         dockRow.addEventListener('pointerleave', () => {
-            icos.forEach(ico => { ico.style.transform = ''; });
+            dockRow.querySelectorAll('.dock-ico').forEach(ico => { ico.style.transform = ''; });
         });
     }
 
@@ -88,7 +92,7 @@ export function initAmbience() {
         const delay = isStorm ? (5000 + Math.random() * 7000) : (18000 + Math.random() * 30000);
         lightningTimer = setTimeout(() => {
             const a = window.__weatherAmbiance;
-            if ((a === 'rain' || a === 'storm') && !reduceMotion) {
+            if ((a === 'rain' || a === 'storm') && !reduceMotion && !powerSaving) {
                 const strong = a === 'storm';
                 lightning.classList.toggle('strong', strong);
                 lightning.classList.remove('flash');
@@ -199,7 +203,7 @@ export function initAmbience() {
         const ambiance = window.__weatherAmbiance;
         // 雨/雷暴/雪/雾 下不显示星空，避免画面杂乱
         const hideFor = ['rain', 'storm', 'snow', 'fog'];
-        const show = isNight && !reduceMotion && !hideFor.includes(ambiance);
+        const show = isNight && !reduceMotion && !powerSaving && !hideFor.includes(ambiance);
         if (show) {
             if (!stars.length) initStars();
             if (!starAnimId) animateStars();
@@ -231,13 +235,29 @@ export function initAmbience() {
         refreshStarVisibility();
     };
 
+    window.addEventListener('gx:settings-changed', event => {
+        if (!['appearance', 'all'].includes(event.detail?.section)) return;
+        powerSaving = Boolean((event.detail?.settings || getSettings()).appearance.powerSaving);
+        if (powerSaving) {
+            if (lightningTimer) {
+                clearTimeout(lightningTimer);
+                lightningTimer = null;
+            }
+            document.querySelectorAll('.glass-spot').forEach(el => el.style.setProperty('--spot', '0'));
+            dockRow?.querySelectorAll('.dock-ico').forEach(ico => { ico.style.transform = ''; });
+        } else if (window.__weatherAmbiance === 'rain' || window.__weatherAmbiance === 'storm') {
+            scheduleLightning();
+        }
+        refreshStarVisibility();
+    });
+
     applyTimeTint();
     setInterval(applyTimeTint, 5 * 60 * 1000); // 每 5 分钟校准一次时段
 
     // ---- 行情数字滚动 + sparkline 画入：作为全局工具暴露 ----
     // 数字滚动：把字符串价格里的数字部分做插值动画，保留非数字格式（货币符号/逗号）
     window.__animateNumber = function (el, toStr) {
-        if (reduceMotion) { el.innerText = toStr; return; }
+        if (reduceMotion || powerSaving) { el.innerText = toStr; return; }
         const fromStr = el.dataset.rawVal || '';
         const toNum = parseFloat(String(toStr).replace(/[^0-9.\-]/g, ''));
         const fromNum = parseFloat(String(fromStr).replace(/[^0-9.\-]/g, ''));
@@ -271,7 +291,7 @@ export function initAmbience() {
 
     // sparkline 画入：为新插入的折线测量长度并触发描绘动画
     window.__drawInSparkline = function (container) {
-        if (reduceMotion) return;
+        if (reduceMotion || powerSaving) return;
         const poly = container.querySelector('.sparkline-poly');
         if (!poly || typeof poly.getTotalLength !== 'function') return;
         let len = 0;

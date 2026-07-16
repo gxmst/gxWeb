@@ -1,6 +1,7 @@
 // ================== 底部行情双行排版 ==================
 // 数字滚动 / sparkline 画入通过 window.__animateNumber / __drawInSparkline 桥接
 // （由 ambience 模块初始化时挂载，未就绪时各调用点自带降级）。
+import { getSettings } from './settings-store.js';
 
 const SPARKLINE_MIN_POINTS = 3;
 const TICKER_POLL_INTERVAL = 20000;
@@ -25,9 +26,37 @@ async function fetchTickerData() {
     try {
         const response = await fetch('./ticker.json', { cache: 'no-cache' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const items = await response.json();
+        const rawItems = await response.json();
         const container = document.getElementById('tickerContent');
-        if (!items || items.length === 0) return;
+        if (!Array.isArray(rawItems)) return;
+        window.dispatchEvent(new CustomEvent('gx:ticker-data', {
+            detail: {
+                items: rawItems.map(item => ({
+                    symbol: String(item.symbol || ''),
+                    name: String(item.name || item.symbol || ''),
+                    category: String(item.category || ''),
+                })).filter(item => item.symbol),
+            },
+        }));
+        const tickerSettings = getSettings().ticker;
+        const favorites = new Set(tickerSettings.favorites);
+        const positions = new Map(tickerSettings.order.map((symbol, index) => [String(symbol), index]));
+        const items = rawItems
+            .filter(item => tickerSettings.showAll || favorites.has(String(item.symbol || '')))
+            .sort((a, b) => {
+                const aSymbol = String(a.symbol || '');
+                const bSymbol = String(b.symbol || '');
+                const ai = positions.has(aSymbol) ? positions.get(aSymbol) : Number.MAX_SAFE_INTEGER;
+                const bi = positions.has(bSymbol) ? positions.get(bSymbol) : Number.MAX_SAFE_INTEGER;
+                return ai - bi;
+            });
+        if (items.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'px-3 text-xs text-white/40';
+            empty.textContent = '未选择行情';
+            container.replaceChildren(empty);
+            return;
+        }
 
         // 数量相同但 symbol 已替换时也必须重绘，避免新条目找不到旧节点。
         const currentSymbols = Array.from(container.children).map(element => element.dataset.symbol || '');
@@ -117,6 +146,7 @@ function setTickerStatus(kind, label, title) {
         : `animate-ping absolute inline-flex h-full w-full rounded-full ${colors.ping} opacity-75`;
     statusDot.className = `relative inline-flex rounded-full h-2 w-2 ${colors.dot}`;
     status.title = title;
+    window.dispatchEvent(new CustomEvent('gx:status-change', { detail: { source: 'ticker', kind } }));
 }
 
 async function fetchTickerStatus() {
@@ -159,6 +189,9 @@ export function initTicker() {
         window.clearTimeout(tickerPollTimer);
         tickerPollTimer = null;
         if (!document.hidden) poll();
+    });
+    window.addEventListener('gx:settings-changed', event => {
+        if (event.detail?.section === 'ticker' || event.detail?.section === 'all') fetchTickerData();
     });
     poll();
 }

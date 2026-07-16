@@ -6,18 +6,20 @@
 // 这样 DOM、跨模块的 window.__* 钩子的就绪时序可控，不再依赖脚本书写顺序的巧合。
 //
 // 关键顺序约束：
-//   1. initAmbience() 必须在 initWeather() 之前——它定义 window.__setAmbiance 钩子，
+//   1. initSettings() 先应用本地偏好；initAmbience() 必须在 initWeather() 之前——它定义 window.__setAmbiance 钩子，
 //      天气引擎切换氛围时会调用它（否则首帧 ambiance 落空，要等下次校准）。
 //   2. 所有控件事件由各模块在 initXxx() 内绑定，不依赖内联处理器或额外全局函数。
 
-import { initUI } from './modules/ui.js';
-import { initAmbience } from './modules/ambience.js';
-import { initFluid } from './modules/fluid.js';
-import { initWallpapers } from './modules/wallpaper.js';
-import { initWeather } from './modules/weather.js';
-import { initTicker } from './modules/ticker.js';
-import { initNews } from './modules/news.js';
-import { initInteractions } from './modules/interactions.js';
+import { initUI } from './modules/ui.js?v=settings-20260716a';
+import { initAmbience } from './modules/ambience.js?v=settings-20260716a';
+import { initFluid } from './modules/fluid.js?v=settings-20260716a';
+import { initWallpapers } from './modules/wallpaper.js?v=settings-20260716a';
+import { initWeather } from './modules/weather.js?v=settings-20260716a';
+import { initTicker } from './modules/ticker.js?v=settings-20260716a';
+import { initNews } from './modules/news.js?v=settings-20260716a';
+import { initInteractions } from './modules/interactions.js?v=settings-20260716a';
+import { initStatus } from './modules/status.js?v=settings-20260716a';
+import { initSettings } from './modules/settings.js?v=settings-20260716a';
 
 // 只有完整模块图加载成功后才隐藏待进场元素；脚本被禁用或模块加载失败时，
 // 页面内容保持可见，避免核心界面永久停在 opacity: 0。
@@ -42,10 +44,12 @@ function runInitializer(name, initializer) {
 function init() {
     // 单个模块失败不会阻断其余功能；顺序仍满足 ambience/fluid 的桥接约束。
     runInitializer('ui', initUI);
+    runInitializer('settings', initSettings);
     runInitializer('ambience', initAmbience);
     runInitializer('fluid', initFluid);
     runInitializer('wallpapers', initWallpapers);
     runInitializer('weather', initWeather);
+    runInitializer('status', initStatus);
     runInitializer('ticker', initTicker);
     runInitializer('news', initNews);
     runInitializer('interactions', initInteractions);
