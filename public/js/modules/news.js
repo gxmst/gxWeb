@@ -184,6 +184,7 @@ export function setFontSize(size, persist = true, render = true) {
     if (persist && getSettings().news.fontSize !== size) updateSettings('news', { fontSize: size });
     ['sm', 'base', 'lg'].forEach(s => {
         const btn = document.getElementById('fs-' + s);
+        if (!btn) return;
         if (s === size) { btn.classList.add('bg-white/20', 'text-white'); btn.classList.remove('text-white/50'); }
         else { btn.classList.remove('bg-white/20', 'text-white'); btn.classList.add('text-white/50'); }
         btn.setAttribute('aria-pressed', String(s === size));
@@ -315,7 +316,7 @@ function createNewsElement(news, isNew = false) {
     // 时间轴信息流：去掉表格式分隔线，靠竖线+节点圆点串联；重要项染红节点与底色
     const importantClass = news.is_important ? ' is-important' : '';
 
-    item.className = `news-feed-item${importantClass} py-2.5 [&_a]:text-blue-400 [&_a]:underline [&_a]:hover:text-blue-300` + (isNew ? ' animate-slide-down' : '');
+    item.className = `news-feed-item${importantClass} py-2 [&_a]:text-blue-400 [&_a]:underline [&_a]:hover:text-blue-300` + (isNew ? ' animate-slide-down' : '');
     item.dataset.newsKey = news._clientKey;
     item.dataset.newsSignature = newsRenderSignature(news);
 
@@ -339,7 +340,7 @@ function createNewsElement(news, isNew = false) {
         header.appendChild(badge);
     }
 
-    body.className = `${fs} leading-loose text-white/90 drop-shadow-sm tech-content`;
+    body.className = `${fs} leading-relaxed text-white/90 drop-shadow-sm tech-content`;
     if (isHtmlBlock) {
         body.innerHTML = DOMPurify.sanitize(news.content || '', { ADD_ATTR: ['target', 'rel'] });
         body.querySelectorAll('a').forEach(a => {

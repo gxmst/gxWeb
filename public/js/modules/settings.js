@@ -15,6 +15,7 @@ function applyAppearanceClasses(settings = getSettings()) {
     const root = document.documentElement;
     root.classList.toggle('weather-effects-off', !settings.appearance.weatherEffects);
     root.classList.toggle('tilt-off', !settings.appearance.tilt);
+    root.classList.toggle('glass-glow-off', !settings.appearance.glassGlow);
     root.classList.toggle('power-saving', settings.appearance.powerSaving);
 }
 
@@ -260,6 +261,11 @@ function syncControls(settings = getSettings()) {
     setChecked('settingsWeatherEffects', settings.appearance.weatherEffects);
     setChecked('settingsTilt', settings.appearance.tilt);
     setChecked('settingsRipple', settings.appearance.ripple);
+    setChecked('settingsGlassGlow', settings.appearance.glassGlow);
+    setChecked('settingsGlassRefraction', settings.appearance.glassRefraction);
+    setChecked('settingsTimeTint', settings.appearance.timeTint);
+    setChecked('settingsNightSky', settings.appearance.nightSky);
+    setChecked('settingsNumberMotion', settings.appearance.numberMotion);
     setChecked('settingsPowerSaving', settings.appearance.powerSaving);
     document.getElementById('weatherModeServer')?.setAttribute('aria-pressed', String(settings.weather.mode === 'server'));
     document.getElementById('weatherModeCity')?.setAttribute('aria-pressed', String(settings.weather.mode === 'city'));
@@ -281,7 +287,7 @@ async function searchCities() {
     status.textContent = '搜索中';
     results.replaceChildren();
     try {
-        const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
+        const url = new URL('./api/weather/geocoding', window.location.href);
         url.searchParams.set('name', query);
         url.searchParams.set('count', '6');
         url.searchParams.set('language', 'zh');
@@ -320,7 +326,7 @@ async function searchCities() {
         });
         results.replaceChildren(fragment);
     } catch {
-        status.textContent = '城市搜索暂不可用';
+        status.textContent = '城市搜索失败，请稍后重试';
     }
 }
 
@@ -400,6 +406,11 @@ function bindControls() {
     document.getElementById('settingsWeatherEffects')?.addEventListener('change', event => updateSettings('appearance', { weatherEffects: event.target.checked }));
     document.getElementById('settingsTilt')?.addEventListener('change', event => updateSettings('appearance', { tilt: event.target.checked }));
     document.getElementById('settingsRipple')?.addEventListener('change', event => updateSettings('appearance', { ripple: event.target.checked }));
+    document.getElementById('settingsGlassGlow')?.addEventListener('change', event => updateSettings('appearance', { glassGlow: event.target.checked }));
+    document.getElementById('settingsGlassRefraction')?.addEventListener('change', event => updateSettings('appearance', { glassRefraction: event.target.checked }));
+    document.getElementById('settingsTimeTint')?.addEventListener('change', event => updateSettings('appearance', { timeTint: event.target.checked }));
+    document.getElementById('settingsNightSky')?.addEventListener('change', event => updateSettings('appearance', { nightSky: event.target.checked }));
+    document.getElementById('settingsNumberMotion')?.addEventListener('change', event => updateSettings('appearance', { numberMotion: event.target.checked }));
     document.getElementById('settingsPowerSaving')?.addEventListener('change', event => updateSettings('appearance', { powerSaving: event.target.checked }));
     document.getElementById('addShortcutButton')?.addEventListener('click', () => {
         const next = getSettings().shortcuts;

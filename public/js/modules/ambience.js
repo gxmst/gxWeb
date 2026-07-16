@@ -5,7 +5,8 @@ import { getSettings } from './settings-store.js';
 
 export function initAmbience() {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let powerSaving = getSettings().appearance.powerSaving;
+    let appearance = getSettings().appearance;
+    let powerSaving = appearance.powerSaving;
 
     // ---- 进场错峰动画：逐个触发 .entered ----
     const enterEls = Array.from(document.querySelectorAll('[data-enter]'));
@@ -21,7 +22,7 @@ export function initAmbience() {
     const spotEls = Array.from(document.querySelectorAll('.glass-spot'));
     spotEls.forEach(el => {
         el.addEventListener('pointermove', (e) => {
-            if (powerSaving) return;
+            if (powerSaving || !appearance.glassGlow) return;
             const r = el.getBoundingClientRect();
             el.style.setProperty('--mx', ((e.clientX - r.left) / r.width * 100).toFixed(1) + '%');
             el.style.setProperty('--my', ((e.clientY - r.top) / r.height * 100).toFixed(1) + '%');
@@ -56,6 +57,12 @@ export function initAmbience() {
     function applyTimeTint() {
         if (!timeTint) return;
         const h = new Date().getHours();
+        document.body.dataset.daypart = (h >= 20 || h < 5) ? 'night' : 'day';
+        if (!appearance.timeTint || powerSaving) {
+            timeTint.style.opacity = '0';
+            refreshStarVisibility();
+            return;
+        }
         let bg, opacity;
         if (h >= 5 && h < 9) {
             // 清晨：极淡的暖橘
@@ -77,7 +84,6 @@ export function initAmbience() {
         timeTint.style.background = bg;
         timeTint.style.opacity = opacity;
         // 夜晚开启星空（仅在非雨雪氛围下由 setAmbiance 控制可见性）
-        document.body.dataset.daypart = (h >= 20 || h < 5) ? 'night' : 'day';
         refreshStarVisibility();
     }
 
@@ -203,7 +209,7 @@ export function initAmbience() {
         const ambiance = window.__weatherAmbiance;
         // 雨/雷暴/雪/雾 下不显示星空，避免画面杂乱
         const hideFor = ['rain', 'storm', 'snow', 'fog'];
-        const show = isNight && !reduceMotion && !powerSaving && !hideFor.includes(ambiance);
+        const show = appearance.nightSky && isNight && !reduceMotion && !powerSaving && !hideFor.includes(ambiance);
         if (show) {
             if (!stars.length) initStars();
             if (!starAnimId) animateStars();
@@ -237,7 +243,8 @@ export function initAmbience() {
 
     window.addEventListener('gx:settings-changed', event => {
         if (!['appearance', 'all'].includes(event.detail?.section)) return;
-        powerSaving = Boolean((event.detail?.settings || getSettings()).appearance.powerSaving);
+        appearance = (event.detail?.settings || getSettings()).appearance;
+        powerSaving = Boolean(appearance.powerSaving);
         if (powerSaving) {
             if (lightningTimer) {
                 clearTimeout(lightningTimer);
@@ -248,6 +255,10 @@ export function initAmbience() {
         } else if (window.__weatherAmbiance === 'rain' || window.__weatherAmbiance === 'storm') {
             scheduleLightning();
         }
+        if (!appearance.glassGlow) {
+            document.querySelectorAll('.glass-spot').forEach(el => el.style.setProperty('--spot', '0'));
+        }
+        applyTimeTint();
         refreshStarVisibility();
     });
 
@@ -257,7 +268,7 @@ export function initAmbience() {
     // ---- 行情数字滚动 + sparkline 画入：作为全局工具暴露 ----
     // 数字滚动：把字符串价格里的数字部分做插值动画，保留非数字格式（货币符号/逗号）
     window.__animateNumber = function (el, toStr) {
-        if (reduceMotion || powerSaving) { el.innerText = toStr; return; }
+        if (reduceMotion || powerSaving || !appearance.numberMotion) { el.innerText = toStr; return; }
         const fromStr = el.dataset.rawVal || '';
         const toNum = parseFloat(String(toStr).replace(/[^0-9.\-]/g, ''));
         const fromNum = parseFloat(String(fromStr).replace(/[^0-9.\-]/g, ''));
@@ -291,7 +302,7 @@ export function initAmbience() {
 
     // sparkline 画入：为新插入的折线测量长度并触发描绘动画
     window.__drawInSparkline = function (container) {
-        if (reduceMotion || powerSaving) return;
+        if (reduceMotion || powerSaving || !appearance.numberMotion) return;
         const poly = container.querySelector('.sparkline-poly');
         if (!poly || typeof poly.getTotalLength !== 'function') return;
         let len = 0;

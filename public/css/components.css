@@ -164,6 +164,8 @@ html.js-motion [data-enter] { opacity: 0; will-change: transform, opacity; }
     pointer-events: none;
     z-index: 4;
 }
+html.glass-glow-off .glass-spot::before,
+html.glass-glow-off .glass-spot::after { display: none; }
 
 /* ============ 指针视差 3D 倾斜 ============ */
 main, aside { perspective: 1400px; }

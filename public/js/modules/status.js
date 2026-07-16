@@ -110,10 +110,23 @@ async function fetchPipelineStatus() {
 export function initStatus() {
     const button = document.getElementById('systemStatusButton');
     const popover = document.getElementById('systemStatusPopover');
+    if (popover && popover.parentElement !== document.body) document.body.appendChild(popover);
+    const positionPopover = () => {
+        if (!button || !popover || popover.hidden) return;
+        const rect = button.getBoundingClientRect();
+        const width = Math.min(320, window.innerWidth - 24);
+        const left = Math.max(12, Math.min(window.innerWidth - width - 12, rect.right - width));
+        popover.style.left = `${left}px`;
+        const height = popover.offsetHeight;
+        const below = rect.bottom + 8;
+        const above = rect.top - height - 8;
+        popover.style.top = `${below + height <= window.innerHeight - 12 ? below : Math.max(12, above)}px`;
+    };
     const setOpen = open => {
         if (!button || !popover) return;
         popover.hidden = !open;
         button.setAttribute('aria-expanded', String(open));
+        if (open) requestAnimationFrame(positionPopover);
     };
     button?.addEventListener('click', event => {
         event.stopPropagation();
@@ -124,6 +137,8 @@ export function initStatus() {
     document.addEventListener('keydown', event => {
         if (event.key === 'Escape') setOpen(false);
     });
+    window.addEventListener('resize', positionPopover);
+    window.addEventListener('scroll', positionPopover, true);
     window.addEventListener('gx:status-change', event => {
         const source = event.detail?.source;
         if (source === 'news' || source === 'ticker') {

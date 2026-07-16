@@ -158,7 +158,6 @@ let lastWallpaperImg = null;       // 上下文丢失后恢复时，重新上传
 let uploadedWallpaperSrc = '';
 let pendingPointer = null;
 let lastFrameTime = 0;
-let controlButton = null;
 const rippleUniformData = new Float32Array(MAX_RIPPLES * 4);
 const pointerState = {
     x: 0.5,
@@ -509,25 +508,6 @@ function render(frameTime) {
     }
 }
 
-function updateControl() {
-    if (!controlButton) return;
-    const preferred = requestedMode === MODE_LIGHT;
-    const actuallyAvailable = preferred && !powerSaving && !reduceMotion && !unavailable && !contextLost && window.innerWidth >= 768;
-    controlButton.setAttribute('aria-pressed', String(actuallyAvailable));
-    controlButton.setAttribute('aria-label', '背景涟漪');
-    controlButton.disabled = reduceMotion || unavailable;
-    controlButton.classList.toggle('bg-white/20', actuallyAvailable);
-    controlButton.classList.toggle('ring-2', actuallyAvailable);
-    controlButton.classList.toggle('ring-white/40', actuallyAvailable);
-
-    if (unavailable) controlButton.title = '当前浏览器不支持背景涟漪';
-    else if (reduceMotion) controlButton.title = '系统已启用减少动态效果';
-    else if (powerSaving && preferred) controlButton.title = '省电模式下背景涟漪已暂停';
-    else if (contextLost && preferred) controlButton.title = '背景涟漪正在恢复（点击关闭）';
-    else if (preferred) controlButton.title = weatherMotionActive ? '关闭背景涟漪（天气动画期间已暂停）' : '关闭背景涟漪';
-    else controlButton.title = '开启轻量背景涟漪';
-}
-
 function ensureInitialized() {
     // context lost 是可恢复的瞬时状态，不能当作“不支持”并清掉用户偏好。
     if (initialized) return contextLost || Boolean(gl && program);
@@ -556,7 +536,6 @@ function ensureInitialized() {
         resetLoopState();
         clearInteractionState();
         syncCanvasVisibility();
-        updateControl();
     });
 
     canvas.addEventListener('webglcontextrestored', () => {
@@ -564,7 +543,6 @@ function ensureInitialized() {
             contextLost = false;
             unavailable = true;
             stopFluidRuntime();
-            updateControl();
             return;
         }
         contextLost = false;
@@ -592,7 +570,6 @@ function reconcileFluidState() {
     const shouldEnable = requestedMode === MODE_LIGHT && !powerSaving && !reduceMotion && !unavailable && window.innerWidth >= 768;
     if (!shouldEnable) {
         stopFluidRuntime();
-        updateControl();
         return;
     }
 
@@ -600,7 +577,6 @@ function reconcileFluidState() {
         requestedMode = MODE_OFF;
         if (getSettings().appearance.ripple) updateSettings('appearance', { ripple: false });
         stopFluidRuntime();
-        updateControl();
         return;
     }
 
@@ -612,17 +588,9 @@ function reconcileFluidState() {
     if (img?.complete && img.naturalWidth > 0) setWallpaper(img, wasEnabled && canRender());
     syncCanvasVisibility();
     kick();
-    updateControl();
-}
-
-function setRequestedMode(mode) {
-    const ripple = mode === MODE_LIGHT;
-    requestedMode = ripple ? MODE_LIGHT : MODE_OFF;
-    updateSettings('appearance', { ripple });
 }
 
 export function initFluid() {
-    controlButton = document.getElementById('rippleBtn');
     const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
     reduceMotion = motionPreference.matches;
     const appearance = getSettings().appearance;
@@ -631,9 +599,6 @@ export function initFluid() {
 
     // 即使默认关闭，也要记录 wallpaper 模块后续送来的当前图片，首次开启才能立即接管。
     window.__fluidSetWallpaper = rememberWallpaper;
-    controlButton?.addEventListener('click', () => {
-        setRequestedMode(requestedMode === MODE_LIGHT ? MODE_OFF : MODE_LIGHT);
-    });
 
     const handleMotionPreference = (event) => {
         reduceMotion = event.matches;
@@ -655,7 +620,6 @@ export function initFluid() {
         clearInteractionState();
         syncCanvasVisibility();
         if (!weatherMotionActive) kick();
-        updateControl();
     });
     window.addEventListener('gx:settings-changed', event => {
         if (!['appearance', 'all'].includes(event.detail?.section)) return;

@@ -104,7 +104,7 @@ export function initInteractions() {
 
     function syncGlassRefraction(settings = getSettings()) {
         const enabled = glassSupported && !motionPreference.matches &&
-            window.innerWidth >= 768 && !settings.appearance.powerSaving;
+            window.innerWidth >= 768 && settings.appearance.glassRefraction && !settings.appearance.powerSaving;
         document.documentElement.classList.toggle('glass-refract', enabled);
     }
 

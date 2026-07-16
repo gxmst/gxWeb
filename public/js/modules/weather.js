@@ -371,7 +371,7 @@ async function fetchWeather() {
     const settings = getSettings();
     if (settings.weather.mode === 'city') {
         try {
-            const url = new URL('https://api.open-meteo.com/v1/forecast');
+            const url = new URL('./api/weather/forecast', window.location.href);
             url.searchParams.set('latitude', String(settings.weather.latitude));
             url.searchParams.set('longitude', String(settings.weather.longitude));
             url.searchParams.set('current_weather', 'true');

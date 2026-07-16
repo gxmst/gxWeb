@@ -9,13 +9,13 @@
     <!-- 字体：本地自托管 Inter（正文）+ JetBrains Mono（数字），仅含 latin/latin-ext 子集 -->
     <link rel="stylesheet" href="./fonts/fonts.css">
     <!-- Tailwind：静态预编译产物（由 `npm run build:css` 生成）。改动 class 后需重新构建。 -->
-    <link rel="stylesheet" href="./vendor/app.css?v=settings-20260716a">
+    <link rel="stylesheet" href="./vendor/app.css?v=compact-20260716a">
     <!-- 自定义样式：从旧单文件 <style> 拆分为四个职责文件。
          base=字体/时钟/骨架；glass=玻璃材质/折射/氛围；components=时间轴/光斑/磁吸/Tab；effects=时段/雷暴/晴天/星空 -->
-    <link rel="stylesheet" href="./css/base.css?v=settings-20260716a">
-    <link rel="stylesheet" href="./css/glass.css?v=settings-20260716a">
-    <link rel="stylesheet" href="./css/components.css?v=settings-20260716a">
-    <link rel="stylesheet" href="./css/effects.css?v=settings-20260716a">
+    <link rel="stylesheet" href="./css/base.css?v=compact-20260716a">
+    <link rel="stylesheet" href="./css/glass.css?v=compact-20260716a">
+    <link rel="stylesheet" href="./css/components.css?v=compact-20260716a">
+    <link rel="stylesheet" href="./css/effects.css?v=compact-20260716a">
     <!-- DOMPurify：模块化脚本通过全局 DOMPurify 引用，须在 main.js 之前以经典脚本加载 -->
     <script src="./vendor/purify.min.js"></script>
 </head>
@@ -97,16 +97,6 @@
             <svg class="w-5 h-5 text-white/70 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z"></path>
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19.4 15a1.7 1.7 0 00.34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0015 19.4a1.7 1.7 0 00-1 .6 1.7 1.7 0 00-.4 1.1V21H9.6v-.1A1.7 1.7 0 008.5 19.3a1.7 1.7 0 00-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 004.1 15a1.7 1.7 0 00-.6-1 1.7 1.7 0 00-1.1-.4H2.3V9.6h.1A1.7 1.7 0 004 8.5a1.7 1.7 0 00-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 008.4 4.1a1.7 1.7 0 001-.6 1.7 1.7 0 00.4-1.1V2.3h4v.1A1.7 1.7 0 0015 4a1.7 1.7 0 001.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0019.4 8.4a1.7 1.7 0 00.6 1 1.7 1.7 0 001.1.4h.1v4h-.1A1.7 1.7 0 0019.4 15z"></path>
-            </svg>
-        </button>
-        <button id="rippleBtn" type="button" aria-pressed="false"
-            class="hidden md:flex w-10 h-10 glass rounded-full items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg outline-none focus:outline-none"
-            title="开启轻量背景涟漪" aria-label="背景涟漪">
-            <svg class="w-5 h-5 text-white/70 group-hover:text-white" fill="none" stroke="currentColor"
-                viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
-                    d="M3 8.5c2.25-2 4.5-2 6.75 0s4.5 2 6.75 0 4.5-2 6.75 0M.75 15.5c2.25-2 4.5-2 6.75 0s4.5 2 6.75 0 4.5-2 6.75 0">
-                </path>
             </svg>
         </button>
     </div>
@@ -233,12 +223,12 @@
 
         <div id="news-panel" data-enter data-tilt="3" style="--enter-delay:0.30s"
             class="glass-spot glass-panel flex-none rounded-2xl md:rounded-3xl p-4 md:p-6 flex flex-col overflow-visible md:overflow-hidden relative md:flex-1">
-            <!-- 标题栏 -->
-            <div class="relative mb-3 border-b border-white/10 pb-3 md:mb-4 md:pb-4">
+            <!-- 紧凑标题与筛选工具栏 -->
+            <div class="mb-2 border-b border-white/10 pb-2">
                 <div class="flex items-center justify-between gap-3">
                     <h2 class="text-base md:text-lg font-bold tracking-wider text-white/90">7x24 市场快讯</h2>
                     <button id="systemStatusButton" type="button" aria-expanded="false" aria-controls="systemStatusPopover"
-                        class="h-9 shrink-0 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-white/75 transition-colors hover:bg-white/10">
+                        class="h-8 shrink-0 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 text-[11px] text-white/75 transition-colors hover:bg-white/10">
                         <span id="systemStatusDot" class="h-2 w-2 rounded-full bg-amber-400"></span>
                         <span id="systemStatusText">检查中</span>
                         <svg class="h-3.5 w-3.5 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -246,69 +236,27 @@
                         </svg>
                     </button>
                 </div>
-                <div class="mt-2 flex items-center justify-between gap-3">
-                    <div class="flex items-center gap-1 bg-white/5 p-0.5 rounded-md text-[10px] border border-white/5" role="group" aria-label="快讯字号">
-                        <button type="button" data-font-size="sm" id="fs-sm" aria-pressed="true"
-                            class="h-8 min-w-8 px-2 rounded transition-all bg-white/20 text-white shadow-sm">小</button>
-                        <button type="button" data-font-size="base" id="fs-base" aria-pressed="false"
-                            class="h-8 min-w-8 px-2 rounded transition-all text-white/50 hover:text-white/90">中</button>
-                        <button type="button" data-font-size="lg" id="fs-lg" aria-pressed="false"
-                            class="h-8 min-w-8 px-2 rounded transition-all text-white/50 hover:text-white/90">大</button>
-                    </div>
-                    <span id="lastUpdateTime" class="text-[10px] numeric text-white/45">更新中...</span>
-                </div>
-
-                <div id="systemStatusPopover" hidden
-                    class="absolute right-0 top-11 z-50 w-[min(320px,calc(100vw-40px))] rounded-xl border border-white/15 bg-slate-950/95 p-3 text-xs shadow-2xl backdrop-blur-xl">
-                    <div class="mb-3 flex items-center justify-between">
-                        <span class="font-semibold text-white/90">数据运行状态</span>
-                        <span id="pipelineUpdatedAt" class="numeric text-[10px] text-white/40">检查中</span>
-                    </div>
-                    <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/10 pb-3">
-                        <div id="newsHeartbeatStatus" class="flex items-center gap-1" role="status" aria-live="polite" title="快讯连接中">
-                            <span class="text-white/50">快讯</span>
-                            <span id="newsStatusText" class="text-[10px] font-bold text-amber-400">连接中</span>
-                            <span class="relative flex h-2 w-2">
-                                <span id="newsStatusPing" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                <span id="newsStatusDot" class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                            </span>
-                        </div>
-                        <div id="tickerHeartbeatStatus" class="flex items-center gap-1" role="status" aria-live="polite" title="行情连接中">
-                            <span class="text-white/50">行情</span>
-                            <span id="tickerStatusText" class="text-[10px] font-bold text-amber-400">连接中</span>
-                            <span class="relative flex h-2 w-2">
-                                <span id="tickerStatusPing" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                <span id="tickerStatusDot" class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                            </span>
-                        </div>
-                    </div>
-                    <div id="pipelineJobList" class="grid grid-cols-2 gap-2"></div>
-                </div>
-            </div>
-
-            <!-- 资讯检索与阅读控制 -->
-            <div class="mb-3 flex flex-col gap-2">
-                <label class="flex h-10 items-center rounded-lg border border-white/10 bg-black/20 px-3 focus-within:border-white/25 focus-within:bg-black/30">
+                <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                <label class="flex h-8 min-w-[150px] flex-[2_1_180px] items-center rounded-lg border border-white/10 bg-black/20 px-2 focus-within:border-white/25 focus-within:bg-black/30">
                     <svg class="h-4 w-4 shrink-0 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                     </svg>
                     <input id="newsSearchInput" type="search" placeholder="搜索快讯、来源或原因" aria-label="搜索快讯"
-                        class="min-w-0 flex-1 bg-transparent px-2 text-sm text-white outline-none placeholder:text-white/35">
+                        class="min-w-0 flex-1 bg-transparent px-1.5 text-xs text-white outline-none placeholder:text-white/35">
                 </label>
-                <div class="flex items-center gap-2">
                     <select id="newsSourceFilter" aria-label="筛选快讯来源"
-                        class="h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-black/25 px-2 text-xs text-white/80 outline-none">
+                        class="h-8 min-w-0 flex-[1_1_105px] rounded-lg border border-white/10 bg-black/25 px-2 text-[11px] text-white/80 outline-none">
                         <option value="all">全部来源</option>
                     </select>
                     <button id="importantOnlyButton" type="button" aria-pressed="false" title="只看重要快讯"
-                        class="h-10 shrink-0 flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-white/65 transition-colors hover:bg-white/10">
+                        class="h-8 shrink-0 flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 text-[11px] text-white/65 transition-colors hover:bg-white/10">
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v18m0-16h11l-1.5 4L16 13H5"></path>
                         </svg>
                         <span>重要</span><span id="count-important" class="tab-badge"></span>
                     </button>
                     <button id="pauseNewsButton" type="button" aria-pressed="false" title="暂停快讯刷新" aria-label="暂停快讯刷新"
-                        class="h-10 w-10 shrink-0 rounded-lg border border-white/10 bg-white/5 text-white/70 transition-colors hover:bg-white/10 flex items-center justify-center">
+                        class="h-8 w-8 shrink-0 rounded-lg border border-white/10 bg-white/5 text-white/70 transition-colors hover:bg-white/10 flex items-center justify-center">
                         <svg data-pause-icon class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path d="M7 5h3v14H7zm7 0h3v14h-3z"></path>
                         </svg>
@@ -316,27 +264,28 @@
                             <path d="M8 5v14l11-7z"></path>
                         </svg>
                     </button>
+                    <span id="lastUpdateTime" class="ml-auto text-[9px] numeric text-white/40">更新中...</span>
                 </div>
-                <div id="newsResultMeta" class="text-[10px] text-white/40" aria-live="polite"></div>
+                <div id="newsResultMeta" class="mt-1 text-[9px] text-white/35" aria-live="polite"></div>
             </div>
 
             <!-- 选项卡切换：滑动高亮指示器 + 分类强调色 + 实时数量角标 -->
             <div id="tabBar" role="tablist" aria-label="快讯分类"
-                class="relative flex p-1 mb-4 bg-black/20 rounded-xl border border-white/5 backdrop-blur-md overflow-x-auto no-scrollbar">
+                class="relative flex p-0.5 mb-2 bg-black/20 rounded-lg border border-white/5 backdrop-blur-md overflow-x-auto no-scrollbar">
                 <span id="tabIndicator"
                     class="absolute top-1 bottom-1 left-0 rounded-lg transition-all duration-300 ease-out pointer-events-none"
                     style="width:0"></span>
                 <button type="button" id="tab-all" data-filter="all" role="tab" aria-selected="true" aria-controls="newsList" tabindex="0"
-                    class="tab-btn relative z-10 flex-1 min-h-10 py-1.5 text-xs rounded-lg transition-all duration-300 shrink-0 min-w-[64px] flex items-center justify-center gap-1">
+                    class="tab-btn relative z-10 flex-1 min-h-8 py-1 text-[11px] rounded-md transition-all duration-300 shrink-0 min-w-[56px] flex items-center justify-center gap-1">
                     <span>全部</span><span id="count-all" class="tab-badge"></span></button>
                 <button type="button" id="tab-news" data-filter="news" role="tab" aria-selected="false" aria-controls="newsList" tabindex="-1"
-                    class="tab-btn relative z-10 flex-1 min-h-10 py-1.5 text-xs rounded-lg transition-all duration-300 shrink-0 min-w-[64px] flex items-center justify-center gap-1">
+                    class="tab-btn relative z-10 flex-1 min-h-8 py-1 text-[11px] rounded-md transition-all duration-300 shrink-0 min-w-[56px] flex items-center justify-center gap-1">
                     <span>国内</span><span id="count-news" class="tab-badge"></span></button>
                 <button type="button" id="tab-foreign" data-filter="foreign" role="tab" aria-selected="false" aria-controls="newsList" tabindex="-1"
-                    class="tab-btn relative z-10 flex-1 min-h-10 py-1.5 text-xs rounded-lg transition-all duration-300 shrink-0 min-w-[64px] flex items-center justify-center gap-1">
+                    class="tab-btn relative z-10 flex-1 min-h-8 py-1 text-[11px] rounded-md transition-all duration-300 shrink-0 min-w-[56px] flex items-center justify-center gap-1">
                     <span>外媒</span><span id="count-foreign" class="tab-badge"></span></button>
                 <button type="button" id="tab-tech" data-filter="tech" role="tab" aria-selected="false" aria-controls="newsList" tabindex="-1"
-                    class="tab-btn relative z-10 flex-1 min-h-10 py-1.5 text-xs rounded-lg transition-all duration-300 shrink-0 min-w-[64px] flex items-center justify-center gap-1">
+                    class="tab-btn relative z-10 flex-1 min-h-8 py-1 text-[11px] rounded-md transition-all duration-300 shrink-0 min-w-[56px] flex items-center justify-center gap-1">
                     <span>科技</span><span id="count-tech" class="tab-badge"></span></button>
             </div>
 
@@ -355,6 +304,24 @@
                 </div>
             </div>
 
+        </div>
+        <div id="systemStatusPopover" hidden
+            class="fixed z-[100] w-[min(320px,calc(100vw-24px))] rounded-xl border border-white/15 bg-slate-950/95 p-3 text-xs shadow-2xl backdrop-blur-xl">
+            <div class="mb-3 flex items-center justify-between">
+                <span class="font-semibold text-white/90">数据运行状态</span>
+                <span id="pipelineUpdatedAt" class="numeric text-[10px] text-white/40">检查中</span>
+            </div>
+            <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/10 pb-3">
+                <div id="newsHeartbeatStatus" class="flex items-center gap-1" role="status" aria-live="polite" title="快讯连接中">
+                    <span class="text-white/50">快讯</span><span id="newsStatusText" class="text-[10px] font-bold text-amber-400">连接中</span>
+                    <span class="relative flex h-2 w-2"><span id="newsStatusPing" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span><span id="newsStatusDot" class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span></span>
+                </div>
+                <div id="tickerHeartbeatStatus" class="flex items-center gap-1" role="status" aria-live="polite" title="行情连接中">
+                    <span class="text-white/50">行情</span><span id="tickerStatusText" class="text-[10px] font-bold text-amber-400">连接中</span>
+                    <span class="relative flex h-2 w-2"><span id="tickerStatusPing" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span><span id="tickerStatusDot" class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span></span>
+                </div>
+            </div>
+            <div id="pipelineJobList" class="grid grid-cols-2 gap-2"></div>
         </div>
         <!-- 回到资讯顶部按钮 -->
         <button id="backToTop" type="button" disabled aria-hidden="true"
@@ -494,6 +461,21 @@
                             <span>背景涟漪</span><input id="settingsRipple" type="checkbox"><i></i>
                         </label>
                         <label class="settings-toggle-row">
+                            <span>玻璃柔光</span><input id="settingsGlassGlow" type="checkbox"><i></i>
+                        </label>
+                        <label class="settings-toggle-row">
+                            <span>玻璃折射</span><input id="settingsGlassRefraction" type="checkbox"><i></i>
+                        </label>
+                        <label class="settings-toggle-row">
+                            <span>时段色调</span><input id="settingsTimeTint" type="checkbox"><i></i>
+                        </label>
+                        <label class="settings-toggle-row">
+                            <span>夜间星空与流星</span><input id="settingsNightSky" type="checkbox"><i></i>
+                        </label>
+                        <label class="settings-toggle-row">
+                            <span>数字与折线动画</span><input id="settingsNumberMotion" type="checkbox"><i></i>
+                        </label>
+                        <label class="settings-toggle-row">
                             <span>省电模式</span><input id="settingsPowerSaving" type="checkbox"><i></i>
                         </label>
                     </section>
@@ -545,7 +527,7 @@
     </footer>
 
     <!-- 应用入口：ES Module。各功能模块在 js/modules/ 下，由 main.js 按依赖顺序启动。 -->
-    <script type="module" src="./js/main.js?v=settings-20260716a"></script>
+    <script type="module" src="./js/main.js?v=compact-20260716a"></script>
 </body>
 
 </html>

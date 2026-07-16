@@ -35,6 +35,11 @@ export const DEFAULT_SETTINGS = {
         weatherEffects: true,
         tilt: true,
         ripple: false,
+        glassGlow: true,
+        glassRefraction: true,
+        timeTint: true,
+        nightSky: true,
+        numberMotion: true,
         powerSaving: false,
     },
     layout: {
@@ -122,6 +127,11 @@ function sanitizeSettings(value) {
             weatherEffects: appearance.weatherEffects !== false,
             tilt: appearance.tilt !== false,
             ripple: Boolean(appearance.ripple),
+            glassGlow: appearance.glassGlow !== false,
+            glassRefraction: appearance.glassRefraction !== false,
+            timeTint: appearance.timeTint !== false,
+            nightSky: appearance.nightSky !== false,
+            numberMotion: appearance.numberMotion !== false,
             powerSaving: Boolean(appearance.powerSaving),
         },
         layout: {
