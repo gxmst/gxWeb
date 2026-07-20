@@ -1,12 +1,13 @@
 // ============ 壁纸收藏夹引擎 + 壁纸取色驱动主题 ============
 import { safeStorageGet, safeStorageSet } from './storage.js';
-import { moveTabIndicator, getCurrentFilter } from './news.js?v=compact-20260716a';
+import { moveTabIndicator, getCurrentFilter } from './news.js?v=polish-20260720a';
 
 let wallpapersArray = [];
 let currentBgIndex = 0;
 let activeBgLayer = 1;
 let isSwitchingBg = false;
 const vSuffix = new Date().toISOString().slice(0, 10);
+const THEME_KEY = 'gxWallTheme';
 
 function wallpaperSrc(index) {
     return wallpapersArray[index] + '?v=' + vSuffix;
@@ -107,20 +108,38 @@ function applyWallpaperThemeFromImage(img) {
         L = Math.max(0.72, Math.min(0.82, avgLum < 0.34 ? L + 0.20 : L + 0.10));
         [r, g, b] = oklchToRgb(L, C, H);
 
-        const root = document.body;
-        root.style.setProperty('--wall-r', Math.round(r));
-        root.style.setProperty('--wall-g', Math.round(g));
-        root.style.setProperty('--wall-b', Math.round(b));
-        root.style.setProperty('--glass-fill', avgLum > 0.62 ? 'rgba(8, 15, 25, 0.10)' : 'rgba(255, 255, 255, 0.040)');
-        root.style.setProperty('--glass-fill-strong', avgLum > 0.62 ? 'rgba(12, 20, 32, 0.14)' : 'rgba(255, 255, 255, 0.068)');
-        root.style.setProperty('--glass-border', avgLum > 0.62 ? 'rgba(255, 255, 255, 0.24)' : 'rgba(255, 255, 255, 0.18)');
-        root.style.setProperty('--glass-shadow', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.38)' : 'rgba(0, 0, 0, 0.30)');
-        root.style.setProperty('--scene-shade', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.34)' : 'rgba(0, 0, 0, 0.22)');
-        root.style.setProperty('--scene-vignette', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.52)' : 'rgba(0, 0, 0, 0.38)');
-        if (typeof moveTabIndicator === 'function') moveTabIndicator(getCurrentFilter());
+        applyThemeVars(r, g, b, avgLum);
+        // 持久化最终主题，下次首帧直接应用，避免"默认天蓝 → 取色后跳变"
+        safeStorageSet(THEME_KEY, JSON.stringify({
+            r: Math.round(r), g: Math.round(g), b: Math.round(b), lum: Number(avgLum.toFixed(3)),
+        }));
     } catch (e) {
         console.warn('壁纸取色失败:', e);
     }
+}
+
+function applyThemeVars(r, g, b, avgLum) {
+    const root = document.body;
+    root.style.setProperty('--wall-r', Math.round(r));
+    root.style.setProperty('--wall-g', Math.round(g));
+    root.style.setProperty('--wall-b', Math.round(b));
+    root.style.setProperty('--glass-fill', avgLum > 0.62 ? 'rgba(8, 15, 25, 0.10)' : 'rgba(255, 255, 255, 0.040)');
+    root.style.setProperty('--glass-fill-strong', avgLum > 0.62 ? 'rgba(12, 20, 32, 0.14)' : 'rgba(255, 255, 255, 0.068)');
+    root.style.setProperty('--glass-border', avgLum > 0.62 ? 'rgba(255, 255, 255, 0.24)' : 'rgba(255, 255, 255, 0.18)');
+    root.style.setProperty('--glass-shadow', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.38)' : 'rgba(0, 0, 0, 0.30)');
+    root.style.setProperty('--scene-shade', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.34)' : 'rgba(0, 0, 0, 0.22)');
+    root.style.setProperty('--scene-vignette', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.52)' : 'rgba(0, 0, 0, 0.38)');
+    if (typeof moveTabIndicator === 'function') moveTabIndicator(getCurrentFilter());
+}
+
+// 首帧应用上次会话保存的主题色，等真正取色完成后会被覆盖
+function applyStoredTheme() {
+    try {
+        const saved = JSON.parse(safeStorageGet(THEME_KEY, '') || 'null');
+        if (!saved) return;
+        const { r, g, b, lum } = saved;
+        if ([r, g, b, lum].every(Number.isFinite)) applyThemeVars(r, g, b, lum);
+    } catch { /* 坏数据直接忽略，保持默认主题 */ }
 }
 
 export function toggleWallpaper() {
@@ -128,7 +147,12 @@ export function toggleWallpaper() {
     if (isSwitchingBg) return;
     isSwitchingBg = true;
 
-    const switchTimeout = setTimeout(() => { isSwitchingBg = false; }, 5000);
+    // 加载期间图标旋转（#wallpaperBtn.is-loading svg），网络慢时按钮有响应感
+    const setLoading = loading =>
+        document.getElementById('wallpaperBtn')?.classList.toggle('is-loading', loading);
+    setLoading(true);
+
+    const switchTimeout = setTimeout(() => { isSwitchingBg = false; setLoading(false); }, 5000);
 
     currentBgIndex = pickRandomWallpaperIndex(currentBgIndex);
     safeStorageSet('lastWallpaperIndex', currentBgIndex);
@@ -142,6 +166,7 @@ export function toggleWallpaper() {
 
     hiddenLayer.onload = () => {
         clearTimeout(switchTimeout);
+        setLoading(false);
         applyWallpaperThemeFromImage(hiddenLayer);
         hiddenLayer.style.opacity = '1';
         currentLayer.style.opacity = '0';
@@ -159,6 +184,7 @@ export function toggleWallpaper() {
 
     hiddenLayer.onerror = () => {
         clearTimeout(switchTimeout);
+        setLoading(false);
         isSwitchingBg = false;
     };
 
@@ -166,14 +192,19 @@ export function toggleWallpaper() {
 }
 
 export async function initWallpapers() {
+    applyStoredTheme();
     document.getElementById('wallpaperBtn')?.addEventListener('click', toggleWallpaper);
     try {
         const resp = await fetch('./wallpapers.json', { cache: 'no-cache' });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         wallpapersArray = await resp.json();
         if (wallpapersArray && wallpapersArray.length > 0) {
+            // 首屏复用上次那张：命中浏览器缓存秒出，不再每次刷新都等一张新图；
+            // 想换的时候点切换按钮（那里仍然随机且排除当前张）。
             const lastIndex = Number.parseInt(safeStorageGet('lastWallpaperIndex', '-1'), 10);
-            currentBgIndex = pickRandomWallpaperIndex(Number.isFinite(lastIndex) ? lastIndex : -1);
+            currentBgIndex = Number.isFinite(lastIndex) && lastIndex >= 0 && lastIndex < wallpapersArray.length
+                ? lastIndex
+                : pickRandomWallpaperIndex();
             safeStorageSet('lastWallpaperIndex', currentBgIndex);
             // 初始化随机壁纸并预加载下一张候选
             const img1 = document.getElementById('bgImage1');

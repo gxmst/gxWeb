@@ -63,6 +63,21 @@ export function initInteractions() {
 
     applySavedPanelWidth();
 
+    // 双击恢复默认宽度；键盘左右箭头微调（手柄在面板左缘：左=加宽，右=收窄）
+    resizer.addEventListener('dblclick', () => {
+        aside.style.width = '';
+        updateSettings('layout', { newsPanelWidth: null });
+    });
+    resizer.addEventListener('keydown', (e) => {
+        if (window.innerWidth < 768 || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+        e.preventDefault();
+        const next = clampNewsPanelWidth(aside.offsetWidth + (e.key === 'ArrowLeft' ? 24 : -24));
+        if (next) {
+            aside.style.width = `${next}px`;
+            updateSettings('layout', { newsPanelWidth: next });
+        }
+    });
+
     resizer.addEventListener('mousedown', () => { if (window.innerWidth < 768) return; isResizing = true; document.body.style.cursor = 'ew-resize'; aside.classList.add('select-none'); });
     resizer.addEventListener('touchstart', (e) => { if (window.innerWidth < 768) return; isResizing = true; aside.classList.add('select-none'); }, { passive: true });
     window.addEventListener('mousemove', (e) => {

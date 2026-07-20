@@ -73,7 +73,7 @@ async function fetchTickerData() {
                 const topRow = document.createElement('div');
                 topRow.className = 'flex items-center gap-1';
                 const nameSpan = document.createElement('span');
-                nameSpan.className = 'text-[9px] text-white/50 tracking-wide drop-shadow-md name-val whitespace-nowrap';
+                nameSpan.className = 'text-[10px] leading-tight text-white/55 tracking-wide drop-shadow-md name-val whitespace-nowrap';
                 nameSpan.textContent = item.name;
                 topRow.appendChild(nameSpan);
                 if (showSparkline) {
@@ -87,10 +87,10 @@ async function fetchTickerData() {
                 const botRow = document.createElement('div');
                 botRow.className = 'flex items-baseline gap-1';
                 const priceSpan = document.createElement('span');
-                priceSpan.className = 'text-[10px] font-bold text-white drop-shadow-md numeric price-val whitespace-nowrap';
+                priceSpan.className = 'text-[11px] leading-tight font-bold text-white drop-shadow-md numeric price-val whitespace-nowrap';
                 priceSpan.textContent = '--';
                 const changeSpan = document.createElement('span');
-                changeSpan.className = 'text-[9px] font-semibold drop-shadow-md numeric change-val whitespace-nowrap';
+                changeSpan.className = 'text-[10px] leading-tight font-semibold drop-shadow-md numeric change-val whitespace-nowrap';
                 changeSpan.textContent = '--';
                 botRow.appendChild(priceSpan);
                 botRow.appendChild(changeSpan);
@@ -112,7 +112,7 @@ async function fetchTickerData() {
                 const cEl = el.querySelector('.change-val');
                 const isUp = !item.change.startsWith('-');
                 cEl.innerText = (isUp ? '▲' : '▼') + ' ' + item.change;
-                cEl.className = `text-[9px] font-semibold drop-shadow-md numeric change-val whitespace-nowrap ${isUp ? 'text-rose-400' : 'text-emerald-400'}`;
+                cEl.className = `text-[10px] leading-tight font-semibold drop-shadow-md numeric change-val whitespace-nowrap ${isUp ? 'text-rose-400' : 'text-emerald-400'}`;
                 const sparkContainer = el.querySelector('.sparkline-container');
                 if (sparkContainer && item.price_history && item.price_history.length >= SPARKLINE_MIN_POINTS) {
                     // 仅在折线数据实际变化时重绘并触发画入动画

@@ -357,12 +357,29 @@ function setWeatherAmbient(kind) {
 let realWeather = '';
 const filterModes = ['auto', '晴', '阴', '雾', '雨', '雷', '雪'];
 const filterIcons = ['✨', '☀️', '☁️', '🌫️', '🌧️', '⛈️', '❄️'];
+const filterLabels = ['自动（跟随实况）', '晴', '阴', '雾', '雨', '雷暴', '雪'];
 let currentFilterIndex = 0;
+let filterToastTimer = null;
+
+// 点击滤镜按钮时短暂显示当前模式名，否则用户只看到 emoji 变化猜不出状态
+function showControlToast(text) {
+    const toast = document.getElementById('controlToast');
+    if (!toast) return;
+    toast.textContent = text;
+    toast.classList.add('show');
+    window.clearTimeout(filterToastTimer);
+    filterToastTimer = window.setTimeout(() => toast.classList.remove('show'), 1400);
+}
 
 function toggleWeatherFilter() {
     currentFilterIndex = (currentFilterIndex + 1) % filterModes.length;
     const mode = filterModes[currentFilterIndex];
-    document.getElementById('filterBtn').innerText = filterIcons[currentFilterIndex];
+    const btn = document.getElementById('filterBtn');
+    btn.innerText = filterIcons[currentFilterIndex];
+    const label = `环境滤镜：${filterLabels[currentFilterIndex]}`;
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    showControlToast(label);
     if (mode === 'auto') applyEnvironmentFilter(realWeather);
     else applyEnvironmentFilter(mode);
 }

@@ -10,6 +10,7 @@ let availableTickers = [];
 let availableNewsSources = [];
 let lastFocusedElement = null;
 let resetTimer = null;
+let drawerCloseTimer = null;
 
 function applyAppearanceClasses(settings = getSettings()) {
     const root = document.documentElement;
@@ -28,6 +29,13 @@ function captureShortcutTemplates() {
     });
 }
 
+// 名字 hash 出稳定色相，字母兜底图标不再是清一色白框
+function shortcutHue(text) {
+    let hue = 0;
+    for (const ch of String(text || '')) hue = (hue * 31 + ch.codePointAt(0)) % 360;
+    return hue;
+}
+
 function genericShortcut(shortcut) {
     const anchor = document.createElement('a');
     anchor.target = '_blank';
@@ -36,7 +44,30 @@ function genericShortcut(shortcut) {
 
     const icon = document.createElement('div');
     icon.className = 'dock-ico w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:bg-white/20 group-hover:scale-110 transition-all duration-300 font-semibold shadow-lg';
-    icon.textContent = Array.from(shortcut.name || '链')[0]?.toUpperCase() || '链';
+
+    const showLetter = () => {
+        icon.replaceChildren();
+        icon.textContent = Array.from(shortcut.name || '链')[0]?.toUpperCase() || '链';
+        const hue = shortcutHue(shortcut.name || shortcut.url);
+        icon.style.background =
+            `linear-gradient(145deg, hsla(${hue}, 68%, 58%, 0.85), hsla(${(hue + 42) % 360}, 68%, 42%, 0.85))`;
+    };
+
+    // 优先站点 favicon（CSP 已放行 icons.duckduckgo.com），拉不到回退彩色字母
+    let host = '';
+    try { host = new URL(shortcut.url).hostname; } catch { /* 无效 URL 走字母兜底 */ }
+    if (host) {
+        const img = document.createElement('img');
+        img.alt = '';
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.className = 'w-6 h-6 rounded-md';
+        img.addEventListener('error', showLetter);
+        img.src = `https://icons.duckduckgo.com/ip3/${host}.ico`;
+        icon.appendChild(img);
+    } else {
+        showLetter();
+    }
 
     const label = document.createElement('span');
     label.className = 'text-xs text-white/90 font-medium drop-shadow-md group-hover:text-white transition-colors max-w-20 truncate';
@@ -343,7 +374,16 @@ function setDrawerOpen(open) {
     const overlay = document.getElementById('settingsOverlay');
     const button = document.getElementById('settingsBtn');
     if (!overlay || !button) return;
-    overlay.hidden = !open;
+    window.clearTimeout(drawerCloseTimer);
+    if (open) {
+        overlay.hidden = false;
+        void overlay.offsetWidth; // 强制回流，让滑入过渡从初始态起步
+        overlay.classList.add('open');
+    } else {
+        overlay.classList.remove('open');
+        // 等滑出过渡结束再真正 hidden（时长与 components.css 的 0.32s 对齐）
+        drawerCloseTimer = window.setTimeout(() => { overlay.hidden = true; }, 340);
+    }
     button.setAttribute('aria-expanded', String(open));
     document.documentElement.classList.toggle('settings-open', open);
     if (open) {

@@ -4,18 +4,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Vibe Workspace</title>
+    <title>gxWeb · 实时信息工作台</title>
+    <!-- 移动端浏览器铬件着色 + 可安装为 PWA（manifest 与图标） -->
+    <meta name="theme-color" content="#0f172a">
     <link rel="icon" type="image/png" href="./favicon.png">
+    <link rel="apple-touch-icon" href="./favicon.png">
+    <link rel="manifest" href="./manifest.json">
     <!-- 字体：本地自托管 Inter（正文）+ JetBrains Mono（数字），仅含 latin/latin-ext 子集 -->
     <link rel="stylesheet" href="./fonts/fonts.css">
     <!-- Tailwind：静态预编译产物（由 `npm run build:css` 生成）。改动 class 后需重新构建。 -->
-    <link rel="stylesheet" href="./vendor/app.css?v=compact-20260716a">
+    <link rel="stylesheet" href="./vendor/app.css?v=polish-20260720a">
     <!-- 自定义样式：从旧单文件 <style> 拆分为四个职责文件。
          base=字体/时钟/骨架；glass=玻璃材质/折射/氛围；components=时间轴/光斑/磁吸/Tab；effects=时段/雷暴/晴天/星空 -->
-    <link rel="stylesheet" href="./css/base.css?v=compact-20260716a">
-    <link rel="stylesheet" href="./css/glass.css?v=compact-20260716a">
-    <link rel="stylesheet" href="./css/components.css?v=compact-20260716a">
-    <link rel="stylesheet" href="./css/effects.css?v=compact-20260716a">
+    <link rel="stylesheet" href="./css/base.css?v=polish-20260720a">
+    <link rel="stylesheet" href="./css/glass.css?v=polish-20260720a">
+    <link rel="stylesheet" href="./css/components.css?v=polish-20260720a">
+    <link rel="stylesheet" href="./css/effects.css?v=polish-20260720a">
     <!-- DOMPurify：模块化脚本通过全局 DOMPurify 引用，须在 main.js 之前以经典脚本加载 -->
     <script src="./vendor/purify.min.js"></script>
 </head>
@@ -78,6 +82,8 @@
 
     <!-- 左上角：控制中心 -->
     <div class="absolute top-6 left-6 flex gap-4 z-30">
+        <!-- 滤镜等按钮的瞬时状态提示（由 weather.js 驱动） -->
+        <div id="controlToast" class="control-toast" role="status" aria-live="polite"></div>
         <button id="wallpaperBtn" type="button" disabled style="opacity: 0.5; pointer-events: none;"
             class="w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg outline-none focus:outline-none"
             title="切换壁纸" aria-label="切换壁纸">
@@ -126,6 +132,10 @@
             </svg>
             <input type="text" id="searchInput" placeholder="在网络上搜索..." aria-label="网络搜索关键词"
                 class="flex-1 min-w-[8rem] bg-transparent border-none outline-none text-white px-3 md:px-4 text-base placeholder-white/60">
+
+            <!-- 快捷键提示：按 / 聚焦搜索框（见 interactions.js 的全局监听） -->
+            <kbd class="hidden md:inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md border border-white/15 bg-white/5 px-1.5 mr-2 text-[11px] font-mono text-white/40"
+                title="按 / 键聚焦搜索框" aria-hidden="true">/</kbd>
 
             <select id="searchEngineSelect" aria-label="搜索引擎"
                 class="md:hidden h-10 max-w-[5.5rem] shrink-0 rounded-full border border-white/15 bg-black/25 px-3 text-sm font-medium text-white outline-none">
@@ -217,7 +227,8 @@
     <!-- 右侧：金融快讯面板 -->
     <aside class="relative z-10 w-full px-3 pt-3 pb-16 flex flex-col group/aside md:w-[450px] md:h-screen md:p-6">
         <!-- 拖拽手柄 -->
-        <div id="resizer"
+        <div id="resizer" tabindex="0" role="separator" aria-orientation="vertical"
+            aria-label="调整资讯面板宽度：左右箭头微调，双击恢复默认"
             class="hidden md:block absolute left-0 top-0 w-1.5 h-full cursor-ew-resize z-20 hover:bg-white/30 transition-colors group-hover/aside:bg-white/10">
         </div>
 
@@ -264,9 +275,9 @@
                             <path d="M8 5v14l11-7z"></path>
                         </svg>
                     </button>
-                    <span id="lastUpdateTime" class="ml-auto text-[9px] numeric text-white/40">更新中...</span>
+                    <span id="lastUpdateTime" class="ml-auto text-[10px] numeric text-white/40">更新中...</span>
                 </div>
-                <div id="newsResultMeta" class="mt-1 text-[9px] text-white/35" aria-live="polite"></div>
+                <div id="newsResultMeta" class="mt-1 text-[10px] text-white/35" aria-live="polite"></div>
             </div>
 
             <!-- 选项卡切换：滑动高亮指示器 + 分类强调色 + 实时数量角标 -->
@@ -527,7 +538,7 @@
     </footer>
 
     <!-- 应用入口：ES Module。各功能模块在 js/modules/ 下，由 main.js 按依赖顺序启动。 -->
-    <script type="module" src="./js/main.js?v=compact-20260716a"></script>
+    <script type="module" src="./js/main.js?v=polish-20260720a"></script>
 </body>
 
 </html>

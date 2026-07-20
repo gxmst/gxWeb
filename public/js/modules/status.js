@@ -75,7 +75,7 @@ function renderPipelineJobs(data) {
         heading.append(label, dot);
 
         const meta = document.createElement('div');
-        meta.className = 'mt-1 truncate text-[9px] text-white/35';
+        meta.className = 'mt-1 truncate text-[10px] text-white/35';
         if (job.running) meta.textContent = '运行中';
         else if (job.last_error) meta.textContent = '最近运行失败';
         else meta.textContent = `${relativeTime(job.last_success)}${job.count ? ` · ${job.count} 条` : ''}`;
@@ -122,15 +122,26 @@ export function initStatus() {
         const above = rect.top - height - 8;
         popover.style.top = `${below + height <= window.innerHeight - 12 ? below : Math.max(12, above)}px`;
     };
+    let popoverCloseTimer = null;
     const setOpen = open => {
         if (!button || !popover) return;
-        popover.hidden = !open;
+        window.clearTimeout(popoverCloseTimer);
+        if (open) {
+            popover.hidden = false;
+            // 先定位再加 .open，淡入从正确位置开始
+            requestAnimationFrame(() => {
+                positionPopover();
+                popover.classList.add('open');
+            });
+        } else {
+            popover.classList.remove('open');
+            popoverCloseTimer = window.setTimeout(() => { popover.hidden = true; }, 200);
+        }
         button.setAttribute('aria-expanded', String(open));
-        if (open) requestAnimationFrame(positionPopover);
     };
     button?.addEventListener('click', event => {
         event.stopPropagation();
-        setOpen(popover?.hidden ?? true);
+        setOpen(!popover?.classList.contains('open'));
     });
     popover?.addEventListener('click', event => event.stopPropagation());
     document.addEventListener('click', () => setOpen(false));

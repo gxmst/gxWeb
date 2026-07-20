@@ -177,18 +177,11 @@ function withViewTransition(mutate) {
     transition.finished?.catch(() => {});
 }
 
-// 字体切换 (0 延时本地秒切)
+// 字体切换 (0 延时本地秒切)；入口只剩设置中心的下拉，旧的 fs- 按钮已随重构移除
 export function setFontSize(size, persist = true, render = true) {
     if (!['sm', 'base', 'lg'].includes(size)) return;
     currentFontSize = size;
     if (persist && getSettings().news.fontSize !== size) updateSettings('news', { fontSize: size });
-    ['sm', 'base', 'lg'].forEach(s => {
-        const btn = document.getElementById('fs-' + s);
-        if (!btn) return;
-        if (s === size) { btn.classList.add('bg-white/20', 'text-white'); btn.classList.remove('text-white/50'); }
-        else { btn.classList.remove('bg-white/20', 'text-white'); btn.classList.add('text-white/50'); }
-        btn.setAttribute('aria-pressed', String(s === size));
-    });
     if (render) withViewTransition(renderNewsList);
 }
 
@@ -448,9 +441,6 @@ async function fetchRealNews() {
 }
 
 export function initNews() {
-    document.querySelectorAll('[data-font-size]').forEach(button => {
-        button.addEventListener('click', () => setFontSize(button.dataset.fontSize));
-    });
     const tabs = Array.from(document.querySelectorAll('[role="tab"][data-filter]'));
     tabs.forEach(button => button.addEventListener('click', () => setFilter(button.dataset.filter)));
     document.getElementById('tabBar')?.addEventListener('keydown', event => {
@@ -571,4 +561,6 @@ export function initNews() {
     poll();
     // 窗口尺寸变化时重新对齐指示器（tab 宽度会随之变化）
     window.addEventListener('resize', () => moveTabIndicator(currentFilter));
+    // web 字体（font-display: swap）换入后 tab 宽度会变，指示器需再对齐一次
+    document.fonts?.ready?.then(() => moveTabIndicator(currentFilter));
 }
