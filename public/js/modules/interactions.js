@@ -1,7 +1,42 @@
 // ================== 辅助交互与快捷键 ==================
 import { getSettings, updateSettings } from './settings-store.js';
 
+// 左上角控制按钮的点击反馈：加一次性 .tapped，动画结束自己摘掉。
+// 用 pointerdown 而不是 click——手指/鼠标一按下就有反应，比等 click 更"跟手"；
+// 同一次交互里重复触发时先强制重排，否则同名动画不会重新播放。
+function bindControlTapFeedback() {
+    document.querySelectorAll('.control-btn').forEach(button => {
+        button.addEventListener('pointerdown', () => {
+            if (button.disabled) return;
+            button.classList.remove('tapped');
+            void button.offsetWidth;
+            button.classList.add('tapped');
+        });
+        button.addEventListener('animationend', event => {
+            if (event.target === button) button.classList.remove('tapped');
+        });
+    });
+
+    // 收藏成功那一下额外来个心跳；由 wallpaper.js 切换 is-favorite 后广播
+    const favoriteButton = document.getElementById('favoriteBtn');
+    window.addEventListener('gx:wallpaper-favorites', event => {
+        if (!favoriteButton) return;
+        const nowFavorite = favoriteButton.classList.contains('is-favorite');
+        if (!nowFavorite || !event.detail?.justAdded) return;
+        favoriteButton.classList.remove('just-favorited');
+        void favoriteButton.offsetWidth;
+        favoriteButton.classList.add('just-favorited');
+    });
+    favoriteButton?.addEventListener('animationend', event => {
+        if (event.target === favoriteButton.querySelector('svg')) {
+            favoriteButton.classList.remove('just-favorited');
+        }
+    });
+}
+
 export function initInteractions() {
+    bindControlTapFeedback();
+
     // 全局快捷键监听
     window.addEventListener('keydown', (e) => {
         const searchInput = document.getElementById('searchInput');

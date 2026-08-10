@@ -104,7 +104,7 @@
         <!-- 滤镜等按钮的瞬时状态提示（由 weather.js 驱动） -->
         <div id="controlToast" class="control-toast" role="status" aria-live="polite"></div>
         <button id="wallpaperBtn" type="button" disabled style="opacity: 0.5; pointer-events: none;"
-            class="w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg outline-none focus:outline-none"
+            class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg outline-none focus:outline-none"
             title="切换壁纸" aria-label="切换壁纸">
             <svg class="w-5 h-5 text-white/70 group-hover:text-white" fill="none" stroke="currentColor"
                 viewBox="0 0 24 24">
@@ -113,24 +113,27 @@
                 </path>
             </svg>
         </button>
-        <!-- 壁纸收藏：把当前这张存进本地收藏夹（IndexedDB 存图片本体），之后参与轮换 -->
-        <button id="favoriteBtn" type="button" disabled aria-pressed="false"
-            class="relative w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg outline-none focus:outline-none disabled:opacity-50"
-            title="收藏这张壁纸" aria-label="收藏这张壁纸">
-            <svg class="w-5 h-5 text-white/70 group-hover:text-white transition-colors" fill="none" stroke="currentColor"
-                viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
-                </path>
-            </svg>
-            <span id="favoriteCount"
-                class="absolute -bottom-0.5 -right-0.5 min-w-4 rounded-full bg-black/70 px-1 text-[9px] font-bold leading-4 text-white/80 numeric"></span>
-        </button>
+        <!-- 壁纸收藏：把当前这张存进本地收藏夹（IndexedDB 存图片本体），之后参与轮换。
+             角标必须放在按钮外层：.glass 带 overflow:hidden，放按钮内会被圆形边界裁掉一半。
+             缩放挂在 wrapper 上，这样按钮和角标一起放大，不会互相脱开。 -->
+        <div class="control-btn-wrap relative shrink-0 transition-transform hover:scale-110 active:scale-95">
+            <button id="favoriteBtn" type="button" disabled aria-pressed="false"
+                class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center transition-colors group shadow-lg outline-none focus:outline-none disabled:opacity-50"
+                title="收藏这张壁纸" aria-label="收藏这张壁纸">
+                <svg class="w-5 h-5 text-white/70 group-hover:text-white transition-colors" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
+                    </path>
+                </svg>
+            </button>
+            <span id="favoriteCount" class="favorite-count numeric" aria-hidden="true"></span>
+        </div>
         <button id="filterBtn" type="button"
-            class="w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg text-lg outline-none focus:outline-none"
+            class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg text-lg outline-none focus:outline-none"
             title="切换环境滤镜" aria-label="切换环境滤镜">✨</button>
         <button id="settingsBtn" type="button" aria-expanded="false" aria-controls="settingsOverlay"
-            class="w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg outline-none focus:outline-none"
+            class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg outline-none focus:outline-none"
             title="设置" aria-label="打开设置">
             <svg class="w-5 h-5 text-white/70 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z"></path>

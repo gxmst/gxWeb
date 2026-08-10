@@ -336,7 +336,9 @@ function rebuildLocalEntries() {
     }
 }
 
-function publishFavorites() {
+// justAdded 只在"刚新增一张收藏"时为真，供 interactions.js 决定是否播心跳动画
+// （取消收藏、启动时的首次同步都不该心跳）。
+function publishFavorites({ justAdded = false } = {}) {
     const items = Array.from(favoriteMeta.values()).sort((a, b) => Number(b.addedAt || 0) - Number(a.addedAt || 0));
     window.dispatchEvent(new CustomEvent('gx:wallpaper-favorites', {
         detail: {
@@ -346,16 +348,17 @@ function publishFavorites() {
             bytes: items.reduce((sum, item) => sum + (Number(item.bytes) || 0), 0),
             currentId: currentEntry?.kind === 'local' ? currentEntry.id : '',
             currentFingerprint,
+            justAdded,
         },
     }));
 }
 
-async function refreshFavorites() {
+async function refreshFavorites({ justAdded = false } = {}) {
     const list = await listFavorites();
     favoriteMeta = new Map(list.map(item => [item.id, item]));
     rebuildLocalEntries();
     syncFavoriteButton();
-    publishFavorites();
+    publishFavorites({ justAdded });
 }
 
 // 把当前显示的这张图整份存下来。缩略图另存一份 dataURL，设置页列表就不必解码原图。
@@ -412,7 +415,7 @@ async function toggleFavorite() {
         // 这样服务器把它轮换掉之后再次抽到它仍然能显示。
         currentEntry = { key: localKey(meta.id), kind: 'local', id: meta.id };
         safeStorageSet(LAST_KEY, currentEntry.key);
-        await refreshFavorites();
+        await refreshFavorites({ justAdded: true });
         showControlToast('已加入我的壁纸，之后会参与轮换');
     } catch (error) {
         console.warn('壁纸收藏失败:', error);
