@@ -49,6 +49,38 @@ body {
     scrollbar-width: none;
 }
 
+/* 可见但克制的滚动条：给长列表一个"我在哪儿"的坐标。
+   scrollbar-gutter: stable 预留槽位，滚动条出现/消失时内容不会左右跳。
+   滑块用壁纸取色，和整体主题一致；WebKit 与 Firefox 两套写法都给。 */
+.gx-scroll {
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--wall-rgb), 0.46) rgba(255, 255, 255, 0.05);
+    overscroll-behavior: contain;
+}
+.gx-scroll::-webkit-scrollbar {
+    width: 8px;
+}
+.gx-scroll::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 9999px;
+    margin: 2px 0;
+}
+.gx-scroll::-webkit-scrollbar-thumb {
+    /* 0.42 是"看得见但不抢戏"的下限——再低在亮壁纸上几乎和轨道糊成一片，
+       而这条滚动条存在的意义就是随时告诉你读到哪儿了 */
+    background: rgba(var(--wall-rgb), 0.42);
+    border: 2px solid transparent;
+    background-clip: content-box;
+    border-radius: 9999px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+    transition: background 0.2s ease;
+}
+.gx-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(var(--wall-rgb), 0.68);
+    background-clip: content-box;
+}
+
 @keyframes shimmer {
     0% { background-position: -400px 0; }
     100% { background-position: 400px 0; }

@@ -4,6 +4,7 @@ import {
     resetSettings,
     updateSettings,
 } from './settings-store.js';
+import { applyFavorite, removeFavorite, requestFavorites } from './wallpaper.js?v=polish-20260811a';
 
 let shortcutTemplates = new Map();
 let availableTickers = [];
@@ -11,6 +12,8 @@ let availableNewsSources = [];
 let lastFocusedElement = null;
 let resetTimer = null;
 let drawerCloseTimer = null;
+let clearFavoritesTimer = null;
+let wallpaperFavorites = { items: [], limit: 24, available: true, bytes: 0, currentId: '', currentFingerprint: '' };
 
 function applyAppearanceClasses(settings = getSettings()) {
     const root = document.documentElement;
@@ -257,6 +260,91 @@ function moveTicker(index, direction, tickers) {
     updateSettings('ticker', { order });
 }
 
+function formatBytes(bytes) {
+    const value = Number(bytes) || 0;
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(0)} KB`;
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function renderWallpaperFavorites() {
+    const grid = document.getElementById('wallpaperFavoriteGrid');
+    const empty = document.getElementById('wallpaperFavoriteEmpty');
+    const meta = document.getElementById('wallpaperFavoriteMeta');
+    const clearButton = document.getElementById('clearWallpaperFavorites');
+    if (!grid || !empty) return;
+
+    const { items, limit, available, bytes, currentId } = wallpaperFavorites;
+    if (!available) {
+        empty.textContent = '当前浏览器不支持本地存储，壁纸收藏不可用。';
+        empty.hidden = false;
+        grid.replaceChildren();
+        if (meta) meta.textContent = '';
+        if (clearButton) clearButton.hidden = true;
+        return;
+    }
+    empty.textContent = '还没有收藏。看到喜欢的壁纸时，点左上角的心形按钮。';
+    empty.hidden = items.length > 0;
+    if (meta) meta.textContent = items.length ? `${items.length} / ${limit} 张 · ${formatBytes(bytes)}` : '';
+    if (clearButton) clearButton.hidden = items.length === 0;
+
+    const fragment = document.createDocumentFragment();
+    items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'wallpaper-favorite-card';
+        if (item.id === currentId) card.classList.add('is-current');
+
+        if (item.thumbnail) {
+            const img = document.createElement('img');
+            img.src = item.thumbnail;
+            img.alt = '';
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            card.appendChild(img);
+        }
+
+        const apply = document.createElement('button');
+        apply.type = 'button';
+        apply.className = 'wallpaper-favorite-apply';
+        const applyLabel = item.id === currentId ? '当前壁纸' : '设为当前壁纸';
+        apply.title = applyLabel;
+        apply.setAttribute('aria-label', applyLabel);
+        apply.addEventListener('click', () => { applyFavorite(item.id); });
+        card.appendChild(apply);
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'wallpaper-favorite-remove';
+        remove.title = '移除这张壁纸';
+        remove.setAttribute('aria-label', '移除这张壁纸');
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('class', 'h-3.5 w-3.5');
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', 'M6 18L18 6M6 6l12 12');
+        path.setAttribute('stroke-linecap', 'round');
+        path.setAttribute('stroke-width', '2');
+        svg.appendChild(path);
+        remove.appendChild(svg);
+        remove.addEventListener('click', event => {
+            event.stopPropagation();
+            removeFavorite(item.id);
+        });
+        card.appendChild(remove);
+
+        if (item.width && item.height) {
+            const badge = document.createElement('span');
+            badge.className = 'wallpaper-favorite-badge';
+            badge.textContent = `${item.width}×${item.height}`;
+            card.appendChild(badge);
+        }
+        fragment.appendChild(card);
+    });
+    grid.replaceChildren(fragment);
+}
+
 function renderNewsSources(settings = getSettings()) {
     const select = document.getElementById('settingsNewsSource');
     if (!select) return;
@@ -289,6 +377,8 @@ function syncControls(settings = getSettings()) {
     setValue('settingsNewsFontSize', settings.news.fontSize);
     setChecked('settingsImportantOnly', settings.news.importantOnly);
     setChecked('settingsAutoRefresh', settings.news.autoRefresh);
+    setChecked('settingsGroupByTime', settings.news.groupByTime);
+    setValue('settingsWallpaperRotation', settings.wallpaper.rotation);
     setChecked('settingsWeatherEffects', settings.appearance.weatherEffects);
     setChecked('settingsTilt', settings.appearance.tilt);
     setChecked('settingsRipple', settings.appearance.ripple);
@@ -307,6 +397,7 @@ function syncControls(settings = getSettings()) {
     renderNewsSources(settings);
     renderShortcutEditor(settings);
     renderTickerEditor(settings);
+    renderWallpaperFavorites();
 }
 
 async function searchCities() {
@@ -443,6 +534,28 @@ function bindControls() {
     document.getElementById('settingsNewsFontSize')?.addEventListener('change', event => updateSettings('news', { fontSize: event.target.value }));
     document.getElementById('settingsImportantOnly')?.addEventListener('change', event => updateSettings('news', { importantOnly: event.target.checked }));
     document.getElementById('settingsAutoRefresh')?.addEventListener('change', event => updateSettings('news', { autoRefresh: event.target.checked }));
+    document.getElementById('settingsGroupByTime')?.addEventListener('change', event => updateSettings('news', { groupByTime: event.target.checked }));
+    document.getElementById('settingsWallpaperRotation')?.addEventListener('change', event => updateSettings('wallpaper', { rotation: event.target.value }));
+    // 清空收藏是不可逆操作（图片字节只存在本地），沿用重置按钮那套二次确认
+    document.getElementById('clearWallpaperFavorites')?.addEventListener('click', async event => {
+        const button = event.currentTarget;
+        if (button.dataset.armed !== 'true') {
+            button.dataset.armed = 'true';
+            button.textContent = '再次点击确认清空';
+            window.clearTimeout(clearFavoritesTimer);
+            clearFavoritesTimer = window.setTimeout(() => {
+                button.dataset.armed = 'false';
+                button.textContent = '清空我的壁纸';
+            }, 3000);
+            return;
+        }
+        window.clearTimeout(clearFavoritesTimer);
+        button.dataset.armed = 'false';
+        button.textContent = '清空我的壁纸';
+        for (const item of wallpaperFavorites.items.slice()) {
+            await removeFavorite(item.id);
+        }
+    });
     document.getElementById('settingsWeatherEffects')?.addEventListener('change', event => updateSettings('appearance', { weatherEffects: event.target.checked }));
     document.getElementById('settingsTilt')?.addEventListener('change', event => updateSettings('appearance', { tilt: event.target.checked }));
     document.getElementById('settingsRipple')?.addEventListener('change', event => updateSettings('appearance', { ripple: event.target.checked }));
@@ -491,6 +604,20 @@ export function initSettings() {
         availableNewsSources = Array.isArray(event.detail?.sources) ? event.detail.sources : [];
         renderNewsSources();
     });
+    window.addEventListener('gx:wallpaper-favorites', event => {
+        const detail = event.detail || {};
+        wallpaperFavorites = {
+            items: Array.isArray(detail.items) ? detail.items : [],
+            limit: Number(detail.limit) || 24,
+            available: detail.available !== false,
+            bytes: Number(detail.bytes) || 0,
+            currentId: String(detail.currentId || ''),
+            currentFingerprint: String(detail.currentFingerprint || ''),
+        };
+        renderWallpaperFavorites();
+    });
+    // 壁纸模块可能在本模块之后完成初始化，主动索要一次当前收藏状态
+    requestFavorites();
     window.addEventListener('gx:settings-changed', event => {
         const settings = event.detail?.settings || getSettings();
         applyAppearanceClasses(settings);

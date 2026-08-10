@@ -10,20 +10,22 @@
 //      天气引擎切换氛围时会调用它（否则首帧 ambiance 落空，要等下次校准）。
 //   2. 所有控件事件由各模块在 initXxx() 内绑定，不依赖内联处理器或额外全局函数。
 
-import { initUI } from './modules/ui.js?v=polish-20260720a';
-import { initAmbience } from './modules/ambience.js?v=polish-20260720a';
-import { initFluid } from './modules/fluid.js?v=polish-20260720a';
-import { initWallpapers } from './modules/wallpaper.js?v=polish-20260720a';
-import { initWeather } from './modules/weather.js?v=polish-20260720a';
-import { initTicker } from './modules/ticker.js?v=polish-20260720a';
-import { initNews } from './modules/news.js?v=polish-20260720a';
-import { initInteractions } from './modules/interactions.js?v=polish-20260720a';
-import { initStatus } from './modules/status.js?v=polish-20260720a';
-import { initSettings } from './modules/settings.js?v=polish-20260720a';
+import { initUI } from './modules/ui.js?v=polish-20260811a';
+import { initAmbience } from './modules/ambience.js?v=polish-20260811a';
+import { initFluid } from './modules/fluid.js?v=polish-20260811a';
+import { initWallpapers } from './modules/wallpaper.js?v=polish-20260811a';
+import { initWeather } from './modules/weather.js?v=polish-20260811a';
+import { initTicker } from './modules/ticker.js?v=polish-20260811a';
+import { initNews } from './modules/news.js?v=polish-20260811a';
+import { initInteractions } from './modules/interactions.js?v=polish-20260811a';
+import { initStatus } from './modules/status.js?v=polish-20260811a';
+import { initSettings } from './modules/settings.js?v=polish-20260811a';
 
 // 只有完整模块图加载成功后才隐藏待进场元素；脚本被禁用或模块加载失败时，
 // 页面内容保持可见，避免核心界面永久停在 opacity: 0。
+// js-reveal 同理：快讯条目的"进视口才显形"初始隐藏态只在脚本就绪后才生效。
 document.documentElement.classList.add('js-motion');
+document.documentElement.classList.add('js-reveal');
 
 function reportInitFailure(name, error) {
     console.error(`[app] ${name} 初始化失败:`, error);

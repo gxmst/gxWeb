@@ -17,10 +17,16 @@ let newsPaused = !initialNewsSettings.autoRefresh;
 let newsPollTimer = null;
 let newsRequestInFlight = false;
 let searchDebounceTimer = null;
+let groupByTime = initialNewsSettings.groupByTime !== false;
+let revealObserver = null;
+let unseenKeys = new Set();
+let pendingFocusKey = '';
 
 const NEWS_POLL_INTERVAL = 30000;
 const MAX_NEWS_ITEMS = 400;
 const NEWS_PAGE_SIZE = 60;
+// 顶部这点距离内视作"正在看最新"，新条目直接就位而不弹提示。
+const AT_TOP_THRESHOLD = 24;
 
 // 供 wallpaper.js 取色后重新对齐指示器读取当前分类
 export function getCurrentFilter() { return currentFilter; }
@@ -109,13 +115,150 @@ function emptyMessage(text) {
 function createLoadMoreButton(total) {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'news-load-more mx-auto mt-4 min-h-10 rounded-lg border border-white/10 bg-white/5 px-4 text-xs text-white/70 transition-colors hover:bg-white/10 hover:text-white';
-    button.textContent = `继续加载（剩余 ${Math.max(0, total - visibleLimit)} 条）`;
+    button.className = 'news-load-more mx-auto mt-4 mb-2 min-h-10 rounded-lg border border-white/10 bg-white/5 px-4 text-xs text-white/70 transition-colors hover:bg-white/10 hover:text-white';
+    button.textContent = `显示更多（剩余 ${Math.max(0, total - visibleLimit)} 条）`;
     button.addEventListener('click', () => {
+        // 记下当前这批的最后一条，渲染后把焦点交给紧随其后的第一条新内容——
+        // 既不丢焦点（原来焦点落回 body，浏览器随即把滚动带走），也不需要滚动。
+        const rendered = allNewsData.filter(applyFilter).slice(0, visibleLimit);
+        pendingFocusKey = rendered.length ? rendered[rendered.length - 1]._clientKey : '';
         visibleLimit += NEWS_PAGE_SIZE;
-        renderNewsList(new Set(), true);
+        renderNewsList(new Set(), 'anchor');
     });
     return button;
+}
+
+// ---- 滚动锚定 ----
+// 原来的做法是 scrollTop += (新高度 - 旧高度)，它只对「在顶部插入」成立：
+// 追加到底部时高度同样变大，于是把视口整块往下推，看起来就是"跳到最下面"。
+// 改成锚定一个具体条目：记住当前视口里第一条可见条目和它相对容器顶的偏移，
+// 渲染后把这个偏移还原。插入、追加、替换都成立。
+function captureScrollAnchor(container) {
+    const containerTop = container.getBoundingClientRect().top;
+    const items = container.querySelectorAll('[data-news-key]');
+    for (const item of items) {
+        const offset = item.getBoundingClientRect().top - containerTop;
+        if (offset >= -4) return { key: item.dataset.newsKey, offset };
+    }
+    return null;
+}
+
+function restoreScrollAnchor(container, anchor) {
+    if (!anchor) return;
+    const target = container.querySelector(`[data-news-key="${CSS.escape(anchor.key)}"]`);
+    if (!target) return;
+    // 两遍收敛：改了 scrollTop 之后 sticky 时段小标题会重新落位，
+    // 轻微改变后续元素的实际位置，一遍校正会留几个像素的残差。
+    for (let pass = 0; pass < 2; pass++) {
+        const delta = (target.getBoundingClientRect().top - container.getBoundingClientRect().top) - anchor.offset;
+        if (Math.abs(delta) <= 0.5) break;
+        container.scrollTop += delta;
+    }
+}
+
+// ---- 时间分组 ----
+// 快讯只带 HH:MM，滚久了完全失去"我看到哪儿了"的坐标。用 raw_time 切出
+// 「今天 14:00」这种小时段，作为 sticky 小标题吸在列表顶部当章节标记。
+function groupLabel(news) {
+    const raw = Number(news.raw_time);
+    if (!Number.isFinite(raw) || raw <= 0) return { id: 'unknown', label: '较早' };
+    const date = new Date(raw * 1000);
+    const now = new Date();
+    const sameDay = date.toDateString() === now.toDateString();
+    const hour = String(date.getHours()).padStart(2, '0');
+    const id = `${date.toDateString()}-${hour}`;
+    if (sameDay) return { id, label: `今天 ${hour}:00` };
+    const yesterday = new Date(now.getTime() - 86400000);
+    const dayLabel = date.toDateString() === yesterday.toDateString()
+        ? '昨天'
+        : date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+    return { id, label: `${dayLabel} ${hour}:00` };
+}
+
+function createGroupSeparator(label, count) {
+    const row = document.createElement('div');
+    row.className = 'news-group-sep';
+    row.dataset.groupSep = label;
+    const text = document.createElement('span');
+    text.textContent = label;
+    row.appendChild(text);
+    if (count > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'news-group-count';
+        badge.textContent = String(count);
+        row.appendChild(badge);
+    }
+    return row;
+}
+
+// ---- 进入视口时逐条显形 ----
+// 只做一次性 reveal：条目滚进视口就加 .in-view，不再移除，避免来回抖动。
+function ensureRevealObserver() {
+    if (revealObserver || typeof IntersectionObserver !== 'function') return revealObserver;
+    const container = document.getElementById('newsList');
+    if (!container) return null;
+    revealObserver = new IntersectionObserver(entries => {
+        for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            entry.target.classList.add('in-view');
+            revealObserver.unobserve(entry.target);
+        }
+    }, { root: window.innerWidth < 768 ? null : container, rootMargin: '80px 0px', threshold: 0.01 });
+    return revealObserver;
+}
+
+function observeReveal(element) {
+    const observer = ensureRevealObserver();
+    if (!observer) {
+        element.classList.add('in-view');
+        return;
+    }
+    observer.observe(element);
+}
+
+function motionAllowed() {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+    return !document.documentElement.classList.contains('power-saving');
+}
+
+// ---- 顶部"N 条新快讯"提示 ----
+// 用户正在往下读时，静默把新条目插到顶部会让人失去参照；改为累计未读数、
+// 用一个可点击的 pill 告知，点了才回到顶部。
+function updateUnseenPill() {
+    const pill = document.getElementById('newsUnseenPill');
+    const label = document.getElementById('newsUnseenCount');
+    if (!pill || !label) return;
+    const count = unseenKeys.size;
+    label.textContent = count > 99 ? '99+' : String(count);
+    const visible = count > 0;
+    pill.classList.toggle('show', visible);
+    pill.disabled = !visible;
+    pill.setAttribute('aria-hidden', String(!visible));
+}
+
+function clearUnseen() {
+    if (!unseenKeys.size) return;
+    unseenKeys = new Set();
+    updateUnseenPill();
+}
+
+function newsListAtTop() {
+    const container = document.getElementById('newsList');
+    if (!container) return true;
+    if (window.innerWidth < 768) {
+        const aside = document.querySelector('aside');
+        return !aside || window.scrollY - aside.offsetTop < AT_TOP_THRESHOLD;
+    }
+    return container.scrollTop < AT_TOP_THRESHOLD;
+}
+
+// 滚动进度：驱动底部渐隐遮罩的开关（滚到底时收掉，否则底部内容永远是灰的）。
+function syncScrollShadow() {
+    const container = document.getElementById('newsList');
+    if (!container) return;
+    const remaining = container.scrollHeight - container.scrollTop - container.clientHeight;
+    container.style.setProperty('--fade-bottom', remaining > 12 ? '2rem' : '0rem');
+    container.style.setProperty('--fade-top', container.scrollTop > 12 ? '1.25rem' : '0rem');
 }
 
 function updateResultMeta(filteredCount, renderedCount) {
@@ -127,18 +270,27 @@ function updateResultMeta(filteredCount, renderedCount) {
         : `没有匹配结果${paused}`;
 }
 
+// 分类角标已经报了总数，标题栏这行只在真的被筛过 / 暂停时才占位置。
+function shouldShowResultMeta() {
+    return importantOnly || currentSource !== 'all' || Boolean(searchTerm) || newsPaused;
+}
+
 // 使用稳定 key 对齐、更新、重排和删除节点；服务端删掉的条目不会留在 DOM 中。
-function renderNewsList(newKeys = new Set(), preserveScroll = false) {
+// mode: 'reset'  切分类/筛选 —— 回到顶部
+//       'anchor' 轮询更新 / 显示更多 —— 锚定当前阅读位置
+function renderNewsList(newKeys = new Set(), mode = 'reset') {
     const listContainer = document.getElementById('newsList');
     const filtered = allNewsData.filter(applyFilter);
     const visibleNews = filtered.slice(0, visibleLimit);
 
     updateTabCounts();
     updateResultMeta(filtered.length, visibleNews.length);
+    const meta = document.getElementById('newsResultMeta');
+    if (meta) meta.hidden = !shouldShowResultMeta();
     listContainer.setAttribute('aria-labelledby', `tab-${currentFilter}`);
     if (!hasLoadedNews && allNewsData.length === 0) return;
-    const oldScroll = listContainer.scrollTop;
-    const oldHeight = listContainer.scrollHeight;
+
+    const anchor = mode === 'anchor' ? captureScrollAnchor(listContainer) : null;
     const existing = new Map(
         Array.from(listContainer.querySelectorAll('[data-news-key]'))
             .map(element => [element.dataset.newsKey, element])
@@ -148,7 +300,21 @@ function renderNewsList(newKeys = new Set(), preserveScroll = false) {
         const constrained = importantOnly || currentSource !== 'all' || Boolean(searchTerm);
         fragment.appendChild(emptyMessage(constrained ? '没有匹配的快讯' : '暂无对应快讯'));
     } else {
-        visibleNews.forEach(news => {
+        let lastGroupId = '';
+        visibleNews.forEach((news, index) => {
+            if (groupByTime) {
+                const group = groupLabel(news);
+                if (group.id !== lastGroupId) {
+                    lastGroupId = group.id;
+                    // 该时段在本次可见范围内的条数，让小标题自带信息量
+                    let count = 0;
+                    for (let i = index; i < visibleNews.length; i++) {
+                        if (groupLabel(visibleNews[i]).id !== group.id) break;
+                        count++;
+                    }
+                    fragment.appendChild(createGroupSeparator(group.label, count));
+                }
+            }
             const signature = newsRenderSignature(news);
             let element = existing.get(news._clientKey);
             if (!element || element.dataset.newsSignature !== signature) {
@@ -159,9 +325,24 @@ function renderNewsList(newKeys = new Set(), preserveScroll = false) {
         if (visibleNews.length < filtered.length) fragment.appendChild(createLoadMoreButton(filtered.length));
     }
     listContainer.replaceChildren(fragment);
-    if (preserveScroll && oldScroll > 10) {
-        listContainer.scrollTop = Math.max(0, oldScroll + listContainer.scrollHeight - oldHeight);
+
+    if (mode === 'anchor') restoreScrollAnchor(listContainer, anchor);
+    else listContainer.scrollTop = 0;
+
+    // "显示更多"后把焦点交给第一条新内容：preventScroll 必须加，
+    // 否则 focus() 自带的 scrollIntoView 会把刚还原好的位置again带走。
+    if (pendingFocusKey) {
+        const previous = listContainer.querySelector(`[data-news-key="${CSS.escape(pendingFocusKey)}"]`);
+        const target = previous?.nextElementSibling?.matches?.('[data-news-key]')
+            ? previous.nextElementSibling
+            : previous?.nextElementSibling?.nextElementSibling;   // 跨过可能插入的时段小标题
+        if (target?.matches?.('[data-news-key]')) {
+            target.tabIndex = -1;
+            target.focus({ preventScroll: true });
+        }
+        pendingFocusKey = '';
     }
+    syncScrollShadow();
 }
 
 // View Transitions 包装：切 tab / 切字号时让列表交叉淡入形变，而非硬切。
@@ -259,7 +440,8 @@ function updateSourceOptions() {
 
 function resetNewsView() {
     visibleLimit = NEWS_PAGE_SIZE;
-    withViewTransition(renderNewsList);
+    clearUnseen();
+    withViewTransition(() => renderNewsList(new Set(), 'reset'));
 }
 
 // 切换分类 Tab
@@ -312,6 +494,10 @@ function createNewsElement(news, isNew = false) {
     item.className = `news-feed-item${importantClass} py-2 [&_a]:text-blue-400 [&_a]:underline [&_a]:hover:text-blue-300` + (isNew ? ' animate-slide-down' : '');
     item.dataset.newsKey = news._clientKey;
     item.dataset.newsSignature = newsRenderSignature(news);
+    // 滚动显形：新建节点先处于未显形态，进视口再淡入上浮。
+    // 省电/减少动态偏好下直接标记为已显形，等于关掉这套动效。
+    if (motionAllowed()) observeReveal(item);
+    else item.classList.add('in-view');
 
     header.className = 'text-[11px] text-white/45 font-mono mb-0.5 flex flex-wrap items-center gap-1.5';
     const time = document.createElement('span');
@@ -421,9 +607,18 @@ async function fetchRealNews() {
 
         // 比较整个有界数据集，而不是只看第一条，避免漏掉同一分钟内的普通更新。
         if (firstLoad || nextSignature !== lastNewsSignature) {
+            const wasAtTop = firstLoad || newsListAtTop();
             allNewsData = newsList;
             updateSourceOptions();
-            renderNewsList(firstLoad ? new Set() : newKeys, !firstLoad);
+            // 数据始终就位（计数/筛选不能骗人），但正在往下读时不抢走视口位置，
+            // 而是把新增条目记成未读、用顶部 pill 提示。
+            if (!firstLoad && !wasAtTop) {
+                for (const key of newKeys) unseenKeys.add(key);
+            } else {
+                clearUnseen();
+            }
+            renderNewsList(firstLoad ? new Set() : newKeys, firstLoad ? 'reset' : 'anchor');
+            updateUnseenPill();
             lastNewsSignature = nextSignature;
         }
     } catch (e) {
@@ -438,6 +633,33 @@ async function fetchRealNews() {
             document.getElementById('lastUpdateTime').innerText = '连接失败';
         }
     }
+}
+
+// 折叠筛选行：搜索 / 来源 / 只看重要平时收起，标题栏只留一个漏斗按钮。
+// 收起时用 inert + hidden 双保险，键盘 Tab 不会落进看不见的控件。
+function setFilterBarOpen(open, persist = true) {
+    const row = document.getElementById('newsFilterRow');
+    const toggle = document.getElementById('newsFilterToggle');
+    if (!row || !toggle) return;
+    row.classList.toggle('open', open);
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.classList.toggle('active', open);
+    if (open) {
+        row.removeAttribute('inert');
+    } else {
+        row.setAttribute('inert', '');
+    }
+    if (persist && Boolean(getSettings().news.filterBarOpen) !== open) {
+        updateSettings('news', { filterBarOpen: open });
+    }
+}
+
+// 有筛选条件生效时给漏斗按钮点一个小圆点，收起状态下也知道结果被过滤过。
+function syncFilterIndicator() {
+    const toggle = document.getElementById('newsFilterToggle');
+    if (!toggle) return;
+    const active = importantOnly || currentSource !== 'all' || Boolean(searchTerm);
+    toggle.classList.toggle('has-filter', active);
 }
 
 export function initNews() {
@@ -459,6 +681,7 @@ export function initNews() {
     const syncImportantButton = () => {
         importantButton?.setAttribute('aria-pressed', String(importantOnly));
         importantButton?.classList.toggle('active', importantOnly);
+        syncFilterIndicator();
     };
     importantButton?.addEventListener('click', () => {
         importantOnly = !importantOnly;
@@ -470,6 +693,7 @@ export function initNews() {
     document.getElementById('newsSourceFilter')?.addEventListener('change', event => {
         currentSource = event.target.value || 'all';
         updateSettings('news', { source: currentSource });
+        syncFilterIndicator();
         resetNewsView();
     });
 
@@ -478,9 +702,40 @@ export function initNews() {
         const value = event.target.value;
         searchDebounceTimer = window.setTimeout(() => {
             searchTerm = value.trim().toLocaleLowerCase('zh-CN');
+            syncFilterIndicator();
             resetNewsView();
         }, 120);
     });
+
+    const filterToggle = document.getElementById('newsFilterToggle');
+    filterToggle?.addEventListener('click', () => {
+        const open = filterToggle.getAttribute('aria-expanded') !== 'true';
+        setFilterBarOpen(open);
+        if (open) document.getElementById('newsSearchInput')?.focus();
+    });
+    document.getElementById('newsFilterRow')?.addEventListener('keydown', event => {
+        if (event.key !== 'Escape') return;
+        setFilterBarOpen(false);
+        filterToggle?.focus();
+    });
+
+    const listContainer = document.getElementById('newsList');
+    document.getElementById('newsUnseenPill')?.addEventListener('click', () => {
+        clearUnseen();
+        if (window.innerWidth < 768) {
+            const aside = document.querySelector('aside');
+            window.scrollTo({ top: aside ? aside.offsetTop : 0, behavior: 'smooth' });
+        } else {
+            listContainer?.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    });
+    const handleListScroll = () => {
+        syncScrollShadow();
+        if (newsListAtTop()) clearUnseen();
+    };
+    listContainer?.addEventListener('scroll', handleListScroll, { passive: true });
+    window.addEventListener('scroll', handleListScroll, { passive: true });
+    window.addEventListener('resize', syncScrollShadow);
 
     const poll = async () => {
         if (document.hidden || newsPaused || newsRequestInFlight) return;
@@ -543,6 +798,11 @@ export function initNews() {
             syncImportantButton();
             viewChanged = true;
         }
+        if ((next.groupByTime !== false) !== groupByTime) {
+            groupByTime = next.groupByTime !== false;
+            viewChanged = true;
+        }
+        setFilterBarOpen(Boolean(next.filterBarOpen), false);
         applyPauseState(!next.autoRefresh);
         if (viewChanged) resetNewsView();
     });
@@ -556,8 +816,11 @@ export function initNews() {
 
     syncImportantButton();
     syncPauseButton();
+    // 上次留了搜索词或来源筛选，就把折叠行展开，否则用户看到"结果少了"却找不到开关。
+    setFilterBarOpen(Boolean(initialNewsSettings.filterBarOpen) || currentSource !== 'all', false);
     setFontSize(currentFontSize, false);
     setFilter(currentFilter, false);
+    updateUnseenPill();
     poll();
     // 窗口尺寸变化时重新对齐指示器（tab 宽度会随之变化）
     window.addEventListener('resize', () => moveTabIndicator(currentFilter));

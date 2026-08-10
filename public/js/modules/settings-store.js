@@ -25,6 +25,13 @@ export const DEFAULT_SETTINGS = {
         fontSize: 'sm',
         importantOnly: false,
         autoRefresh: true,
+        filterBarOpen: false,
+        groupByTime: true,
+    },
+    wallpaper: {
+        // mix = 收藏 + 每日必应一起轮换（新图仍有机会被看到并收藏）
+        // favorites = 只轮换收藏夹（收藏夹为空时自动退回 mix）
+        rotation: 'mix',
     },
     ticker: {
         showAll: true,
@@ -94,6 +101,7 @@ function sanitizeSettings(value) {
     const latitude = Number(weather.latitude);
     const longitude = Number(weather.longitude);
     const news = source.news && typeof source.news === 'object' ? source.news : {};
+    const wallpaper = source.wallpaper && typeof source.wallpaper === 'object' ? source.wallpaper : {};
     const ticker = source.ticker && typeof source.ticker === 'object' ? source.ticker : {};
     const appearance = source.appearance && typeof source.appearance === 'object' ? source.appearance : {};
     const layout = source.layout && typeof source.layout === 'object' ? source.layout : {};
@@ -117,6 +125,11 @@ function sanitizeSettings(value) {
             fontSize: ['sm', 'base', 'lg'].includes(news.fontSize) ? news.fontSize : 'sm',
             importantOnly: Boolean(news.importantOnly),
             autoRefresh: news.autoRefresh !== false,
+            filterBarOpen: Boolean(news.filterBarOpen),
+            groupByTime: news.groupByTime !== false,
+        },
+        wallpaper: {
+            rotation: ['mix', 'favorites'].includes(wallpaper.rotation) ? wallpaper.rotation : 'mix',
         },
         ticker: {
             showAll: ticker.showAll !== false,
