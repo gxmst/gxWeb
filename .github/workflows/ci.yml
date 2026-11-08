@@ -32,6 +32,9 @@ jobs:
       - name: Check vendored assets, generated CSS and JavaScript
         run: npm run check
 
+      - name: Test settings persistence and screen saver behavior
+        run: npm run test:settings
+
       - name: Audit declared npm dependencies
         run: npm audit --audit-level=high
 

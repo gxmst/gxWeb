@@ -10,16 +10,17 @@
 //      天气引擎切换氛围时会调用它（否则首帧 ambiance 落空，要等下次校准）。
 //   2. 所有控件事件由各模块在 initXxx() 内绑定，不依赖内联处理器或额外全局函数。
 
-import { initUI } from './modules/ui.js?v=polish-20260811a';
-import { initAmbience } from './modules/ambience.js?v=polish-20260811a';
-import { initFluid } from './modules/fluid.js?v=polish-20260811a';
-import { initWallpapers } from './modules/wallpaper.js?v=polish-20260811a';
-import { initWeather } from './modules/weather.js?v=polish-20260811a';
-import { initTicker } from './modules/ticker.js?v=polish-20260811a';
-import { initNews } from './modules/news.js?v=polish-20260811a';
-import { initInteractions } from './modules/interactions.js?v=polish-20260811a';
-import { initStatus } from './modules/status.js?v=polish-20260811a';
-import { initSettings } from './modules/settings.js?v=polish-20260811a';
+import { initUI } from './modules/ui.js?v=workspace-20261108a';
+import { initAmbience } from './modules/ambience.js?v=workspace-20261108a';
+import { initFluid } from './modules/fluid.js?v=workspace-20261108a';
+import { initWallpapers } from './modules/wallpaper.js?v=workspace-20261108a';
+import { initWeather } from './modules/weather.js?v=workspace-20261108a';
+import { initTicker } from './modules/ticker.js?v=workspace-20261108a';
+import { initNews } from './modules/news.js?v=workspace-20261108a';
+import { initInteractions } from './modules/interactions.js?v=workspace-20261108a';
+import { initStatus } from './modules/status.js?v=workspace-20261108a';
+import { initSettings } from './modules/settings.js?v=workspace-20261108a';
+import { initWidgets } from './modules/widgets.js';
 
 // 只有完整模块图加载成功后才隐藏待进场元素；脚本被禁用或模块加载失败时，
 // 页面内容保持可见，避免核心界面永久停在 opacity: 0。
@@ -47,6 +48,7 @@ function init() {
     // 单个模块失败不会阻断其余功能；顺序仍满足 ambience/fluid 的桥接约束。
     runInitializer('ui', initUI);
     runInitializer('settings', initSettings);
+    runInitializer('widgets', initWidgets);
     runInitializer('ambience', initAmbience);
     runInitializer('fluid', initFluid);
     runInitializer('wallpapers', initWallpapers);

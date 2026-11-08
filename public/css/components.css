@@ -211,7 +211,10 @@ html.js-reveal .news-feed-item.animate-slide-down {
         transform: none;
         transition: none;
     }
-    .news-unseen-pill, .news-filter-row { transition: none; }
+    .news-unseen-pill, .news-filter-row, .engine-indicator { transition: none; }
+    .clock-colon,
+    .ticker-item-card.ticker-flash-up,
+    .ticker-item-card.ticker-flash-down { animation: none; }
     #newsList { transition: none; }
 }
 .news-feed-item {
@@ -252,55 +255,209 @@ html.js-reveal .news-feed-item.animate-slide-down {
     background: linear-gradient(90deg, rgba(248, 113, 113, 0.08), rgba(248, 113, 113, 0));
 }
 
-/* 科技聚合块样式适配 */
+/* 科技聚合块与结构化微卡片排版 */
 .tech-content br {
     display: block;
     margin-top: 0.5rem;
     content: "";
 }
-.tech-content a {
-    color: rgb(var(--wall-rgb)) !important;
-    text-decoration: underline;
-    text-decoration-color: rgba(var(--wall-rgb), 0.58);
-    text-underline-offset: 0.18em;
-    text-shadow: 0 1px 10px rgba(8, 47, 73, 0.3);
-    transition: color 0.2s ease, text-decoration-color 0.2s ease, background-color 0.2s ease;
-    border-radius: 0.35rem;
-    padding: 0 0.1rem;
-    background: linear-gradient(180deg, rgba(var(--wall-rgb), 0.14), rgba(8, 47, 73, 0.02));
+.tech-block-header {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.55rem;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: rgba(255, 255, 255, 0.94);
 }
+.tech-brand-dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 9999px;
+    box-shadow: 0 0 8px currentColor;
+}
+.tech-section-label {
+    display: inline-flex;
+    align-items: center;
+    margin: 0.65rem 0 0.35rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 9999px;
+    background: rgba(var(--wall-rgb), 0.12);
+    border: 1px solid rgba(var(--wall-rgb), 0.22);
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.tech-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+.tech-card-item {
+    padding: 0.45rem 0.55rem;
+    border-radius: 0.5rem;
+    background: rgba(255, 255, 255, 0.028);
+    border: 1px solid rgba(255, 255, 255, 0.055);
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+.tech-card-item.tech-card-compact {
+    padding: 0.35rem 0.5rem;
+}
+.tech-card-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(var(--wall-rgb), 0.28);
+}
+.tech-card-top {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+}
+.tech-rank {
+    flex-shrink: 0;
+    font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba(var(--wall-rgb), 0.78);
+    font-variant-numeric: tabular-nums;
+}
+.tech-title-link,
+.tech-content a {
+    color: rgba(255, 255, 255, 0.93) !important;
+    font-weight: 600;
+    text-decoration: none !important;
+    transition: color 0.18s ease;
+    line-height: 1.4;
+}
+.tech-title-link:hover,
 .tech-content a:hover {
-    color: #e0f2fe !important;
-    text-decoration-color: rgba(224, 242, 254, 0.9);
-    background: linear-gradient(180deg, rgba(var(--wall-rgb), 0.24), rgba(8, 47, 73, 0.08));
+    color: rgb(var(--wall-rgb)) !important;
+    text-decoration: underline !important;
+    text-decoration-color: rgba(var(--wall-rgb), 0.55) !important;
+    text-underline-offset: 0.2em;
+}
+.tech-star-pill {
+    margin-left: auto;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.08rem 0.4rem;
+    border-radius: 9999px;
+    background: rgba(251, 191, 36, 0.12);
+    border: 1px solid rgba(251, 191, 36, 0.28);
+    color: rgb(253, 224, 71);
+    font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+}
+.tech-desc-en {
+    margin-top: 0.22rem;
+    padding-left: 1.35rem;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.74);
+}
+.tech-desc-zh {
+    margin-top: 0.18rem;
+    padding-left: 1.35rem;
+    font-size: 0.74rem;
+    line-height: 1.42;
+    color: rgba(255, 255, 255, 0.48);
 }
 
+/* 外媒/带链接快讯：去除大段蓝底与常驻下划线，保持与普通快讯一致的干净阅读韵律，
+   通过尾缀微图标 ↗ 与悬停强调色表达可点击状态 */
 .news-link {
-    color: rgb(var(--wall-rgb));
-    text-decoration: underline;
-    text-decoration-color: rgba(var(--wall-rgb), 0.58);
-    text-underline-offset: 0.18em;
-    text-shadow: 0 1px 10px rgba(8, 47, 73, 0.3);
-    transition: color 0.2s ease, text-decoration-color 0.2s ease, background-color 0.2s ease;
-    border-radius: 0.35rem;
-    padding: 0 0.1rem;
-    background: linear-gradient(180deg, rgba(var(--wall-rgb), 0.14), rgba(8, 47, 73, 0.02));
+    color: rgba(255, 255, 255, 0.92);
+    text-decoration: none;
+    transition: color 0.18s ease;
+}
+.news-link::after {
+    content: "↗";
+    display: inline-block;
+    margin-left: 0.25rem;
+    font-family: "Inter", sans-serif;
+    font-size: 0.72em;
+    color: rgba(var(--wall-rgb), 0.72);
+    opacity: 0.65;
+    transform: translateY(-0.04em);
+    transition: transform 0.18s ease, opacity 0.18s ease, color 0.18s ease;
 }
 .news-link:hover {
-    color: #bae6fd;
-    text-decoration-color: rgba(186, 230, 253, 0.9);
-    background: linear-gradient(180deg, rgba(var(--wall-rgb), 0.24), rgba(8, 47, 73, 0.08));
+    color: rgb(var(--wall-rgb));
+    text-decoration: underline;
+    text-decoration-color: rgba(var(--wall-rgb), 0.48);
+    text-underline-offset: 0.2em;
+}
+.news-link:hover::after {
+    opacity: 1;
+    transform: translate(1px, -1px);
+}
+.news-link:visited {
+    color: rgba(255, 255, 255, 0.68);
 }
 
-/* sparkline */
+/* 快讯内嵌涨跌幅数字微胶囊着色 */
+.news-num-up,
+.news-num-down {
+    display: inline-block;
+    padding: 0 0.24rem;
+    margin: 0 0.04rem;
+    border-radius: 0.25rem;
+    font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+    font-size: 0.9em;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.25;
+}
+.news-num-up {
+    color: rgb(253, 164, 175);
+    background: rgba(244, 63, 94, 0.14);
+}
+.news-num-down {
+    color: rgb(110, 231, 183);
+    background: rgba(16, 185, 129, 0.14);
+}
+
+/* sparkline & 底部行情微卡片 */
 .sparkline-svg { display: block; overflow: visible; }
-.sparkline-poly { fill: none; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
+.sparkline-poly { fill: none; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
 .sparkline-poly.draw-in {
     stroke-dasharray: var(--spark-len, 120);
     stroke-dashoffset: var(--spark-len, 120);
     animation: sparkDraw 0.9s ease-out forwards;
 }
 @keyframes sparkDraw { to { stroke-dashoffset: 0; } }
+
+.ticker-item-card {
+    position: relative;
+    padding: 0.2rem 0.55rem;
+    border-radius: 0.5rem;
+    border: 1px solid transparent;
+    transition: background 0.22s ease, border-color 0.22s ease, transform 0.22s ease;
+}
+.ticker-item-card:hover {
+    background: rgba(255, 255, 255, 0.065);
+    border-color: rgba(255, 255, 255, 0.10);
+}
+@keyframes tickerFlashUp {
+    0%   { background: rgba(244, 63, 94, 0.28); border-color: rgba(251, 113, 133, 0.45); }
+    100% { background: transparent; border-color: transparent; }
+}
+@keyframes tickerFlashDown {
+    0%   { background: rgba(16, 185, 129, 0.28); border-color: rgba(52, 211, 153, 0.45); }
+    100% { background: transparent; border-color: transparent; }
+}
+.ticker-item-card.ticker-flash-up {
+    animation: tickerFlashUp 0.95s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.ticker-item-card.ticker-flash-down {
+    animation: tickerFlashDown 0.95s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
 
 /* ============ 进场错峰动画 ============ */
 @keyframes fadeUp {
@@ -801,21 +958,116 @@ html.power-saving #fogLayer,
 html.power-saving #starCanvas,
 html.power-saving #fluidCanvas { display: none !important; }
 
+/* ============ 主视觉：时钟细节 & 日期天气毛玻璃胶囊 ============ */
+@keyframes colonPulse {
+    0%, 100% { opacity: 0.92; }
+    50%      { opacity: 0.32; }
+}
+.clock-colon {
+    display: inline-block;
+    margin: 0 0.04em;
+    transform: translateY(-0.05em);
+    animation: colonPulse 2s ease-in-out infinite;
+}
+html.power-saving .clock-colon {
+    animation: none;
+}
+
+.hero-meta-pill {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    padding: 0.35rem 0.85rem;
+    border-radius: 9999px;
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.10), rgba(var(--wall-rgb), 0.06)),
+        rgba(8, 14, 26, 0.30);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(14px) saturate(165%);
+    -webkit-backdrop-filter: blur(14px) saturate(165%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.28),
+        0 10px 26px rgba(0, 0, 0, 0.26);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    color: rgba(255, 255, 255, 0.90);
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
+}
+.hero-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.hero-meta-divider {
+    width: 1px;
+    height: 0.85rem;
+    background: rgba(255, 255, 255, 0.22);
+}
+.hero-weather-btn {
+    padding: 0.12rem 0.45rem;
+    margin: -0.12rem -0.35rem;
+    border-radius: 9999px;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+    cursor: pointer;
+}
+.hero-weather-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+.hero-weather-btn:active {
+    transform: scale(0.97);
+}
+.hero-weather-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    color: rgb(var(--wall-rgb));
+    filter: drop-shadow(0 0 6px rgba(var(--wall-rgb), 0.45));
+}
+.hero-weather-icon:empty {
+    display: none;
+}
+
+/* ============ 搜索引擎滑动胶囊指示器 ============ */
+.engine-indicator {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    left: 0;
+    width: 0;
+    border-radius: 9999px;
+    pointer-events: none;
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.32),
+        0 4px 12px rgba(0, 0, 0, 0.22);
+    transition: left 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
+                width 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
+                background 0.28s ease,
+                border-color 0.28s ease,
+                box-shadow 0.28s ease;
+}
 .engine-btn {
-    color: rgba(255, 255, 255, 0.62);
+    color: rgba(255, 255, 255, 0.56);
     border: 1px solid transparent;
 }
 .engine-btn:hover {
-    color: rgba(255, 255, 255, 0.95);
-    background: rgba(255, 255, 255, 0.10);
+    color: rgba(255, 255, 255, 0.92);
 }
 .engine-btn.active {
-    color: var(--engine-color);
-    background: rgba(255, 255, 255, 0.20);
-    border-color: rgba(255, 255, 255, 0.20);
-    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
-    font-weight: 700;
-    transform: scale(1.05);
+    color: #ffffff;
+    font-weight: 600;
+}
+.engine-btn.active svg {
+    color: var(--engine-color, rgb(var(--wall-rgb)));
+    opacity: 1;
+    filter: drop-shadow(0 0 6px var(--engine-color, rgba(var(--wall-rgb), 0.5)));
 }
 
 @media (max-width: 767px) {
@@ -970,4 +1222,63 @@ html.power-saving #fluidCanvas { display: none !important; }
 @media (prefers-reduced-motion: reduce) {
     ::view-transition-old(news-list),
     ::view-transition-new(news-list) { animation: none; }
+}
+
+/* 可独立关闭的控件不参与布局，也不进入键盘焦点顺序。 */
+[hidden] { display: none !important; }
+main { min-width: 0; }
+#newsAside { min-width: 0; flex-shrink: 0; }
+#search-bar { min-width: 0; }
+.widget-toggle {
+    display: flex; align-items: center; gap: 0.55rem;
+    padding: 0.65rem; border-radius: 0.65rem;
+    border: 1px solid rgba(255,255,255,0.10);
+    background: rgba(255,255,255,0.035);
+    color: rgba(255,255,255,0.8); font-size: 0.8rem; cursor: pointer;
+}
+.widget-toggle input { accent-color: rgb(var(--wall-rgb)); }
+.widget-toggle:has(input:checked) { border-color: rgba(var(--wall-rgb),0.28); background: rgba(var(--wall-rgb),0.06); }
+.recovery-button {
+    padding: 0.5rem 0.75rem; border-radius: 9999px;
+    border: 1px solid rgba(255,255,255,0.2); background: rgba(15,23,42,0.7);
+    color: rgba(255,255,255,0.9); font-size: 0.8rem; backdrop-filter: blur(12px);
+}
+.recovery-button:hover { background: rgba(51,65,85,0.85); }
+.layout-recovery {
+    position: fixed; top: 1.25rem; right: 1.25rem; z-index: 70;
+    display: flex; gap: 0.5rem; opacity: 0; pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+.recovery-visible .layout-recovery, .layout-recovery:focus-within {
+    opacity: 1; pointer-events: auto;
+}
+.news-hidden main { width: 100%; }
+.news-hidden #backToTop { display: none !important; }
+.ticker-hidden main { padding-bottom: 2rem; }
+.ticker-hidden #newsAside { padding-bottom: 1rem; }
+.quiet-scene body { height: 100dvh; overflow: hidden; }
+.quiet-scene main { min-height: 100dvh; height: 100dvh; padding: 0; }
+.quiet-scene #clockGroup { margin: 0; }
+.quiet-scene .ambient-glow, .quiet-scene #sceneShade, .quiet-scene #weatherOverlay,
+.quiet-scene #timeTint, .quiet-scene #sunGlow, .quiet-scene #cloudLayer,
+.quiet-scene #fogLayer, .quiet-scene #starCanvas, .quiet-scene #fluidCanvas,
+.quiet-scene #weatherCanvas, .quiet-scene #lightningFlash { display: none !important; }
+.news-summary { margin-top: 0.35rem; font-size: 0.8em; line-height: 1.6; color: rgba(255,255,255,0.52); }
+@media (min-width: 768px) {
+    #newsAside { width: min(450px, 42vw); }
+}
+/* 中等宽度沿用下拉引擎，给搜索输入留出空间。 */
+@media (min-width: 768px) and (max-width: 1100px) {
+    #engineBar, #search-bar kbd { display: none !important; }
+    #searchEngineSelect { display: inline-flex !important; }
+    #searchInput { min-width: 0; padding: 0 0.65rem; }
+}
+@media (max-width: 767px) {
+    .layout-recovery { top: 1rem; right: 1rem; }
+    #tabBar .tab-btn { min-width: 0; gap: 0.15rem; }
+    #tabBar .tab-badge { padding: 2px 3px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .clock-colon, .ticker-item-card.ticker-flash-up, .ticker-item-card.ticker-flash-down { animation: none; }
+    .engine-indicator, .layout-recovery { transition: none; }
 }

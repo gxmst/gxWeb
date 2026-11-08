@@ -286,5 +286,40 @@ class RuntimeReliabilityTests(unittest.TestCase):
         self.assertGreaterEqual(state["duration"], 20)
 
 
+class TechHtmlBuilderTests(unittest.TestCase):
+    def test_github_hn_and_v2ex_builders_render_structured_cards(self):
+        with mock.patch.object(spider, "translate_batch", return_value={"Fast web UI": "快速 Web 界面"}):
+            gh_html = spider.build_github_html([
+                {
+                    "label": "Last 7 Days",
+                    "items": [
+                        {
+                            "full_name": "org/repo",
+                            "stargazers_count": 2450,
+                            "description": "Fast web UI",
+                            "html_url": "https://github.com/org/repo",
+                        }
+                    ],
+                }
+            ])
+
+        self.assertIn("tech-card-item", gh_html)
+        self.assertIn("★ 2.5k", gh_html)
+        self.assertIn("快速 Web 界面", gh_html)
+        self.assertNotIn("group-hover:max-h-24", gh_html)
+
+        hn_html = spider.build_hn_html(
+            [{"link": "https://news.ycombinator.com/item?id=1"}],
+            ["Show HN: Demo"],
+            {"Show HN: Demo": "展示 HN：演示"},
+        )
+        self.assertIn("Hacker News", hn_html)
+        self.assertIn("展示 HN：演示", hn_html)
+
+        v2ex_html = spider.build_v2ex_html([{"id": 100, "title": "热门话题"}], [{"id": 101, "title": "最新话题"}])
+        self.assertIn("Hot Topics", v2ex_html)
+        self.assertIn("Latest", v2ex_html)
+
+
 if __name__ == "__main__":
     unittest.main()

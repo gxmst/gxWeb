@@ -1,301 +1,25 @@
 // ================== 天气与粒子物理引擎 ==================
 // 氛围切换通过 window.__setAmbiance 钩子桥接到 ambience 模块（含未就绪降级）。
-import { getSettings } from './settings-store.js';
+import { getSettings, getEffectiveAppearance, isWidgetVisible } from './settings-store.js';
+import { initForecast } from './forecast.js';
+import { createWeatherScene } from './weather-scene.js';
 
-const canvas = document.getElementById('weatherCanvas');
-const ctx = canvas.getContext('2d');
+const scene = createWeatherScene(document.getElementById('weatherCanvas'));
 const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
-let particles = [];
-let animationId = null;
-let uiBounds = [];
-let currentWeatherType = null;   // 'rain' | 'snow' | null
-let canvasFade = 0;              // 切换天气时的画布淡入 (0→1)
 let reduceMotion = motionPreference.matches;
 let weatherPollTimer = null;
-let weatherRequestInFlight = false;
+let weatherRequestController = null;
 const WEATHER_POLL_INTERVAL = 600000;
-
-// 鼠标气流场：粒子在光标附近被推开/打旋
-const mouse = { x: -9999, y: -9999, vx: 0, vy: 0, active: false, lastMove: 0 };
-window.addEventListener('pointermove', (e) => {
-    if (reduceMotion || document.hidden) return;
-    mouse.vx = e.clientX - mouse.x;
-    mouse.vy = e.clientY - mouse.y;
-    mouse.x = e.clientX;
-    mouse.y = e.clientY;
-    mouse.active = true;
-    mouse.lastMove = performance.now();
-}, { passive: true });
-window.addEventListener('pointerleave', () => { mouse.active = false; }, { passive: true });
-
-function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    _uiBoundsDirty = true;
-    updateUIBounds();
-}
-
-// 按视口面积缩放粒子数，避免大屏太稀、小屏太密
-function particleCountFor(type) {
-    const area = window.innerWidth * window.innerHeight;
-    const compact = window.innerWidth < 768;
-    if (type === 'snow') return Math.max(compact ? 55 : 120, Math.min(compact ? 150 : 380, Math.round(area / 9000)));
-    return Math.max(compact ? 40 : 90, Math.min(compact ? 120 : 300, Math.round(area / 12000)));   // rain
-}
-
-let _uiBoundsDirty = true;
-function updateUIBounds() {
-    if (!_uiBoundsDirty) return;
-    _uiBoundsDirty = false;
-    const ids = ['search-bar', 'news-panel', 'bottom-ticker'];
-    uiBounds = [];
-    for (const id of ids) {
-        const el = document.getElementById(id);
-        if (!el) continue;
-        const r = el.getBoundingClientRect();
-        // 读取真实圆角半径，碰撞面才能贴合可见弧线（修复"打在空中"）
-        let radius = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
-        radius = Math.min(radius, r.width / 2, r.height / 2);
-        uiBounds.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, radius, snow: 0 });
-    }
-}
-function markUIBoundsDirty() { _uiBoundsDirty = true; }
-window.addEventListener('resize', resizeCanvas);
-window.addEventListener('scroll', markUIBoundsDirty, true);
-
-// 给定 x，返回该 bound 顶部可见表面的 y（圆角处抬高到弧线上）。x 在 bound 之外返回 null。
-function surfaceYAt(bound, x) {
-    if (x < bound.left || x > bound.right) return null;
-    const rad = bound.radius;
-    if (rad <= 0) return bound.top;
-    // 左圆角区
-    if (x < bound.left + rad) {
-        const dx = rad - (x - bound.left);
-        return bound.top + (rad - Math.sqrt(Math.max(0, rad * rad - dx * dx)));
-    }
-    // 右圆角区
-    if (x > bound.right - rad) {
-        const dx = rad - (bound.right - x);
-        return bound.top + (rad - Math.sqrt(Math.max(0, rad * rad - dx * dx)));
-    }
-    // 中间平直段
-    return bound.top;
-}
-
-resizeCanvas();
-
-class WeatherParticle {
-    constructor(type, seed) { this.type = type; this.reset(seed); }
-    // seed=true：初始播种，散布在屏幕上方较高的带里，让雪/雨"开始下"而非瞬间铺满。
-    // seed=false：落地/出界回收，只补在顶沿略上方，保持下落数量恒定、密度均匀。
-    reset(seed) {
-        this.x = Math.random() * canvas.width;
-        if (seed) {
-            this.y = Math.random() * canvas.height - canvas.height; // [-H, 0)，自上而下渐入
-        } else {
-            this.y = -10 - Math.random() * 40;                      // 顶沿略上方补员
-        }
-        this.prevY = this.y;
-        this.isLanded = false;
-        this.landedTime = 0;
-        this.isSplashing = false;
-        this.splashRadius = 0;
-        this.splashAlpha = 1;
-        this.splashX = 0;
-
-        if (this.type === 'rain') {
-            this.speed = 14 + Math.random() * 8;
-            this.len = 16 + Math.random() * 16;
-            this.opacity = 0.16 + Math.random() * 0.22;
-            this.lineWidth = 0.7 + Math.random() * 0.7;
-        } else {
-            this.speed = 0.6 + Math.random() * 1.8;
-            this.radius = Math.random() * 2.6 + 1.2;
-            this.opacity = 0.55 + Math.random() * 0.4;
-            this.swing = Math.random() * 2;
-            this.swingStep = Math.random() * 100;
-            this.vx = 0; // 受鼠标气流影响的横向速度
-        }
-    }
-
-    applyMouseField() {
-        // 仅在鼠标近期移动过时生效，避免静止光标持续吸附
-        if (!mouse.active || performance.now() - mouse.lastMove > 600) return;
-        const dx = this.x - mouse.x;
-        const dy = this.y - mouse.y;
-        const dist2 = dx * dx + dy * dy;
-        const R = 110;
-        if (dist2 > R * R || dist2 < 0.01) return;
-        const dist = Math.sqrt(dist2);
-        const force = (1 - dist / R);
-        // 斥力（推开）+ 垂直分量制造打旋观感
-        const push = force * (this.type === 'snow' ? 3.2 : 5.0);
-        this.x += (dx / dist) * push + (-dy / dist) * push * 0.4 * (this.type === 'snow' ? 1 : 0.3);
-        if (this.type === 'snow') this.y += (dy / dist) * push * 0.5;
-    }
-
-    update() {
-        if (this.isLanded) {
-            this.landedTime++;
-            // 落地快速淡出回收（积雪由窗台积雪层呈现，不靠滞留个体堆叠）
-            if (this.landedTime > 90 + Math.random() * 90) {
-                this.opacity -= 0.02;
-                if (this.opacity <= 0) this.reset(false);
-            }
-            return;
-        }
-
-        if (this.isSplashing) {
-            this.splashRadius += 1.4;
-            this.splashAlpha -= 0.09;
-            if (this.splashAlpha <= 0) this.reset(false);
-            return;
-        }
-
-        this.applyMouseField();
-
-        this.prevY = this.y;
-        this.y += this.speed;
-        if (this.type === 'snow') {
-            this.x += Math.sin(this.swingStep) * this.swing + this.vx;
-            this.swingStep += 0.02;
-            this.vx *= 0.94; // 鼠标横推后缓慢回稳
-        }
-
-        for (const bound of uiBounds) {
-            if (this.x <= bound.left || this.x >= bound.right) continue;
-            const surfY = surfaceYAt(bound, this.x);
-            if (surfY === null) continue;
-            // 叠加已积雪厚度：落点再抬高一点，雪会"落在雪上"
-            const landY = surfY - (this.type === 'snow' ? bound.snow : 0);
-            if (this.prevY < landY && this.y >= landY) {
-                if (this.type === 'snow') {
-                    this.isLanded = true;
-                    this.y = landY;
-                    // 喂给窗台积雪层（缓慢变厚，封顶）
-                    if (bound.snow < 14) bound.snow += 0.05;
-                } else {
-                    this.isSplashing = true;
-                    this.splashX = this.x;
-                    this.y = landY;
-                    this.splashRadius = 1;
-                    this.splashAlpha = 0.55;
-                }
-                return;
-            }
-        }
-
-        if (this.y > canvas.height + 50) this.reset(false);
-    }
-    draw() {
-        if (this.isLanded) {
-            ctx.beginPath();
-            ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
-            ctx.ellipse(this.x, this.y, this.radius * 2, this.radius * 0.6, 0, 0, Math.PI * 2);
-            ctx.fill();
-            return;
-        }
-
-        if (this.isSplashing) {
-            const r = Math.min(this.splashRadius, 10);
-            ctx.beginPath();
-            ctx.strokeStyle = `rgba(220, 238, 255, ${this.splashAlpha})`;
-            ctx.lineWidth = 1.4;
-            ctx.ellipse(this.splashX, this.y, r, r * 0.4, 0, Math.PI, Math.PI * 2);
-            ctx.stroke();
-            ctx.fillStyle = `rgba(220, 238, 255, ${this.splashAlpha})`;
-            ctx.beginPath();
-            ctx.arc(this.splashX - r, this.y - r * 0.4, 0.8, 0, Math.PI * 2);
-            ctx.arc(this.splashX + r, this.y - r * 0.4, 0.8, 0, Math.PI * 2);
-            ctx.fill();
-            return;
-        }
-
-        if (this.type === 'rain') {
-            const grad = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.len);
-            grad.addColorStop(0, `rgba(200, 222, 250, 0)`);
-            grad.addColorStop(0.5, `rgba(208, 230, 255, ${this.opacity})`);
-            grad.addColorStop(1, `rgba(200, 222, 250, 0)`);
-            ctx.strokeStyle = grad;
-            ctx.lineWidth = this.lineWidth;
-            ctx.lineCap = 'butt';
-            ctx.beginPath();
-            ctx.moveTo(this.x, this.y);
-            ctx.lineTo(this.x, this.y + this.len);
-            ctx.stroke();
-        } else {
-            ctx.beginPath();
-            ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
-            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    }
-}
-
-// 窗台积雪层：沿每个 UI 顶沿（含圆角弧线）描出一条随时间变厚的白边
-function drawSnowLedges() {
-    for (const bound of uiBounds) {
-        if (bound.snow <= 0.3) continue;
-        const depth = bound.snow;
-        ctx.save();
-        ctx.beginPath();
-        const step = 4;
-        ctx.moveTo(bound.left, surfaceYAt(bound, bound.left));
-        for (let x = bound.left; x <= bound.right; x += step) {
-            ctx.lineTo(x, surfaceYAt(bound, x) - 0);
-        }
-        // 回扫上沿（抬高 depth）形成厚度带
-        for (let x = bound.right; x >= bound.left; x -= step) {
-            ctx.lineTo(x, surfaceYAt(bound, x) - depth);
-        }
-        ctx.closePath();
-        const g = ctx.createLinearGradient(0, bound.top - depth, 0, bound.top + 2);
-        g.addColorStop(0, 'rgba(255,255,255,0.92)');
-        g.addColorStop(1, 'rgba(255,255,255,0.55)');
-        ctx.fillStyle = g;
-        ctx.fill();
-        ctx.restore();
-    }
-}
-
-let _uiBoundsFrame = 0;
-function shouldAnimateWeather() {
-    return !reduceMotion && !document.hidden && Boolean(currentWeatherType) && particles.length > 0;
-}
-
-function stopWeatherAnimation() {
-    if (animationId !== null) cancelAnimationFrame(animationId);
-    animationId = null;
-}
-
-function startWeatherAnimation() {
-    if (!shouldAnimateWeather() || animationId !== null) return;
-    animationId = requestAnimationFrame(animateWeather);
-}
-
-function animateWeather() {
-    animationId = null;
-    if (!shouldAnimateWeather()) return;
-    _uiBoundsFrame++;
-    if (_uiBoundsFrame % 60 === 0) _uiBoundsDirty = true;
-    updateUIBounds();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // 切换天气时整层淡入，消除"啪"地铺满的突兀感
-    if (canvasFade < 1) canvasFade = Math.min(1, canvasFade + 0.02);
-    ctx.globalAlpha = canvasFade;
-    if (currentWeatherType === 'snow') drawSnowLedges();
-    particles.forEach(p => { p.update(); p.draw(); });
-    ctx.globalAlpha = 1;
-    animationId = requestAnimationFrame(animateWeather);
-}
+const stopWeatherAnimation = () => scene.pause();
+const startWeatherAnimation = () => scene.resume();
 
 const WEATHER_PROFILES = {
-    rain: { overlay: 'rgba(38, 82, 130, 0.18)', particle: 'rain', ambiance: 'rain' },
-    storm: { overlay: 'rgba(28, 52, 92, 0.28)', particle: 'rain', ambiance: 'storm', heavy: true },
-    sun: { overlay: 'rgba(255, 218, 128, 0.08)', particle: null, ambiance: 'sunny' },
-    snow: { overlay: 'rgba(104, 126, 158, 0.18)', particle: 'snow', ambiance: 'snow' },
-    fog: { overlay: 'rgba(150, 158, 170, 0.16)', particle: null, ambiance: 'fog' },
-    cloudy: { overlay: 'rgba(108, 122, 142, 0.12)', particle: null, ambiance: 'cloudy' },
+    rain: { overlay: 'rgba(38, 70, 110, 0.10)', particle: 'rain', ambiance: 'rain' },
+    storm: { overlay: 'rgba(28, 52, 92, 0.18)', particle: 'rain', ambiance: 'storm', heavy: true },
+    sun: { overlay: 'rgba(255, 218, 128, 0.035)', particle: null, ambiance: 'sunny' },
+    snow: { overlay: 'rgba(104, 126, 158, 0.10)', particle: 'snow', ambiance: 'snow' },
+    fog: { overlay: 'rgba(150, 158, 170, 0.07)', particle: null, ambiance: 'fog' },
+    cloudy: { overlay: 'rgba(108, 122, 142, 0.06)', particle: null, ambiance: 'cloudy' },
     none: { overlay: 'rgba(0, 0, 0, 0.12)', particle: null, ambiance: 'none' }
 };
 
@@ -319,30 +43,17 @@ function setWeatherOverlay(overlay, profile) {
 
 function applyEnvironmentFilter(weatherKeyword) {
     const overlay = document.getElementById('weatherOverlay');
-    stopWeatherAnimation();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    particles = [];
-    canvasFade = 0;
-    _uiBoundsDirty = true; updateUIBounds();
-    // 重置积雪厚度，避免切走再切回时残留旧雪
-    uiBounds.forEach(b => b.snow = 0);
-
-    const appearance = getSettings().appearance;
+    const appearance = getEffectiveAppearance();
     const effectsAllowed = appearance.weatherEffects && !appearance.powerSaving;
     const profile = effectsAllowed ? weatherProfileFor(weatherKeyword) : WEATHER_PROFILES.none;
     setWeatherOverlay(overlay, profile);
 
-    currentWeatherType = profile.particle;
+    const particle = !reduceMotion ? profile.particle : null;
+    scene.set(particle,{heavy:profile.heavy});
     // 全屏雨雪粒子运行时暂停 WebGL 涟漪，避免两套高频背景动画争抢 GPU。
     window.dispatchEvent(new CustomEvent('gx:weather-motion', {
-        detail: { active: Boolean(currentWeatherType) },
+        detail: { active: Boolean(particle) },
     }));
-    if (profile.particle && !reduceMotion) {
-        let n = particleCountFor(profile.particle);
-        if (profile.heavy) n = Math.min(420, Math.round(n * 1.6)); // 雷暴：雨量更大
-        for (let i = 0; i < n; i++) particles.push(new WeatherParticle(profile.particle, true));
-        startWeatherAnimation();
-    }
     setWeatherAmbient(profile.ambiance);
 }
 
@@ -356,10 +67,35 @@ function setWeatherAmbient(kind) {
 
 let realWeather = '';
 const filterModes = ['auto', '晴', '阴', '雾', '雨', '雷', '雪'];
-const filterIcons = ['✨', '☀️', '☁️', '🌫️', '🌧️', '⛈️', '❄️'];
+const filterIconKinds = ['auto', 'sun', 'cloudy', 'fog', 'rain', 'storm', 'snow'];
 const filterLabels = ['自动（跟随实况）', '晴', '阴', '雾', '雨', '雷暴', '雪'];
 let currentFilterIndex = 0;
 let filterToastTimer = null;
+
+const WEATHER_SVGS = {
+    sun: '<svg class="w-4 h-4 text-amber-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4" fill="currentColor" fill-opacity="0.25"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>',
+    cloudy: '<svg class="w-4 h-4 text-sky-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" fill="currentColor" fill-opacity="0.18"/></svg>',
+    fog: '<svg class="w-4 h-4 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10h16M6 14h12M4 18h10M8 6h12"/></svg>',
+    rain: '<svg class="w-4 h-4 text-sky-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" fill="currentColor" fill-opacity="0.18"/><path d="M16 14v6m-4-4v6m-4-6v6"/></svg>',
+    storm: '<svg class="w-4 h-4 text-amber-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16.326A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.973"/><path d="m13 12-3 5h4l-3 5"/></svg>',
+    snow: '<svg class="w-4 h-4 text-cyan-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M8 15h.01M8 19h.01M12 17h.01M12 21h.01M16 15h.01M16 19h.01"/></svg>',
+};
+
+function renderWeatherHero(rawText) {
+    const infoEl = document.getElementById('weatherInfo');
+    const iconSlot = document.getElementById('weatherIconSlot');
+    if (!infoEl) return;
+    const profile = weatherProfileFor(rawText);
+    const kind = profile.ambiance === 'sunny' ? 'sun' : profile.ambiance;
+    const svg = WEATHER_SVGS[kind] || '';
+    if (iconSlot) {
+        iconSlot.innerHTML = svg;
+    }
+    const cleaned = svg
+        ? String(rawText || '').replace(/[☀️☁️🌫️🌧️⛈️❄️]\s*/g, '').trim()
+        : String(rawText || '').trim();
+    infoEl.innerText = cleaned || String(rawText || '');
+}
 
 // 点击滤镜按钮时短暂显示当前模式名，否则用户只看到 emoji 变化猜不出状态
 function showControlToast(text) {
@@ -375,7 +111,8 @@ function toggleWeatherFilter() {
     currentFilterIndex = (currentFilterIndex + 1) % filterModes.length;
     const mode = filterModes[currentFilterIndex];
     const btn = document.getElementById('filterBtn');
-    btn.innerText = filterIcons[currentFilterIndex];
+    btn.innerHTML = WEATHER_SVGS[filterIconKinds[currentFilterIndex]] || '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/></svg>';
+    btn.querySelector('svg')?.setAttribute('aria-hidden', 'true');
     const label = `环境滤镜：${filterLabels[currentFilterIndex]}`;
     btn.title = label;
     btn.setAttribute('aria-label', label);
@@ -384,7 +121,7 @@ function toggleWeatherFilter() {
     else applyEnvironmentFilter(mode);
 }
 
-async function fetchWeather() {
+async function fetchWeather(signal) {
     const settings = getSettings();
     if (settings.weather.mode === 'city') {
         try {
@@ -392,9 +129,10 @@ async function fetchWeather() {
             url.searchParams.set('latitude', String(settings.weather.latitude));
             url.searchParams.set('longitude', String(settings.weather.longitude));
             url.searchParams.set('current_weather', 'true');
-            const response = await fetch(url, { cache: 'no-cache' });
+            const response = await fetch(url, { cache: 'no-cache', signal });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const payload = await response.json();
+            if (signal.aborted) return;
             const current = payload.current_weather || {};
             const code = Number(current.weathercode);
             const temperature = Number(current.temperature);
@@ -404,39 +142,50 @@ async function fetchWeather() {
             const city = String(settings.weather.city || '').split(' · ')[0] || '当前城市';
             const text = `${city} · ${emoji} ${temperature}°C`;
             realWeather = text;
-            document.getElementById('weatherInfo').innerText = text;
+            renderWeatherHero(text);
             if (filterModes[currentFilterIndex] === 'auto') applyEnvironmentFilter(realWeather);
             return;
         } catch (error) {
+            if (signal.aborted) return;
             console.warn('指定城市天气获取失败，回退服务器天气:', error);
         }
     }
     try {
-        const response = await fetch('./weather.txt', { cache: 'no-cache' });
+        const response = await fetch('./weather.txt', { cache: 'no-cache', signal });
         if (!response.ok) throw new Error();
         const text = await response.text();
+        if (signal.aborted) return;
         if (!text.includes('失败')) {
             realWeather = text;
-            document.getElementById('weatherInfo').innerText = text;
+            renderWeatherHero(text);
             if (filterModes[currentFilterIndex] === 'auto') applyEnvironmentFilter(realWeather);
         }
-    } catch { document.getElementById('weatherInfo').innerText = '暂无天气数据'; }
+    } catch {
+        if (!signal.aborted) renderWeatherHero('暂无天气数据');
+    }
 }
 
 export function initWeather() {
+    initForecast();
     document.getElementById('filterBtn')?.addEventListener('click', toggleWeatherFilter);
     const currentKeyword = () => filterModes[currentFilterIndex] === 'auto'
         ? realWeather
         : filterModes[currentFilterIndex];
 
+    const needsWeather = () => isWidgetVisible('weather') || (getEffectiveAppearance().weatherEffects && !getEffectiveAppearance().powerSaving);
+    let weatherNeeded = needsWeather();
     const poll = async () => {
-        if (document.hidden || weatherRequestInFlight) return;
-        weatherRequestInFlight = true;
+        if (document.hidden || !needsWeather() || weatherRequestController) return;
+        const controller = new AbortController();
+        weatherRequestController = controller;
         try {
-            await fetchWeather();
+            await fetchWeather(controller.signal);
         } finally {
-            weatherRequestInFlight = false;
-            if (!document.hidden) weatherPollTimer = window.setTimeout(poll, WEATHER_POLL_INTERVAL);
+            // An obsolete request must not reset the active request or its timer.
+            if (weatherRequestController === controller) {
+                weatherRequestController = null;
+                if (!document.hidden && needsWeather()) weatherPollTimer = window.setTimeout(poll, WEATHER_POLL_INTERVAL);
+            }
         }
     };
     document.addEventListener('visibilitychange', () => {
@@ -452,12 +201,25 @@ export function initWeather() {
         if (event.detail?.section === 'weather' || event.detail?.section === 'all') {
             window.clearTimeout(weatherPollTimer);
             weatherPollTimer = null;
+            weatherRequestController?.abort();
+            weatherRequestController = null;
             poll();
         }
-        if (event.detail?.section === 'appearance' || event.detail?.section === 'all') {
+        if (['appearance', 'widgets', 'all'].includes(event.detail?.section)) {
             applyEnvironmentFilter(currentKeyword());
+            syncWeatherPolling();
         }
     });
+    function syncWeatherPolling() {
+        const next = needsWeather();
+        if (next === weatherNeeded) return;
+        weatherNeeded = next;
+        window.clearTimeout(weatherPollTimer);
+        weatherRequestController?.abort();
+        weatherRequestController = null;
+        if (next) poll();
+    }
+    window.addEventListener('gx:layout-changed', syncWeatherPolling);
     const handleMotionPreference = event => {
         reduceMotion = event.matches;
         applyEnvironmentFilter(currentKeyword());

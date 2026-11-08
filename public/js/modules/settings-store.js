@@ -2,6 +2,14 @@ import { safeStorageGet, safeStorageSet } from './storage.js';
 
 const SETTINGS_KEY = 'gxSettingsV1';
 
+export const FONT_OPTIONS = [
+    { id: 'modern', label: '现代黑体', family: '"Inter", "PingFang SC", "Microsoft YaHei", sans-serif' },
+    { id: 'system', label: '系统字体', family: 'system-ui, -apple-system, "Segoe UI", sans-serif' },
+    { id: 'serif', label: '书卷宋体', family: '"Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif' },
+    { id: 'wenkai', label: '霞鹜文楷', family: '"LXGW WenKai", KaiTi, "STKaiti", serif' },
+    { id: 'mono', label: '等宽字体', family: '"JetBrains Mono", "Sarasa Mono SC", Consolas, "Microsoft YaHei", monospace' },
+];
+
 export const DEFAULT_SHORTCUTS = [
     { id: 'bilibili', name: 'Bilibili', url: 'https://bilibili.com' },
     { id: 'twitter', name: 'Twitter', url: 'https://x.com' },
@@ -12,6 +20,10 @@ export const DEFAULT_SHORTCUTS = [
 
 export const DEFAULT_SETTINGS = {
     version: 1,
+    widgets: {
+        date: true, weather: true, search: true, shortcuts: true, news: true, ticker: true,
+        wallpaperButton: true, favoriteButton: true, filterButton: true, settingsButton: true,
+    },
     search: { engine: 'bing' },
     weather: {
         mode: 'server',
@@ -27,6 +39,9 @@ export const DEFAULT_SETTINGS = {
         autoRefresh: true,
         filterBarOpen: false,
         groupByTime: true,
+        hiddenSources: [],
+        readingView: 'all',
+        density: 'standard',
     },
     wallpaper: {
         // mix = 收藏 + 每日必应一起轮换（新图仍有机会被看到并收藏）
@@ -48,9 +63,12 @@ export const DEFAULT_SETTINGS = {
         nightSky: true,
         numberMotion: true,
         powerSaving: false,
+        panelOpacity: 60,
     },
+    typography: { interfaceFont: 'modern', newsFont: 'inherit', clockFont: 'mono' },
     layout: {
         newsPanelWidth: null,
+        newsPanelMode: 'compact',
     },
     shortcuts: DEFAULT_SHORTCUTS,
 };
@@ -105,11 +123,15 @@ function sanitizeSettings(value) {
     const ticker = source.ticker && typeof source.ticker === 'object' ? source.ticker : {};
     const appearance = source.appearance && typeof source.appearance === 'object' ? source.appearance : {};
     const layout = source.layout && typeof source.layout === 'object' ? source.layout : {};
+    const typography = source.typography && typeof source.typography === 'object' ? source.typography : {};
+    const fontIds = FONT_OPTIONS.map(font => font.id);
     const search = source.search && typeof source.search === 'object' ? source.search : {};
+    const widgets = source.widgets && typeof source.widgets === 'object' ? source.widgets : {};
     const panelWidth = Number.parseInt(layout.newsPanelWidth, 10);
 
     return {
         version: 1,
+        widgets: Object.fromEntries(Object.keys(DEFAULT_SETTINGS.widgets).map(key => [key, widgets[key] !== false])),
         search: {
             engine: ['bing', 'baidu', 'google', 'duck'].includes(search.engine) ? search.engine : 'bing',
         },
@@ -120,13 +142,16 @@ function sanitizeSettings(value) {
             longitude: Number.isFinite(longitude) && longitude >= -180 && longitude <= 180 ? longitude : 123.43,
         },
         news: {
-            category: ['all', 'news', 'foreign', 'tech'].includes(news.category) ? news.category : 'all',
+            category: ['all', 'news', 'foreign', 'tech', 'community'].includes(news.category) ? news.category : 'all',
             source: String(news.source || 'all').slice(0, 80),
             fontSize: ['sm', 'base', 'lg'].includes(news.fontSize) ? news.fontSize : 'sm',
             importantOnly: Boolean(news.importantOnly),
             autoRefresh: news.autoRefresh !== false,
             filterBarOpen: Boolean(news.filterBarOpen),
             groupByTime: news.groupByTime !== false,
+            hiddenSources: stringList(news.hiddenSources).filter(source => ['nodeseek', 'linuxdo'].includes(source)),
+            readingView: ['all','unread','saved'].includes(news.readingView) ? news.readingView : 'all',
+            density: ['compact','standard','relaxed'].includes(news.density) ? news.density : 'standard',
         },
         wallpaper: {
             rotation: ['mix', 'favorites'].includes(wallpaper.rotation) ? wallpaper.rotation : 'mix',
@@ -146,9 +171,16 @@ function sanitizeSettings(value) {
             nightSky: appearance.nightSky !== false,
             numberMotion: appearance.numberMotion !== false,
             powerSaving: Boolean(appearance.powerSaving),
+            panelOpacity: Number.isFinite(appearance.panelOpacity) ? Math.max(20,Math.min(95,appearance.panelOpacity)) : 60,
+        },
+        typography: {
+            interfaceFont: fontIds.includes(typography.interfaceFont) ? typography.interfaceFont : 'modern',
+            newsFont: ['inherit', ...fontIds].includes(typography.newsFont) ? typography.newsFont : 'inherit',
+            clockFont: fontIds.includes(typography.clockFont) ? typography.clockFont : 'mono',
         },
         layout: {
-            newsPanelWidth: Number.isFinite(panelWidth) && panelWidth >= 350 ? panelWidth : null,
+            newsPanelWidth: Number.isFinite(panelWidth) && panelWidth >= 280 ? Math.min(panelWidth, 10000) : null,
+            newsPanelMode: ['compact', 'wide', 'full'].includes(layout.newsPanelMode) ? layout.newsPanelMode : 'compact',
         },
         shortcuts: sanitizeShortcuts(source.shortcuts),
     };
@@ -186,6 +218,33 @@ function loadSettings() {
 }
 
 let currentSettings = loadSettings();
+let screenSaver = false;
+
+export function isScreenSaver() { return screenSaver; }
+
+export function isQuietScene() {
+    return screenSaver || Object.values(currentSettings.widgets).every(value => !value);
+}
+
+export function isWidgetVisible(name) {
+    return !screenSaver && currentSettings.widgets[name] !== false;
+}
+
+export function getEffectiveAppearance() {
+    const appearance = clone(currentSettings.appearance);
+    if (isQuietScene()) {
+        Object.keys(appearance).forEach(key => { appearance[key] = key === 'powerSaving'; });
+    }
+    return appearance;
+}
+
+export function setScreenSaver(value) {
+    if (screenSaver === Boolean(value)) return;
+    screenSaver = Boolean(value);
+    window.dispatchEvent(new CustomEvent('gx:settings-changed', {
+        detail: { section: 'widgets', settings: getSettings() },
+    }));
+}
 
 function publish(section) {
     safeStorageSet(SETTINGS_KEY, JSON.stringify(currentSettings));

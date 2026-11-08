@@ -1,11 +1,11 @@
-import { getSettings } from './settings-store.js';
+import { getSettings, getEffectiveAppearance } from './settings-store.js';
 
 // ================== 视觉增强：进场 / 光斑 / 磁吸 / 时段 / 雷暴 / 星空 / 数字滚动 ==================
 // 暴露给其它模块的钩子：window.__setAmbiance / __animateNumber / __drawInSparkline
 
 export function initAmbience() {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let appearance = getSettings().appearance;
+    let appearance = getEffectiveAppearance();
     let powerSaving = appearance.powerSaving;
 
     // ---- 进场错峰动画：逐个触发 .entered ----
@@ -87,35 +87,21 @@ export function initAmbience() {
         refreshStarVisibility();
     }
 
-    // ---- 雷暴闪电：仅雨模式下偶发泛光 ----
+    // ---- 雷暴：偶发柔和泛光，普通雨不闪屏 ----
     const lightning = document.getElementById('lightningFlash');
     let lightningTimer = null;
     function scheduleLightning() {
-        if (!lightning) return;
-        const amb = window.__weatherAmbiance;
-        const isStorm = amb === 'storm';
-        // 雷暴：5~12s 一次、更亮、偶发双闪；普通雨：18~48s 一次、柔和
-        const delay = isStorm ? (5000 + Math.random() * 7000) : (18000 + Math.random() * 30000);
+        if (!lightning || lightningTimer || window.__weatherAmbiance !== 'storm' || document.hidden || reduceMotion || powerSaving) return;
         lightningTimer = setTimeout(() => {
-            const a = window.__weatherAmbiance;
-            if ((a === 'rain' || a === 'storm') && !reduceMotion && !powerSaving) {
-                const strong = a === 'storm';
-                lightning.classList.toggle('strong', strong);
+            lightningTimer = null;
+            if (window.__weatherAmbiance === 'storm' && !document.hidden && !reduceMotion && !powerSaving) {
+                lightning.classList.add('strong');
                 lightning.classList.remove('flash');
-                void lightning.offsetWidth; // 重排以重启动画
+                void lightning.offsetWidth;
                 lightning.classList.add('flash');
-                // 雷暴偶发双闪：首闪后 120~260ms 再补一道
-                if (strong && Math.random() < 0.4) {
-                    setTimeout(() => {
-                        if (window.__weatherAmbiance !== 'storm') return;
-                        lightning.classList.remove('flash');
-                        void lightning.offsetWidth;
-                        lightning.classList.add('flash');
-                    }, 120 + Math.random() * 140);
-                }
             }
             scheduleLightning();
-        }, delay);
+        }, 14000 + Math.random() * 14000);
     }
     lightning && lightning.addEventListener('animationend', () => lightning.classList.remove('flash'));
 
@@ -208,8 +194,8 @@ export function initAmbience() {
         // 雨/雪氛围下不显示星空，避免画面杂乱
         const ambiance = window.__weatherAmbiance;
         // 雨/雷暴/雪/雾 下不显示星空，避免画面杂乱
-        const hideFor = ['rain', 'storm', 'snow', 'fog'];
-        const show = appearance.nightSky && isNight && !reduceMotion && !powerSaving && !hideFor.includes(ambiance);
+        const hideFor = ['rain', 'storm', 'snow', 'fog', 'cloudy'];
+        const show = appearance.nightSky && isNight && !document.hidden && !reduceMotion && !powerSaving && !hideFor.includes(ambiance);
         if (show) {
             if (!stars.length) initStars();
             if (!starAnimId) animateStars();
@@ -236,14 +222,16 @@ export function initAmbience() {
         if (fogLayer) fogLayer.classList.toggle('on', ambiance === 'fog');
         const cloudLayer = document.getElementById('cloudLayer');
         if (cloudLayer) cloudLayer.classList.toggle('on', ambiance === 'cloudy');
-        // 雷暴与普通雨都跑闪电调度（内部按 storm/rain 区分频率与强度）
-        if (ambiance === 'rain' || ambiance === 'storm') { if (!lightningTimer) scheduleLightning(); }
+        if (ambiance !== 'storm') {
+            clearTimeout(lightningTimer);lightningTimer=null;
+            lightning?.classList.remove('flash');
+        } else scheduleLightning();
         refreshStarVisibility();
     };
 
     window.addEventListener('gx:settings-changed', event => {
-        if (!['appearance', 'all'].includes(event.detail?.section)) return;
-        appearance = (event.detail?.settings || getSettings()).appearance;
+        if (!['appearance', 'widgets', 'all'].includes(event.detail?.section)) return;
+        appearance = getEffectiveAppearance();
         powerSaving = Boolean(appearance.powerSaving);
         if (powerSaving) {
             if (lightningTimer) {
@@ -252,7 +240,7 @@ export function initAmbience() {
             }
             document.querySelectorAll('.glass-spot').forEach(el => el.style.setProperty('--spot', '0'));
             dockRow?.querySelectorAll('.dock-ico').forEach(ico => { ico.style.transform = ''; });
-        } else if (window.__weatherAmbiance === 'rain' || window.__weatherAmbiance === 'storm') {
+        } else if (window.__weatherAmbiance === 'storm') {
             scheduleLightning();
         }
         if (!appearance.glassGlow) {
@@ -264,6 +252,12 @@ export function initAmbience() {
 
     applyTimeTint();
     setInterval(applyTimeTint, 5 * 60 * 1000); // 每 5 分钟校准一次时段
+    document.addEventListener('visibilitychange',()=>{
+        document.documentElement.classList.toggle('scene-paused',document.hidden);
+        if(document.hidden){clearTimeout(lightningTimer);lightningTimer=null;}
+        else scheduleLightning();
+        refreshStarVisibility();
+    });
 
     // ---- 行情数字滚动 + sparkline 画入：作为全局工具暴露 ----
     // 数字滚动：把字符串价格里的数字部分做插值动画，保留非数字格式（货币符号/逗号）

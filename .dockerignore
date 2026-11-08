@@ -1,7 +1,9 @@
-# The spider image only needs these four build inputs. An allow-list keeps
+# The backend image only needs the listed build inputs. An allow-list keeps
 # .git, node_modules, generated public data and local secrets out of context.
 *
 !Dockerfile
 !.dockerignore
 !requirements.txt
 !spider.py
+!runtime_config.py
+!control_api.py

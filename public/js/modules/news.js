@@ -1,11 +1,13 @@
 // ================== 新闻流与交互渲染 ==================
-import { getSettings, updateSettings } from './settings-store.js';
+import { getSettings, updateSettings, isWidgetVisible } from './settings-store.js';
+import { isRead, isSaved, markRead, markAllRead, toggleSaved, savedNews, BOOKMARK_LIMIT } from './news-state.js';
+import { showControlToast } from './toast.js';
 
 let allNewsData = [];
 let hasLoadedNews = false;
 const initialNewsSettings = getSettings().news;
 const storedFilter = initialNewsSettings.category;
-let currentFilter = ['all', 'news', 'foreign', 'tech'].includes(storedFilter) ? storedFilter : 'all';
+let currentFilter = ['all', 'news', 'foreign', 'tech', 'community'].includes(storedFilter) ? storedFilter : 'all';
 let lastNewsSignature = '';
 const storedFontSize = initialNewsSettings.fontSize;
 let currentFontSize = ['sm', 'base', 'lg'].includes(storedFontSize) ? storedFontSize : 'sm';
@@ -17,10 +19,55 @@ let newsPaused = !initialNewsSettings.autoRefresh;
 let newsPollTimer = null;
 let newsRequestInFlight = false;
 let searchDebounceTimer = null;
+let hiddenSources = initialNewsSettings.hiddenSources;
 let groupByTime = initialNewsSettings.groupByTime !== false;
 let revealObserver = null;
 let unseenKeys = new Set();
 let pendingFocusKey = '';
+let readingView = initialNewsSettings.readingView;
+let readingObserver = null;
+const readingTimers = new Map();
+
+function readingPool() {
+    return readingView === 'saved' ? savedNews() : allNewsData;
+}
+
+function updateReadingControls() {
+    const unread = allNewsData.filter(news => applyFilter(news,true) && !isRead(news._clientKey)).length;
+    const saved = savedNews().filter(news => applyFilter(news,true)).length;
+    document.getElementById('readingUnreadCount').textContent = String(unread);
+    document.getElementById('readingSavedCount').textContent = String(saved);
+    document.querySelectorAll('[data-reading-view]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.readingView === readingView)));
+    document.querySelectorAll('[data-news-key]').forEach(item => {
+        const key = item.dataset.newsKey;
+        item.classList.toggle('is-read',isRead(key));
+        const read = item.querySelector('[data-mark-read]');
+        if(read) { read.setAttribute('aria-label',isRead(key) ? '标记为未读' : '标记为已读'); read.title = read.getAttribute('aria-label'); read.setAttribute('aria-pressed',String(isRead(key))); }
+        const save = item.querySelector('[data-save-news]');
+        if(save) {save.setAttribute('aria-pressed',String(isSaved(key)));save.setAttribute('aria-label',isSaved(key) ? '取消收藏这条资讯' : '收藏这条资讯');save.title = save.getAttribute('aria-label');}
+    });
+}
+
+function observeReading() {
+    readingObserver?.disconnect();
+    readingTimers.forEach(timer=>clearTimeout(timer)); readingTimers.clear();
+    if(!window.IntersectionObserver || readingView !== 'all' || document.hidden || !isWidgetVisible('news')) return;
+    const container = document.getElementById('newsList');
+    const inPanel = window.innerWidth >= 768 || document.documentElement.classList.contains('news-panel-full');
+    readingObserver = new IntersectionObserver(entries => {
+        for(const entry of entries) {
+            const key = entry.target.dataset.newsKey;
+            clearTimeout(readingTimers.get(key)); readingTimers.delete(key);
+            if(entry.isIntersecting && entry.intersectionRatio >= 0.6 && !isRead(key)) {
+                readingTimers.set(key,setTimeout(() => {
+                    readingTimers.delete(key);
+                    if(!document.hidden && document.getElementById('settingsOverlay').hidden && isWidgetVisible('news') && entry.target.isConnected) markRead(key);
+                },1800));
+            }
+        }
+    },{root:inPanel ? container : null,threshold:[0,0.6]});
+    container.querySelectorAll('[data-news-key]').forEach(item=>readingObserver.observe(item));
+}
 
 const NEWS_POLL_INTERVAL = 30000;
 const MAX_NEWS_ITEMS = 400;
@@ -50,7 +97,16 @@ function newsIdentity(news) {
 
 function assignClientKeys(newsList) {
     const occurrences = new Map();
-    return newsList.slice(0, MAX_NEWS_ITEMS).map(news => {
+    // 为较慢的来源保留容量，避免数百条财经快讯挤掉整个社区/科技分类。
+    const reserved = new Set();
+    for (const category of ['community', 'tech']) {
+        newsList.filter(item => item.category === category).slice(0, 80).forEach(item => reserved.add(item));
+    }
+    for (const item of newsList) {
+        if (reserved.size >= MAX_NEWS_ITEMS) break;
+        reserved.add(item);
+    }
+    return newsList.filter(item => reserved.has(item)).slice(0, MAX_NEWS_ITEMS).map(news => {
         const base = newsIdentity(news);
         const occurrence = occurrences.get(base) || 0;
         occurrences.set(base, occurrence + 1);
@@ -62,7 +118,7 @@ function newsRenderSignature(news) {
     return String(simpleHash(JSON.stringify([
         news._clientKey, news.time, news.display_content, news.content, news.url,
         news.category, news.source, news.format, Boolean(news.is_important),
-        news.importance_score, news.importance_reason, currentFontSize
+        news.importance_score, news.importance_reason, news.summary, news.forum_category, currentFontSize
     ])) >>> 0);
 }
 
@@ -70,7 +126,7 @@ function datasetSignature(newsList) {
     return String(simpleHash(JSON.stringify(newsList.map(news => [
         news._clientKey, news.time, news.display_content, news.content, news.url,
         news.category, news.source, news.format, Boolean(news.is_important),
-        news.importance_score, news.importance_reason
+        news.importance_score, news.importance_reason, news.summary, news.forum_category
     ]))) >>> 0);
 }
 
@@ -120,7 +176,7 @@ function createLoadMoreButton(total) {
     button.addEventListener('click', () => {
         // 记下当前这批的最后一条，渲染后把焦点交给紧随其后的第一条新内容——
         // 既不丢焦点（原来焦点落回 body，浏览器随即把滚动带走），也不需要滚动。
-        const rendered = allNewsData.filter(applyFilter).slice(0, visibleLimit);
+        const rendered = readingPool().filter(news=>applyFilter(news)).slice(0, visibleLimit);
         pendingFocusKey = rendered.length ? rendered[rendered.length - 1]._clientKey : '';
         visibleLimit += NEWS_PAGE_SIZE;
         renderNewsList(new Set(), 'anchor');
@@ -245,7 +301,7 @@ function clearUnseen() {
 function newsListAtTop() {
     const container = document.getElementById('newsList');
     if (!container) return true;
-    if (window.innerWidth < 768) {
+    if (window.innerWidth < 768 && !document.documentElement.classList.contains('news-panel-full')) {
         const aside = document.querySelector('aside');
         return !aside || window.scrollY - aside.offsetTop < AT_TOP_THRESHOLD;
     }
@@ -280,7 +336,7 @@ function shouldShowResultMeta() {
 //       'anchor' 轮询更新 / 显示更多 —— 锚定当前阅读位置
 function renderNewsList(newKeys = new Set(), mode = 'reset') {
     const listContainer = document.getElementById('newsList');
-    const filtered = allNewsData.filter(applyFilter);
+    const filtered = readingPool().filter(news=>applyFilter(news));
     const visibleNews = filtered.slice(0, visibleLimit);
 
     updateTabCounts();
@@ -288,7 +344,7 @@ function renderNewsList(newKeys = new Set(), mode = 'reset') {
     const meta = document.getElementById('newsResultMeta');
     if (meta) meta.hidden = !shouldShowResultMeta();
     listContainer.setAttribute('aria-labelledby', `tab-${currentFilter}`);
-    if (!hasLoadedNews && allNewsData.length === 0) return;
+    if (!hasLoadedNews && allNewsData.length === 0 && filtered.length === 0) return;
 
     const anchor = mode === 'anchor' ? captureScrollAnchor(listContainer) : null;
     const existing = new Map(
@@ -298,7 +354,7 @@ function renderNewsList(newKeys = new Set(), mode = 'reset') {
     const fragment = document.createDocumentFragment();
     if (filtered.length === 0) {
         const constrained = importantOnly || currentSource !== 'all' || Boolean(searchTerm);
-        fragment.appendChild(emptyMessage(constrained ? '没有匹配的快讯' : '暂无对应快讯'));
+        fragment.appendChild(emptyMessage(readingView === 'saved' ? '还没有收藏的资讯，点击星标即可留存' : readingView === 'unread' ? '当前分类已读完' : constrained ? '没有匹配的快讯' : '暂无对应快讯'));
     } else {
         let lastGroupId = '';
         visibleNews.forEach((news, index) => {
@@ -343,6 +399,8 @@ function renderNewsList(newKeys = new Set(), mode = 'reset') {
         pendingFocusKey = '';
     }
     syncScrollShadow();
+    updateReadingControls();
+    observeReading();
 }
 
 // View Transitions 包装：切 tab / 切字号时让列表交叉淡入形变，而非硬切。
@@ -350,7 +408,7 @@ function renderNewsList(newKeys = new Set(), mode = 'reset') {
 // 不会把动态壁纸/WebGL 卷进整页快照。不支持的浏览器或省电模式直接同步执行。
 function withViewTransition(mutate) {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (!hasLoadedNews || reduce || typeof document.startViewTransition !== 'function') {
+    if (!hasLoadedNews || reduce || !motionAllowed() || typeof document.startViewTransition !== 'function') {
         mutate();
         return;
     }
@@ -371,6 +429,7 @@ const TAB_ACCENTS = {
     all: '255,255,255',
     news: '96,165,250',     // 蓝
     foreign: '251,191,36',  // 琥珀
+    community: '52,211,153',
     tech: '167,139,250',    // 紫
 };
 
@@ -392,12 +451,13 @@ export function moveTabIndicator(filter) {
 
 // 更新各分类实时数量角标
 function updateTabCounts() {
-    const counts = { all: allNewsData.length, news: 0, foreign: 0, tech: 0 };
-    for (const n of allNewsData) {
+    const enabled = allNewsData.filter(n => !hiddenSources.includes(n.source));
+    const counts = { all: enabled.length, news: 0, foreign: 0, tech: 0, community: 0 };
+    for (const n of enabled) {
         const c = n.category;
-        if (c === 'news' || c === 'foreign' || c === 'tech') counts[c]++;
+        if (Object.hasOwn(counts, c) && c !== 'all') counts[c]++;
     }
-    for (const k of ['all', 'news', 'foreign', 'tech']) {
+    for (const k of ['all', 'news', 'foreign', 'tech', 'community']) {
         const el = document.getElementById('count-' + k);
         if (el) el.textContent = counts[k] ? (k === 'tech' ? `${counts[k]}源` : String(counts[k])) : '';
     }
@@ -407,7 +467,7 @@ function updateTabCounts() {
 }
 
 function sourceLabel(source) {
-    const labels = { sina: '新浪', github: 'GitHub', hn: 'Hacker News', v2ex: 'V2EX' };
+    const labels = { sina: '新浪', github: 'GitHub', hn: 'Hacker News', v2ex: 'V2EX', nodeseek: 'NodeSeek', linuxdo: 'Linux DO' };
     return labels[String(source || '').toLowerCase()] || String(source || '未知来源');
 }
 
@@ -446,10 +506,10 @@ function resetNewsView() {
 
 // 切换分类 Tab
 export function setFilter(filter, persist = true, render = true) {
-    if (!['all', 'news', 'foreign', 'tech'].includes(filter)) return;
+    if (!['all', 'news', 'foreign', 'tech', 'community'].includes(filter)) return;
     currentFilter = filter;
     if (persist && getSettings().news.category !== filter) updateSettings('news', { category: filter });
-    ['all', 'news', 'foreign', 'tech'].forEach(t => {
+    ['all', 'news', 'foreign', 'tech', 'community'].forEach(t => {
         const btn = document.getElementById('tab-' + t);
         if (btn) {
             const active = t === filter;
@@ -480,6 +540,30 @@ function normalizeNewsDisplayText(news) {
     return rawText;
 }
 
+const MARKET_MOVE_REGEX = /([+-]\d+(?:\.\d+)?%|(?:上涨|下跌|涨超|跌超|涨幅|跌幅)\s*\d+(?:\.\d+)?%)/g;
+
+function appendFormattedNewsText(target, text) {
+    const str = String(text || '');
+    let lastIndex = 0;
+    MARKET_MOVE_REGEX.lastIndex = 0;
+    let match;
+    while ((match = MARKET_MOVE_REGEX.exec(str)) !== null) {
+        if (match.index > lastIndex) {
+            target.appendChild(document.createTextNode(str.slice(lastIndex, match.index)));
+        }
+        const token = match[0];
+        const isDown = token.startsWith('-') || token.includes('跌');
+        const span = document.createElement('span');
+        span.className = isDown ? 'news-num-down' : 'news-num-up';
+        span.textContent = token;
+        target.appendChild(span);
+        lastIndex = MARKET_MOVE_REGEX.lastIndex;
+    }
+    if (lastIndex < str.length) {
+        target.appendChild(document.createTextNode(str.slice(lastIndex)));
+    }
+}
+
 function createNewsElement(news, isNew = false) {
     const fs = currentFontSize === 'sm' ? 'text-sm' : (currentFontSize === 'base' ? 'text-base' : 'text-lg');
     const item = document.createElement('div');
@@ -491,7 +575,7 @@ function createNewsElement(news, isNew = false) {
     // 时间轴信息流：去掉表格式分隔线，靠竖线+节点圆点串联；重要项染红节点与底色
     const importantClass = news.is_important ? ' is-important' : '';
 
-    item.className = `news-feed-item${importantClass} py-2 [&_a]:text-blue-400 [&_a]:underline [&_a]:hover:text-blue-300` + (isNew ? ' animate-slide-down' : '');
+    item.className = `news-feed-item${importantClass} py-2` + (isNew ? ' animate-slide-down' : '');
     item.dataset.newsKey = news._clientKey;
     item.dataset.newsSignature = newsRenderSignature(news);
     // 滚动显形：新建节点先处于未显形态，进视口再淡入上浮。
@@ -519,9 +603,18 @@ function createNewsElement(news, isNew = false) {
         header.appendChild(badge);
     }
 
-    body.className = `${fs} leading-relaxed text-white/90 drop-shadow-sm tech-content`;
+    body.className = `${fs} leading-relaxed text-white/90 drop-shadow-sm tech-content news-readable`;
     if (isHtmlBlock) {
-        body.innerHTML = DOMPurify.sanitize(news.content || '', { ADD_ATTR: ['target', 'rel'] });
+        const rawHtml = String(news.content || '').replace(
+            /^HN Trends(?=<div)/,
+            '<div class="tech-block-header"><span class="tech-brand-dot bg-amber-400"></span><span>Hacker News</span></div>'
+        );
+        body.innerHTML = DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['target', 'rel'] });
+        // 兼容旧版缓存：消除旧 HTML 块里的 group-hover 手风琴折叠，防止悬停高度抖动
+        body.querySelectorAll('.max-h-0.opacity-0').forEach(el => {
+            el.classList.remove('overflow-hidden', 'max-h-0', 'opacity-0', 'group-hover:max-h-24', 'group-hover:max-h-20', 'group-hover:opacity-100');
+            el.classList.add('tech-desc-zh');
+        });
         body.querySelectorAll('a').forEach(a => {
             const href = sanitizeHttpUrl(a.getAttribute('href'));
             if (!href) {
@@ -539,28 +632,53 @@ function createNewsElement(news, isNew = false) {
         link.href = safeUrl;
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
-        link.className = 'news-link visited:text-sky-200';
-        link.textContent = displayText;
+        link.className = 'news-link';
+        appendFormattedNewsText(link, displayText);
         body.appendChild(link);
     } else {
-        body.textContent = displayText;
+        appendFormattedNewsText(body, displayText);
     }
 
+    if (news.category === 'community' && news.summary) {
+        const summary = document.createElement('div');
+        summary.className = 'news-summary';
+        summary.textContent = news.summary;
+        body.appendChild(summary);
+    }
+    if (news.forum_category) {
+        const category = document.createElement('span');
+        category.className = 'news-source-badge';
+        category.textContent = news.forum_category;
+        header.appendChild(category);
+    }
+    const actions = document.createElement('span'); actions.className = 'news-item-actions';
+    const readButton = document.createElement('button'); readButton.type = 'button'; readButton.dataset.markRead = '';
+    readButton.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>';
+    readButton.addEventListener('click',() => { clearTimeout(readingTimers.get(news._clientKey));readingTimers.delete(news._clientKey);markRead(news._clientKey,!isRead(news._clientKey)); });
+    const saveButton = document.createElement('button'); saveButton.type = 'button'; saveButton.dataset.saveNews = '';
+    saveButton.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m12 3 2.8 5.7 6.3.9-4.6 4.5 1.1 6.3-5.6-3-5.6 3 1.1-6.3L3 9.6l6.2-.9Z"/></svg>';
+    saveButton.addEventListener('click',() => {
+        if(!toggleSaved(news)) showControlToast(`最多收藏 ${BOOKMARK_LIMIT} 条，请先取消部分收藏`);
+    });
+    actions.append(readButton,saveButton); header.appendChild(actions);
     item.appendChild(header);
     item.appendChild(body);
     return item;
 }
 
-function applyFilter(n) {
+function applyFilter(n, ignoreReading=false) {
+    if(!ignoreReading && readingView === 'unread' && isRead(n._clientKey)) return false;
+    if (hiddenSources.includes(n.source)) return false;
     const category = n.category || 'all';
     if (currentFilter === 'news' && category !== 'news') return false;
     if (currentFilter === 'foreign' && category !== 'foreign') return false;
     if (currentFilter === 'tech' && category !== 'tech') return false;
+    if (currentFilter === 'community' && category !== 'community') return false;
     if (importantOnly && !n.is_important) return false;
     if (currentSource !== 'all' && n.source !== currentSource) return false;
     if (searchTerm) {
         const searchText = [
-            n.display_content, n.content, sourceLabel(n.source), n.importance_reason
+            n.display_content, n.content, n.summary, n.forum_category, sourceLabel(n.source), n.importance_reason
         ].filter(Boolean).join(' ').replace(/<[^>]+>/g, ' ').toLocaleLowerCase('zh-CN');
         if (!searchText.includes(searchTerm)) return false;
     }
@@ -583,7 +701,7 @@ async function fetchRealNews() {
             if (!normalized.format) normalized.format = normalized.category === 'tech' && !normalized.url ? 'html' : 'text';
             return normalized;
         }));
-        setNewsStatus('online');
+        setNewsStatus(newsPaused ? 'paused' : 'online');
         if (!newsList || newsList.length === 0) {
             hasLoadedNews = true;
             allNewsData = [];
@@ -627,7 +745,8 @@ async function fetchRealNews() {
         if (!hasLoadedNews) {
             hasLoadedNews = true;
             const listContainer = document.getElementById('newsList');
-            if (listContainer) {
+            if (readingView === 'saved') renderNewsList();
+            else if (listContainer) {
                 listContainer.replaceChildren(emptyMessage('快讯暂不可用'));
             }
             document.getElementById('lastUpdateTime').innerText = '连接失败';
@@ -663,6 +782,10 @@ function syncFilterIndicator() {
 }
 
 export function initNews() {
+    document.querySelectorAll('[data-reading-view]').forEach(button=>button.addEventListener('click',()=>updateSettings('news',{readingView:button.dataset.readingView})));
+    document.getElementById('markAllNewsRead').addEventListener('click',()=>{markAllRead(readingPool().filter(news=>applyFilter(news,true)));if(readingView === 'unread') renderNewsList();});
+    window.addEventListener('gx:reading-changed',event=>{updateReadingControls();if(event.detail.kind === 'saved' && readingView === 'saved') renderNewsList(new Set(),'anchor');});
+    document.addEventListener('visibilitychange',observeReading);
     const tabs = Array.from(document.querySelectorAll('[role="tab"][data-filter]'));
     tabs.forEach(button => button.addEventListener('click', () => setFilter(button.dataset.filter)));
     document.getElementById('tabBar')?.addEventListener('keydown', event => {
@@ -722,7 +845,7 @@ export function initNews() {
     const listContainer = document.getElementById('newsList');
     document.getElementById('newsUnseenPill')?.addEventListener('click', () => {
         clearUnseen();
-        if (window.innerWidth < 768) {
+        if (window.innerWidth < 768 && !document.documentElement.classList.contains('news-panel-full')) {
             const aside = document.querySelector('aside');
             window.scrollTo({ top: aside ? aside.offsetTop : 0, behavior: 'smooth' });
         } else {
@@ -738,13 +861,13 @@ export function initNews() {
     window.addEventListener('resize', syncScrollShadow);
 
     const poll = async () => {
-        if (document.hidden || newsPaused || newsRequestInFlight) return;
+        if (document.hidden || !isWidgetVisible('news') || (newsPaused && hasLoadedNews) || newsRequestInFlight) return;
         newsRequestInFlight = true;
         try {
             await fetchRealNews();
         } finally {
             newsRequestInFlight = false;
-            if (!document.hidden && !newsPaused) newsPollTimer = window.setTimeout(poll, NEWS_POLL_INTERVAL);
+            if (!document.hidden && isWidgetVisible('news') && !newsPaused) newsPollTimer = window.setTimeout(poll, NEWS_POLL_INTERVAL);
         }
     };
 
@@ -780,6 +903,11 @@ export function initNews() {
         const next = event.detail?.settings?.news;
         if (!next) return;
         let viewChanged = false;
+        if(next.readingView !== readingView) {readingView = next.readingView; viewChanged = true;}
+        if (JSON.stringify(next.hiddenSources) !== JSON.stringify(hiddenSources)) {
+            hiddenSources = next.hiddenSources;
+            viewChanged = true;
+        }
         if (next.fontSize !== currentFontSize) {
             setFontSize(next.fontSize, false, false);
             viewChanged = true;
@@ -810,9 +938,17 @@ export function initNews() {
     const handleVisibility = () => {
         window.clearTimeout(newsPollTimer);
         newsPollTimer = null;
-        if (!document.hidden && !newsPaused) poll();
+        if (!document.hidden) poll();
     };
     document.addEventListener('visibilitychange', handleVisibility);
+    let newsVisible = isWidgetVisible('news');
+    window.addEventListener('gx:layout-changed', () => {
+        const next = isWidgetVisible('news');
+        if (next === newsVisible) return;
+        newsVisible = next;
+        handleVisibility();
+        if (next) requestAnimationFrame(() => { moveTabIndicator(currentFilter); syncScrollShadow(); });
+    });
 
     syncImportantButton();
     syncPauseButton();
@@ -824,6 +960,15 @@ export function initNews() {
     poll();
     // 窗口尺寸变化时重新对齐指示器（tab 宽度会随之变化）
     window.addEventListener('resize', () => moveTabIndicator(currentFilter));
+    window.addEventListener('gx:panel-layout', () => { moveTabIndicator(currentFilter); syncScrollShadow(); observeReading(); });
+    // Follow the panel's width transition, including its final full-screen size.
+    new ResizeObserver(() => moveTabIndicator(currentFilter)).observe(document.getElementById('tabBar'));
+    window.addEventListener('gx:settings-changed', event => {
+        if (event.detail?.section === 'typography') {
+            requestAnimationFrame(() => moveTabIndicator(currentFilter));
+            document.fonts?.ready?.then(() => moveTabIndicator(currentFilter));
+        }
+    });
     // web 字体（font-display: swap）换入后 tab 宽度会变，指示器需再对齐一次
     document.fonts?.ready?.then(() => moveTabIndicator(currentFilter));
 }

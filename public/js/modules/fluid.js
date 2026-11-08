@@ -1,4 +1,4 @@
-import { getSettings, updateSettings } from './settings-store.js';
+import { getSettings, updateSettings, getEffectiveAppearance } from './settings-store.js';
 
 // ================== WebGL 轻量涟漪壁纸 ==================
 // 在壁纸图层之上叠一块 WebGL canvas（z-[3]，氛围光/遮罩之下），采样当前壁纸做
@@ -575,7 +575,7 @@ function reconcileFluidState() {
 
     if (!ensureInitialized()) {
         requestedMode = MODE_OFF;
-        if (getSettings().appearance.ripple) updateSettings('appearance', { ripple: false });
+        if (getEffectiveAppearance().ripple) updateSettings('appearance', { ripple: false });
         stopFluidRuntime();
         return;
     }
@@ -593,7 +593,7 @@ function reconcileFluidState() {
 export function initFluid() {
     const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
     reduceMotion = motionPreference.matches;
-    const appearance = getSettings().appearance;
+    const appearance = getEffectiveAppearance();
     requestedMode = appearance.ripple ? MODE_LIGHT : MODE_OFF;
     powerSaving = appearance.powerSaving;
 
@@ -622,8 +622,8 @@ export function initFluid() {
         if (!weatherMotionActive) kick();
     });
     window.addEventListener('gx:settings-changed', event => {
-        if (!['appearance', 'all'].includes(event.detail?.section)) return;
-        const next = event.detail?.settings?.appearance || getSettings().appearance;
+        if (!['appearance', 'widgets', 'all'].includes(event.detail?.section)) return;
+        const next = getEffectiveAppearance();
         requestedMode = next.ripple ? MODE_LIGHT : MODE_OFF;
         powerSaving = Boolean(next.powerSaving);
         reconcileFluidState();

@@ -2,4 +2,5 @@
 # silently move to a different direct dependency release.
 requests==2.34.2
 feedparser==6.0.12
-Pillow==12.3.0
+httpx[http2]==0.28.1
+Pillow==13.0.0

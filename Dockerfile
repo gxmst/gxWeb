@@ -19,8 +19,9 @@ RUN groupadd --gid "${APP_GID}" app \
         --shell /usr/sbin/nologin app
 
 COPY --chown=app:app spider.py /app/spider.py
+COPY --chown=app:app runtime_config.py control_api.py /app/
 
-RUN mkdir -p /app/public/favorite \
+RUN mkdir -p /app/public/favorite /app/state \
     && chown -R app:app /app
 
 USER app:app

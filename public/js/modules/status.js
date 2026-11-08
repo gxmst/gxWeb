@@ -1,3 +1,4 @@
+import { isWidgetVisible } from './settings-store.js';
 // ================== 数据管线健康状态 ==================
 const STATUS_POLL_INTERVAL = 60000;
 const JOB_LABELS = {
@@ -10,6 +11,8 @@ const JOB_LABELS = {
     wallpaper_list: '壁纸列表',
     rss: '海外 RSS',
     tech: '科技聚合',
+    nodeseek: 'NodeSeek',
+    linuxdo: 'Linux DO',
 };
 
 const sourceStates = { news: 'loading', ticker: 'loading', pipeline: 'loading' };
@@ -29,7 +32,7 @@ function updateSummary() {
     const text = document.getElementById('systemStatusText');
     const dot = document.getElementById('systemStatusDot');
     if (!text || !dot) return;
-    const states = Object.values(sourceStates);
+    const states = Object.entries(sourceStates).filter(([source]) => source !== 'ticker' || isWidgetVisible('ticker')).map(([, state]) => state);
     let kind = 'online';
     if (states.includes('offline')) kind = 'offline';
     else if (states.includes('degraded')) kind = 'degraded';
@@ -158,15 +161,27 @@ export function initStatus() {
         }
     });
 
+    let statusInFlight = false;
     const poll = async () => {
-        if (document.hidden) return;
-        await fetchPipelineStatus();
-        if (!document.hidden) statusPollTimer = window.setTimeout(poll, STATUS_POLL_INTERVAL);
+        if (document.hidden || !isWidgetVisible('news') || statusInFlight) return;
+        statusInFlight = true;
+        try { await fetchPipelineStatus(); } finally { statusInFlight = false; }
+        if (!document.hidden && isWidgetVisible('news')) statusPollTimer = window.setTimeout(poll, STATUS_POLL_INTERVAL);
     };
     document.addEventListener('visibilitychange', () => {
         window.clearTimeout(statusPollTimer);
         statusPollTimer = null;
         if (!document.hidden) poll();
+    });
+    let newsVisible = isWidgetVisible('news');
+    window.addEventListener('gx:layout-changed', () => {
+        updateSummary();
+        const next = isWidgetVisible('news');
+        if (next === newsVisible) return;
+        newsVisible = next;
+        window.clearTimeout(statusPollTimer);
+        if (next) poll();
+        else setOpen(false);
     });
     updateSummary();
     poll();

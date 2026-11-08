@@ -3,7 +3,7 @@
 // 本地收藏夹存在 IndexedDB 里（见 wallpaper-store.js），存的是图片字节而不是路径——
 // 因为 bg_0..bg_4.jpg 是滚动窗口，5 天后同名文件已是别的图，存路径等于收藏了一个格子。
 import { safeStorageGet, safeStorageSet } from './storage.js';
-import { moveTabIndicator, getCurrentFilter } from './news.js?v=polish-20260811a';
+import { moveTabIndicator, getCurrentFilter } from './news.js?v=workspace-20261108a';
 import { getSettings } from './settings-store.js';
 import { showControlToast } from './toast.js';
 import {
@@ -191,6 +191,9 @@ function applyThemeVars(r, g, b, avgLum) {
     root.style.setProperty('--wall-r', Math.round(r));
     root.style.setProperty('--wall-g', Math.round(g));
     root.style.setProperty('--wall-b', Math.round(b));
+    root.style.setProperty('--surface-rgb', `${Math.round(r * 0.12)}, ${Math.round(g * 0.12)}, ${Math.round(b * 0.12)}`);
+    root.style.setProperty('--surface-opacity', (0.32 + Math.min(1, Math.max(0, avgLum)) * 0.22).toFixed(2));
+    root.style.setProperty('--reading-opacity', (0.48 + Math.min(1, Math.max(0, avgLum)) * 0.20).toFixed(2));
     root.style.setProperty('--glass-fill', avgLum > 0.62 ? 'rgba(8, 15, 25, 0.10)' : 'rgba(255, 255, 255, 0.040)');
     root.style.setProperty('--glass-fill-strong', avgLum > 0.62 ? 'rgba(12, 20, 32, 0.14)' : 'rgba(255, 255, 255, 0.068)');
     root.style.setProperty('--glass-border', avgLum > 0.62 ? 'rgba(255, 255, 255, 0.24)' : 'rgba(255, 255, 255, 0.18)');

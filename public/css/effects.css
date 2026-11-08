@@ -14,8 +14,8 @@
     background: rgba(225, 238, 255, 0.9);
 }
 #lightningFlash.flash { animation: lightningFlash 0.9s ease-out; }
-/* 雷暴：更亮、更硬的双击闪白 */
-#lightningFlash.strong { background: rgba(236, 245, 255, 1); }
+/* 雷暴：低亮度的短暂泛光 */
+#lightningFlash.strong { background: rgba(216, 234, 253, 0.65); }
 #lightningFlash.strong.flash { animation: lightningFlashStrong 0.7s ease-out; }
 @keyframes lightningFlash {
     0%   { opacity: 0; }
@@ -27,11 +27,10 @@
 }
 @keyframes lightningFlashStrong {
     0%   { opacity: 0; }
-    3%   { opacity: 0.85; }
-    7%   { opacity: 0.2; }
-    11%  { opacity: 0.95; }
-    18%  { opacity: 0.1; }
-    26%  { opacity: 0; }
+    8%   { opacity: 0.22; }
+    20%  { opacity: 0.06; }
+    35%  { opacity: 0.12; }
+    65%  { opacity: 0; }
     100% { opacity: 0; }
 }
 
@@ -44,19 +43,18 @@
     opacity: 0;
     transition: opacity 1.8s ease;
     z-index: 12;
-    background:
-        radial-gradient(60% 40% at 20% 30%, rgba(60, 72, 92, 0.5), transparent 70%),
-        radial-gradient(50% 36% at 70% 22%, rgba(50, 62, 82, 0.42), transparent 72%),
-        radial-gradient(55% 42% at 45% 60%, rgba(70, 82, 102, 0.36), transparent 74%);
-    background-repeat: no-repeat;
-    background-size: 160% 160%;
-    will-change: background-position;
 }
-#cloudLayer.on { opacity: 1; animation: cloudDrift 90s linear infinite; }
+#cloudLayer::before,#cloudLayer::after {
+    content:'';position:absolute;inset:-15%;
+    background:radial-gradient(ellipse at 28% 24%,rgba(45,61,82,0.28),transparent 52%),radial-gradient(ellipse at 80% 66%,rgba(74,92,111,0.17),transparent 50%);
+}
+#cloudLayer::after {transform:scale(1.2);opacity:0.5;}
+#cloudLayer.on {opacity:0.65;}
+#cloudLayer.on::before {animation:cloudDrift 95s ease-in-out infinite alternate;}
+#cloudLayer.on::after {animation:cloudDrift 130s ease-in-out infinite alternate-reverse;}
 @keyframes cloudDrift {
-    0%   { background-position: 0% 0%, 30% 10%, 60% 40%; }
-    50%  { background-position: 40% 8%, 70% 4%, 20% 46%; }
-    100% { background-position: 0% 0%, 30% 10%, 60% 40%; }
+    from {transform:translate3d(-3%,-1%,0);}
+    to {transform:translate3d(4%,2%,0);}
 }
 
 /* ============ 雾/霾：缓慢横向飘动的雾气 ============ */
@@ -67,19 +65,18 @@
     opacity: 0;
     transition: opacity 1.8s ease;
     z-index: 16;
-    background:
-        linear-gradient(180deg, rgba(214, 220, 228, 0.28) 0%, rgba(200, 208, 218, 0.1) 40%, transparent 75%),
-        radial-gradient(120% 60% at 50% 20%, rgba(224, 230, 238, 0.32), transparent 70%);
-    background-repeat: no-repeat;
-    background-size: 200% 100%, 100% 100%;
-    backdrop-filter: blur(1.5px);
-    -webkit-backdrop-filter: blur(1.5px);
-    will-change: background-position;
 }
-#fogLayer.on { opacity: 1; animation: fogDrift 40s ease-in-out infinite alternate; }
+#fogLayer::before,#fogLayer::after {
+    content:'';position:absolute;inset:-15%;
+    background:radial-gradient(ellipse at 22% 74%,rgba(217,227,235,0.22),transparent 55%),radial-gradient(ellipse at 78% 42%,rgba(204,219,231,0.14),transparent 58%);
+}
+#fogLayer::after {opacity:0.55;background:radial-gradient(ellipse at 66% 90%,rgba(215,227,237,0.24),transparent 56%);}
+#fogLayer.on {opacity:0.8;}
+#fogLayer.on::before {animation:fogDrift 55s ease-in-out infinite alternate;}
+#fogLayer.on::after {animation:fogDrift 78s ease-in-out infinite alternate-reverse;}
 @keyframes fogDrift {
-    0%   { background-position: 0% 0%, 0 0; }
-    100% { background-position: 60% 0%, 0 0; }
+    from {transform:translate3d(-4%,0,0);}
+    to {transform:translate3d(4%,-2%,0);}
 }
 
 /* ============ 晴天光束光晕 ============ */
@@ -91,9 +88,8 @@
     transition: opacity 1.6s ease;
     z-index: 14;
     background:
-        radial-gradient(circle at 82% 14%, rgba(255, 244, 214, 0.5), rgba(255, 244, 214, 0) 38%),
-        conic-gradient(from 150deg at 82% 14%, rgba(255, 240, 200, 0) 0deg,
-            rgba(255, 238, 196, 0.16) 30deg, rgba(255, 240, 200, 0) 70deg);
+        radial-gradient(ellipse at 82% 12%,rgba(255,231,188,0.22),transparent 58%),
+        linear-gradient(155deg,rgba(255,221,169,0.045),transparent 65%);
 }
 #sunGlow.on { opacity: 1; }
 
@@ -105,8 +101,9 @@
     .sparkline-poly.draw-in { animation: none; stroke-dashoffset: 0; }
     #tabIndicator { transition: none; }
     /* 云影/雾停止飘动，保留静态叠色 */
-    #cloudLayer.on, #fogLayer.on { animation: none; }
+    #cloudLayer.on::before,#cloudLayer.on::after,#fogLayer.on::before,#fogLayer.on::after {animation:none;}
 }
+.scene-paused #cloudLayer::before,.scene-paused #cloudLayer::after,.scene-paused #fogLayer::before,.scene-paused #fogLayer::after {animation-play-state:paused;}
 
 /* ============ 骨架屏 ============ */
 @keyframes shimmer {

@@ -1,3 +1,4 @@
+from runtime_config import read_config
 import re
 import json
 import time
@@ -7,7 +8,9 @@ import signal
 import hashlib
 import requests
 import feedparser
+import httpx
 import calendar
+from email.utils import parsedate_to_datetime
 import random
 import threading
 import logging
@@ -15,6 +18,7 @@ from json import JSONDecodeError
 from datetime import datetime, timedelta, timezone
 from PIL import Image
 import io
+from html.parser import HTMLParser
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from urllib.parse import urlparse
@@ -667,6 +671,12 @@ def fetch_github_trends(days=7, limit=10):
         raise ValueError("GitHub API response format is invalid")
     return data.get("items", [])[:limit]
 
+def _format_stars(stars):
+    stars = int(stars or 0)
+    if stars >= 1000:
+        return f"{stars / 1000:.1f}k"
+    return str(stars)
+
 def build_github_html(sections):
     # 先把所有需要翻译的 description 一次性 batch 翻译，避免逐条串行。
     descs = []
@@ -675,38 +685,77 @@ def build_github_html(sections):
             descs.append((repo.get("description") or "No description")[:200])
     translations = translate_batch(descs) if descs else {}
 
-    github_html = '<div class="font-semibold text-white mb-3">GitHub Trends</div>'
+    github_html = '<div class="tech-block-header"><span class="tech-brand-dot bg-purple-400"></span><span>GitHub Trends</span></div>'
     for section in sections:
-        github_html += f'<div class="text-white/60 text-xs uppercase tracking-[0.2em] mt-4 mb-2">{escape_text(section["label"])}</div>'
+        github_html += f'<div class="tech-section-label">{escape_text(section["label"])}</div>'
+        github_html += '<div class="tech-card-list">'
         for i, repo in enumerate(section["items"]):
             name = escape_text(repo.get("full_name"))
-            stars = int(repo.get("stargazers_count") or 0)
+            stars_str = _format_stars(repo.get("stargazers_count"))
             desc_en_raw = (repo.get("description") or "No description")[:200]
             desc_en = escape_text(desc_en_raw)
-            desc_zh = escape_text(translations.get(desc_en_raw, desc_en_raw))
+            desc_zh_raw = translations.get(desc_en_raw, desc_en_raw)
+            desc_zh = escape_text(desc_zh_raw)
             repo_url = escape_text(sanitize_url(repo.get("html_url")))
-            github_html += f'<div class="group mb-3 border-b border-white/5 pb-2 last:border-0">'
-            github_html += f'<a href="{repo_url}" target="_blank" rel="noopener noreferrer" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {name} (STAR {stars})</a>'
-            github_html += f'<div class="text-white/80 text-sm mt-1">{desc_en}</div>'
-            github_html += f'<div class="overflow-hidden max-h-0 opacity-0 group-hover:max-h-24 group-hover:opacity-100 transition-all duration-500 ease-in-out text-white/50 text-xs mt-1">ZH: {desc_zh}</div></div>'
+            github_html += '<div class="tech-card-item">'
+            github_html += '<div class="tech-card-top">'
+            github_html += f'<span class="tech-rank">{i+1:02d}</span>'
+            github_html += f'<a href="{repo_url}" target="_blank" rel="noopener noreferrer" class="tech-title-link">{name}</a>'
+            github_html += f'<span class="tech-star-pill" title="{int(repo.get("stargazers_count") or 0)} Stars">★ {stars_str}</span>'
+            github_html += '</div>'
+            github_html += f'<div class="tech-desc-en">{desc_en}</div>'
+            if desc_zh and desc_zh != desc_en:
+                github_html += f'<div class="tech-desc-zh">{desc_zh}</div>'
+            github_html += '</div>'
+        github_html += '</div>'
     return github_html
 
-def build_v2ex_html(hot_topics, new_topics):
-    v2ex_html = '<div class="font-semibold text-white mb-3">V2EX</div>'
+def build_hn_html(hn_entries, hn_titles, hn_zh_map):
+    hn_html = '<div class="tech-block-header"><span class="tech-brand-dot bg-amber-400"></span><span>Hacker News</span></div>'
+    hn_html += '<div class="tech-card-list">'
+    for i, entry in enumerate(hn_entries):
+        title_en_raw = hn_titles[i]
+        title_en = escape_text(title_en_raw)
+        title_zh_raw = hn_zh_map.get(title_en_raw, title_en_raw)
+        title_zh = escape_text(title_zh_raw)
+        entry_url = escape_text(sanitize_url(entry.get("link")))
+        hn_html += '<div class="tech-card-item">'
+        hn_html += '<div class="tech-card-top">'
+        hn_html += f'<span class="tech-rank">{i+1:02d}</span>'
+        hn_html += f'<a href="{entry_url}" target="_blank" rel="noopener noreferrer" class="tech-title-link">{title_en}</a>'
+        hn_html += '</div>'
+        if title_zh and title_zh != title_en:
+            hn_html += f'<div class="tech-desc-zh">{title_zh}</div>'
+        hn_html += '</div>'
+    hn_html += '</div>'
+    return hn_html
 
-    v2ex_html += '<div class="text-white/60 text-xs uppercase tracking-[0.2em] mt-4 mb-2">Hot</div>'
+def build_v2ex_html(hot_topics, new_topics):
+    v2ex_html = '<div class="tech-block-header"><span class="tech-brand-dot bg-sky-400"></span><span>V2EX</span></div>'
+
+    v2ex_html += '<div class="tech-section-label">Hot Topics</div>'
+    v2ex_html += '<div class="tech-card-list">'
     for i, entry in enumerate(hot_topics):
         entry_title = escape_text(entry.get("title", "").strip())
         entry_url = escape_text(sanitize_url(f'https://www.v2ex.com/t/{entry.get("id")}'))
-        v2ex_html += f'<div class="mb-3 border-b border-white/5 pb-2 last:border-0">'
-        v2ex_html += f'<a href="{entry_url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {entry_title}</a></div>'
+        v2ex_html += '<div class="tech-card-item tech-card-compact">'
+        v2ex_html += '<div class="tech-card-top">'
+        v2ex_html += f'<span class="tech-rank">{i+1:02d}</span>'
+        v2ex_html += f'<a href="{entry_url}" target="_blank" rel="noopener noreferrer" class="tech-title-link font-normal">{entry_title}</a>'
+        v2ex_html += '</div></div>'
+    v2ex_html += '</div>'
 
-    v2ex_html += '<div class="text-white/60 text-xs uppercase tracking-[0.2em] mt-4 mb-2">New</div>'
+    v2ex_html += '<div class="tech-section-label">Latest</div>'
+    v2ex_html += '<div class="tech-card-list">'
     for i, entry in enumerate(new_topics):
         entry_title = escape_text(entry.get("title", "").strip())
         entry_url = escape_text(sanitize_url(f'https://www.v2ex.com/t/{entry.get("id")}'))
-        v2ex_html += f'<div class="mb-3 border-b border-white/5 pb-2 last:border-0">'
-        v2ex_html += f'<a href="{entry_url}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {entry_title}</a></div>'
+        v2ex_html += '<div class="tech-card-item tech-card-compact">'
+        v2ex_html += '<div class="tech-card-top">'
+        v2ex_html += f'<span class="tech-rank">{i+1:02d}</span>'
+        v2ex_html += f'<a href="{entry_url}" target="_blank" rel="noopener noreferrer" class="tech-title-link font-normal">{entry_title}</a>'
+        v2ex_html += '</div></div>'
+    v2ex_html += '</div>'
 
     return v2ex_html
 
@@ -1044,15 +1093,7 @@ def fetch_tech_news():
             hn_entries = feed.entries[:10]
             hn_titles = [entry.get("title", "").strip() for entry in hn_entries]
             hn_zh_map = translate_batch(hn_titles)
-            hn_html = "HN Trends"
-            for i, entry in enumerate(hn_entries):
-                title_en_raw = hn_titles[i]
-                title_en = escape_text(title_en_raw)
-                title_zh = escape_text(hn_zh_map.get(title_en_raw, title_en_raw))
-                entry_url = escape_text(sanitize_url(entry.get("link")))
-                hn_html += f'<div class="group mb-3 border-b border-white/5 pb-2 last:border-0">'
-                hn_html += f'<a href="{entry_url}" target="_blank" rel="noopener noreferrer" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">{i+1}. {title_en}</a>'
-                hn_html += f'<div class="overflow-hidden max-h-0 opacity-0 group-hover:max-h-20 group-hover:opacity-100 transition-all duration-500 ease-in-out text-white/50 text-xs mt-1">ZH: {title_zh}</div></div>'
+            hn_html = build_hn_html(hn_entries, hn_titles, hn_zh_map)
 
             tech_blocks.append({
                 "time": time_str,
@@ -1098,11 +1139,155 @@ def fetch_tech_news():
         log(f"⚠️ [翻译引擎] 缓存落盘失败，将在下轮重试: {e}")
     return tech_blocks
 
+# ================= 社区公开 RSS =================
+FORUM_SOURCES = {
+    "nodeseek": {"name": "NodeSeek", "url": "https://rss.nodeseek.com/", "hosts": {"nodeseek.com", "www.nodeseek.com"}},
+    "linuxdo": {"name": "Linux DO", "url": "https://linux.do/latest.rss", "hosts": {"linux.do"}},
+}
+_forum_feed_cache = {}
+_forum_retry_state = {}
+
+
+def forum_retry_after(value, now=None):
+    """Support Retry-After seconds or HTTP dates; invalid headers add no delay."""
+    try:
+        return max(0, int(str(value).strip()))
+    except (ValueError, TypeError):
+        try:
+            date = parsedate_to_datetime(value)
+            return max(0, date.timestamp() - (time.time() if now is None else now))
+        except (ValueError, TypeError, OverflowError):
+            return 0
+
+
+def forum_config():
+    def bounded(name, default, minimum, maximum):
+        try:
+            return max(minimum, min(maximum, int(os.getenv(name, str(default)))))
+        except (TypeError, ValueError):
+            return default
+    return {
+        "interval": bounded("FORUM_POLL_INTERVAL_SECONDS", 300, 300, 86400),
+        "limit": bounded("FORUM_ITEMS_PER_SOURCE", 30, 1, 50),
+    }
+
+
+class _FeedTextParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+        self.skipped = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"script", "style"}:
+            self.skipped += 1
+        elif not self.skipped and tag in {"p", "div", "br", "li"}:
+            self.parts.append(" ")
+
+    def handle_endtag(self, tag):
+        if tag in {"script", "style"}:
+            self.skipped = max(0, self.skipped - 1)
+        elif not self.skipped:
+            self.parts.append(" ")
+
+    def handle_data(self, data):
+        if not self.skipped:
+            self.parts.append(data)
+
+
+def _feed_plain_text(value, limit):
+    parser = _FeedTextParser()
+    parser.feed(str(value or "")[:20000])
+    text = " ".join("".join(parser.parts).split())
+    return text[:limit] + ("…" if len(text) > limit else "")
+
+
+def parse_forum_feed(payload, source, limit=30):
+    config = FORUM_SOURCES[source]
+    feed = feedparser.parse(payload)
+    if not feed.entries:
+        raise ValueError(f"{config['name']} RSS 没有有效帖子（可能是验证页或空响应）")
+    items = []
+    seen = set()
+    for entry in feed.entries:
+        title = _feed_plain_text(entry.get("title"), 200)
+        url = sanitize_url(entry.get("link"))
+        if not title or not url or urlparse(url).hostname not in config["hosts"] or url in seen:
+            continue
+        seen.add(url)
+        parsed_time = entry.get("published_parsed") or entry.get("updated_parsed")
+        try:
+            ts = max(0, calendar.timegm(parsed_time)) if parsed_time else 0
+        except (TypeError, ValueError, OverflowError):
+            ts = 0
+        tags = entry.get("tags") or []
+        category = _feed_plain_text(tags[0].get("term"), 30) if tags else ""
+        items.append({
+            "id": f"forum-{source}-{hashlib.sha256(url.encode()).hexdigest()[:20]}",
+            "time": datetime.fromtimestamp(ts, timezone(timedelta(hours=8))).strftime("%H:%M") if ts else "",
+            "raw_time": ts,
+            "content": title,
+            "summary": _feed_plain_text(entry.get("summary"), 240),
+            "url": url,
+            "is_important": False,
+            "category": "community",
+            "source": source,
+            "forum_category": category,
+            "format": "text",
+        })
+        if len(items) >= max(1, min(50, limit)):
+            break
+    if not items:
+        raise ValueError(f"{config['name']} RSS 帖子全部无效")
+    return sorted(items, key=lambda item: item["raw_time"], reverse=True)
+
+
+def _fetch_forum_response(url, headers):
+    # Public RSS can reject HTTP/1.1 while serving HTTP/2. Each request uses a
+    # fresh standard client, with no saved forum account or login cookies.
+    with httpx.Client(http2=True, follow_redirects=True, timeout=httpx.Timeout(20.0, connect=8.0)) as client:
+        return client.get(url, headers=headers)
+
+
+def fetch_forum_news(source):
+    config = FORUM_SOURCES[source]
+    cached = _forum_feed_cache.get(source, {})
+    headers = {"User-Agent": "gxWeb/1.0 (public RSS reader)", "Accept": "application/rss+xml, application/xml, text/xml"}
+    if cached.get("etag"):
+        headers["If-None-Match"] = cached["etag"]
+    if cached.get("modified"):
+        headers["If-Modified-Since"] = cached["modified"]
+    response = None
+    try:
+        response = _fetch_forum_response(config["url"], headers)
+        if response.status_code == 304:
+            if not cached.get("items"):
+                raise ValueError("RSS 返回 304，但没有可用缓存")
+            _forum_retry_state.pop(source, None)
+            return [dict(item) for item in cached["items"]]
+        response.raise_for_status()
+        items = parse_forum_feed(response.content, source, forum_config()["limit"])
+    except Exception as error:
+        attempts = _forum_retry_state.get(source, {}).get("failures", 0) + 1
+        base = 1800 if response is not None and response.status_code == 403 else 600
+        delay = min(86400, base * 2 ** min(attempts - 1, 8))
+        if response is not None:
+            delay = max(delay, forum_retry_after(response.headers.get("Retry-After")))
+        _forum_retry_state[source] = {"failures": attempts, "until": time.monotonic() + delay}
+        raise RuntimeError(f"{config['name']} 请求失败，至少 {int(delay)} 秒后重试：{error}") from error
+    _forum_retry_state.pop(source, None)
+    _forum_feed_cache[source] = {
+        "etag": response.headers.get("ETag"), "modified": response.headers.get("Last-Modified"), "items": items,
+    }
+    log(f"✅ [社区] {config['name']} 解析 {len(items)} 条公开帖子")
+    return items
+
+
 # ================= 主循环控制 =================
 PIPELINE_STATUS_FILE = "./public/pipeline-status.json"
 PIPELINE_JOBS = (
     "heartbeat", "ticker", "sina", "finance_news",
-    "wallpaper", "weather", "wallpaper_list", "rss", "tech"
+    "wallpaper", "weather", "wallpaper_list", "rss", "tech", "nodeseek", "linuxdo"
 )
 try:
     PIPELINE_JOB_TIMEOUT_SECONDS = max(
@@ -1121,6 +1306,7 @@ class SpiderApp:
         self.sina_news = []
         self.rss_news = []
         self.tech_news = []
+        self.community_news = []
         self.last_wallpaper_date = None
         self.last_rss_time = 0
         self.last_weather_time = 0
@@ -1162,7 +1348,8 @@ class SpiderApp:
             content = item.get("content")
             if not isinstance(content, str) or not content:
                 continue
-            content_hash = hashlib.md5(content.encode()).hexdigest()
+            identity = f"{item.get('source', '')}|{item.get('url', '')}|{item.get('id') or content}"
+            content_hash = hashlib.md5(identity.encode()).hexdigest()
             if content_hash in seen:
                 continue
             seen.add(content_hash)
@@ -1190,7 +1377,11 @@ class SpiderApp:
             [item for item in items if isinstance(item, dict) and item.get("category") == "tech"],
             100,
         )
-        recovered = len(self.sina_news) + len(self.rss_news) + len(self.tech_news)
+        self.community_news = self._dedupe_news(
+            [item for item in items if isinstance(item, dict) and item.get("category") == "community"],
+            100, newest_first=True,
+        )
+        recovered = len(self.sina_news) + len(self.rss_news) + len(self.tech_news) + len(self.community_news)
         if recovered:
             log(f"✅ [系统] 从 finance-news.json 恢复 {recovered} 条 last-known-good 数据。")
 
@@ -1320,6 +1511,7 @@ class SpiderApp:
         workers = {
             "fast": threading.Thread(target=self._fast_loop, name="fast", daemon=True),
             "slow": threading.Thread(target=self._slow_loop, name="slow", daemon=True),
+            "forums": threading.Thread(target=self._forum_loop, name="forums", daemon=True),
         }
         for worker in workers.values():
             worker.start()
@@ -1379,8 +1571,9 @@ class SpiderApp:
             sina_snapshot = list(self.sina_news)
             rss_snapshot = list(self.rss_news)
             tech_snapshot = list(self.tech_news)
+            community_snapshot = list(self.community_news)
 
-        final_news = sina_snapshot + rss_snapshot + tech_snapshot
+        final_news = sina_snapshot + rss_snapshot + tech_snapshot + community_snapshot
         # 时间线保持严格倒序；重要项由前端样式和“只看重要”筛选突出。
         final_news.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
         if not final_news:
@@ -1393,19 +1586,28 @@ class SpiderApp:
         atomic_save_json("./public/finance-news.json", output_data)
         log(
             f"✅ [fast] 更新完成：总库 {len(final_news)} 条 "
-            f"(新浪 {len(sina_snapshot)} / RSS {len(rss_snapshot)} / 科技 {len(tech_snapshot)})。"
+            f"(新浪 {len(sina_snapshot)} / RSS {len(rss_snapshot)} / 科技 {len(tech_snapshot)} / 社区 {len(community_snapshot)})。"
         )
         return final_news
 
     def _fast_loop(self):
-        """行情 + 新浪快讯；按单调时钟对齐 60 秒周期，不叠加抓取耗时。"""
-        interval = 60.0
-        next_run = time.monotonic()
+        """行情 + 新浪快讯；动态读取服务端间隔，不并发或补跑错过的周期。"""
+        last_completed = None
+        last_heartbeat = None
         while not self.shutdown:
+            now_mono = time.monotonic()
+            if last_heartbeat is None or now_mono - last_heartbeat >= 60:
+                self._run_job("heartbeat", self._touch_heartbeat)
+                last_heartbeat = time.monotonic()
+            interval = read_config()['intervals']['fast']
+            if last_completed is not None:
+                wait = last_completed + interval - time.monotonic()
+                if wait > 0:
+                    self._interruptible_sleep(min(10, wait))
+                    continue
             now_bj = get_beijing_time()
             log(f"\n--- [fast] {now_bj.strftime('%H:%M:%S')} 行情+快讯 ---")
 
-            self._run_job("heartbeat", self._touch_heartbeat)
             self._run_job(
                 "ticker",
                 fetch_ticker,
@@ -1431,19 +1633,17 @@ class SpiderApp:
                 failure_message="没有可发布新闻，未覆盖现有文件",
             )
 
-            next_run += interval
-            now_mono = time.monotonic()
-            while next_run <= now_mono:
-                next_run += interval
-            self._interruptible_sleep(next_run - now_mono)
+            last_completed = time.monotonic()
+            self._interruptible_sleep(10)
 
     def _slow_loop(self):
         """慢任务独立记时与报错；抓取为空时保留内存中的 last-known-good。"""
         intervals = {"weather": 1800.0, "wallpaper_list": 300.0, "rss": 1800.0, "tech": 1800.0}
-        next_due = {name: 0.0 for name in intervals}
+        last_completed = {name: None for name in intervals}
         wallpaper_retry_due = 0.0
 
         while not self.shutdown:
+            intervals = read_config()['intervals']
             now_mono = time.monotonic()
             today = get_beijing_time().strftime('%Y-%m-%d')
 
@@ -1461,17 +1661,17 @@ class SpiderApp:
                 # 失败后 5 分钟再试，避免每 30 秒轰击上游；成功后条件本身会阻止当天重复抓取。
                 wallpaper_retry_due = time.monotonic() + 300.0
 
-            if now_mono >= next_due["weather"]:
+            if last_completed["weather"] is None or now_mono >= last_completed["weather"] + intervals["weather"]:
                 self.last_weather_time = time.time()
                 self._run_job("weather", fetch_weather)
-                next_due["weather"] = time.monotonic() + intervals["weather"]
+                last_completed["weather"] = time.monotonic()
 
-            if now_mono >= next_due["wallpaper_list"]:
+            if last_completed["wallpaper_list"] is None or now_mono >= last_completed["wallpaper_list"] + intervals["wallpaper_list"]:
                 self.last_wallpaper_list_time = time.time()
                 self._run_job("wallpaper_list", update_wallpaper_list)
-                next_due["wallpaper_list"] = time.monotonic() + intervals["wallpaper_list"]
+                last_completed["wallpaper_list"] = time.monotonic()
 
-            if now_mono >= next_due["rss"]:
+            if last_completed["rss"] is None or now_mono >= last_completed["rss"] + intervals["rss"]:
                 self.last_rss_time = time.time()
                 rss_ok, rss_news_raw = self._run_job(
                     "rss",
@@ -1484,9 +1684,9 @@ class SpiderApp:
                         self.rss_news = self._merge_by_source(
                             self.rss_news, rss_news_raw, 500, newest_first=True
                         )
-                next_due["rss"] = time.monotonic() + intervals["rss"]
+                last_completed["rss"] = time.monotonic()
 
-            if now_mono >= next_due["tech"]:
+            if last_completed["tech"] is None or now_mono >= last_completed["tech"] + intervals["tech"]:
                 self.last_tech_time = time.time()
                 tech_ok, tech_news_raw = self._run_job(
                     "tech",
@@ -1499,8 +1699,32 @@ class SpiderApp:
                         self.tech_news = self._merge_by_source(
                             self.tech_news, tech_news_raw, 100
                         )
-                next_due["tech"] = time.monotonic() + intervals["tech"]
+                last_completed["tech"] = time.monotonic()
 
+            self._interruptible_sleep(30)
+
+    def _forum_loop(self):
+        """社区任务独立轮询，不被翻译或科技抓取阻塞；失败时保留该来源旧数据。"""
+        last_completed = {source: None for source in FORUM_SOURCES}
+        while not self.shutdown:
+            intervals = read_config()['intervals']
+            for source in FORUM_SOURCES:
+                if self.shutdown:
+                    break
+                if time.monotonic() < _forum_retry_state.get(source, {}).get('until', 0):
+                    continue
+                if last_completed[source] is not None and time.monotonic() < last_completed[source] + intervals[source]:
+                    continue
+                ok, items = self._run_job(
+                    source, lambda source=source: fetch_forum_news(source), success_if=bool,
+                    failure_message="公开订阅暂不可用，保留上次帖子",
+                )
+                if ok:
+                    with self._data_lock:
+                        self.community_news = self._merge_by_source(
+                            self.community_news, items, 100, newest_first=True,
+                        )
+                last_completed[source] = time.monotonic()
             self._interruptible_sleep(30)
 
     def _handle_signal(self, signum, frame):

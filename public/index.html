@@ -10,34 +10,36 @@
     <link rel="icon" type="image/png" href="./favicon.png">
     <link rel="apple-touch-icon" href="./favicon.png">
     <link rel="manifest" href="./manifest.json">
-    <!-- 字体：本地自托管 Inter（正文）+ JetBrains Mono（数字），仅含 latin/latin-ext 子集 -->
+    <!-- 自托管 Inter、JetBrains Mono 与中文文楷；仅在选用时加载对应字体文件。 -->
     <link rel="stylesheet" href="./fonts/fonts.css">
     <!-- Tailwind：静态预编译产物（由 `npm run build:css` 生成）。改动 class 后需重新构建。 -->
-    <link rel="stylesheet" href="./vendor/app.css?v=polish-20260811a">
+    <link rel="stylesheet" href="./vendor/app.css?v=workspace-20261108a">
     <!-- 自定义样式：从旧单文件 <style> 拆分为四个职责文件。
          base=字体/时钟/骨架；glass=玻璃材质/折射/氛围；components=时间轴/光斑/磁吸/Tab；effects=时段/雷暴/晴天/星空 -->
-    <link rel="stylesheet" href="./css/base.css?v=polish-20260811a">
-    <link rel="stylesheet" href="./css/glass.css?v=polish-20260811a">
-    <link rel="stylesheet" href="./css/components.css?v=polish-20260811a">
-    <link rel="stylesheet" href="./css/effects.css?v=polish-20260811a">
+    <link rel="stylesheet" href="./css/base.css?v=workspace-20261108a">
+    <link rel="stylesheet" href="./css/glass.css?v=workspace-20261108a">
+    <link rel="stylesheet" href="./css/components.css?v=workspace-20261108a">
+    <link rel="stylesheet" href="./css/effects.css?v=workspace-20261108a">
+    <link rel="stylesheet" href="./css/workspace.css">
     <!-- DOMPurify：模块化脚本通过全局 DOMPurify 引用，须在 main.js 之前以经典脚本加载 -->
     <script src="./vendor/purify.min.js"></script>
     <!-- 模块预载：ESM 默认是"读到 import 才发请求"，本站的依赖图有三层，
          跨太平洋 120ms RTT 下最深的叶子模块要等到第三轮才开始下载（实测 ~760ms）。
          这里把整张图一次性声明出来，浏览器立刻并行拉，三轮压成一轮。
          注意 href 必须与 JS 里的 import 说明符完全一致（含 ?v=），否则会重复下载。 -->
-    <link rel="modulepreload" href="./js/main.js?v=polish-20260811a">
-    <link rel="modulepreload" href="./js/modules/ui.js?v=polish-20260811a">
-    <link rel="modulepreload" href="./js/modules/ambience.js?v=polish-20260811a">
-    <link rel="modulepreload" href="./js/modules/fluid.js?v=polish-20260811a">
-    <link rel="modulepreload" href="./js/modules/wallpaper.js?v=polish-20260811a">
-    <link rel="modulepreload" href="./js/modules/weather.js?v=polish-20260811a">
-    <link rel="modulepreload" href="./js/modules/ticker.js?v=polish-20260811a">
-    <link rel="modulepreload" href="./js/modules/news.js?v=polish-20260811a">
-    <link rel="modulepreload" href="./js/modules/interactions.js?v=polish-20260811a">
-    <link rel="modulepreload" href="./js/modules/status.js?v=polish-20260811a">
-    <link rel="modulepreload" href="./js/modules/settings.js?v=polish-20260811a">
+    <link rel="modulepreload" href="./js/main.js?v=workspace-20261108a">
+    <link rel="modulepreload" href="./js/modules/ui.js?v=workspace-20261108a">
+    <link rel="modulepreload" href="./js/modules/ambience.js?v=workspace-20261108a">
+    <link rel="modulepreload" href="./js/modules/fluid.js?v=workspace-20261108a">
+    <link rel="modulepreload" href="./js/modules/wallpaper.js?v=workspace-20261108a">
+    <link rel="modulepreload" href="./js/modules/weather.js?v=workspace-20261108a">
+    <link rel="modulepreload" href="./js/modules/ticker.js?v=workspace-20261108a">
+    <link rel="modulepreload" href="./js/modules/news.js?v=workspace-20261108a">
+    <link rel="modulepreload" href="./js/modules/interactions.js?v=workspace-20261108a">
+    <link rel="modulepreload" href="./js/modules/status.js?v=workspace-20261108a">
+    <link rel="modulepreload" href="./js/modules/settings.js?v=workspace-20261108a">
     <link rel="modulepreload" href="./js/modules/settings-store.js">
+    <link rel="modulepreload" href="./js/modules/widgets.js">
     <link rel="modulepreload" href="./js/modules/storage.js">
     <link rel="modulepreload" href="./js/modules/toast.js">
     <link rel="modulepreload" href="./js/modules/wallpaper-store.js">
@@ -100,7 +102,7 @@
     <div id="lightningFlash" class="fixed inset-0 z-[41] pointer-events-none opacity-0"></div>
 
     <!-- 左上角：控制中心 -->
-    <div class="absolute top-6 left-6 flex gap-4 z-30">
+    <div id="controlCenter" class="absolute top-6 left-6 flex gap-3 z-30">
         <!-- 滤镜等按钮的瞬时状态提示（由 weather.js 驱动） -->
         <div id="controlToast" class="control-toast" role="status" aria-live="polite"></div>
         <button id="wallpaperBtn" type="button" disabled style="opacity: 0.5; pointer-events: none;"
@@ -116,7 +118,7 @@
         <!-- 壁纸收藏：把当前这张存进本地收藏夹（IndexedDB 存图片本体），之后参与轮换。
              角标必须放在按钮外层：.glass 带 overflow:hidden，放按钮内会被圆形边界裁掉一半。
              缩放挂在 wrapper 上，这样按钮和角标一起放大，不会互相脱开。 -->
-        <div class="control-btn-wrap relative shrink-0 transition-transform hover:scale-110 active:scale-95">
+        <div id="favoriteControl" class="control-btn-wrap relative shrink-0 transition-transform hover:scale-110 active:scale-95">
             <button id="favoriteBtn" type="button" disabled aria-pressed="false"
                 class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center transition-colors group shadow-lg outline-none focus:outline-none disabled:opacity-50"
                 title="收藏这张壁纸" aria-label="收藏这张壁纸">
@@ -131,7 +133,7 @@
         </div>
         <button id="filterBtn" type="button"
             class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg text-lg outline-none focus:outline-none"
-            title="切换环境滤镜" aria-label="切换环境滤镜">✨</button>
+            title="切换环境滤镜" aria-label="切换环境滤镜"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/></svg></button>
         <button id="settingsBtn" type="button" aria-expanded="false" aria-controls="settingsOverlay"
             class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg outline-none focus:outline-none"
             title="设置" aria-label="打开设置">
@@ -140,27 +142,38 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19.4 15a1.7 1.7 0 00.34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0015 19.4a1.7 1.7 0 00-1 .6 1.7 1.7 0 00-.4 1.1V21H9.6v-.1A1.7 1.7 0 008.5 19.3a1.7 1.7 0 00-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 004.1 15a1.7 1.7 0 00-.6-1 1.7 1.7 0 00-1.1-.4H2.3V9.6h.1A1.7 1.7 0 004 8.5a1.7 1.7 0 00-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 008.4 4.1a1.7 1.7 0 001-.6 1.7 1.7 0 00.4-1.1V2.3h4v.1A1.7 1.7 0 0015 4a1.7 1.7 0 001.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0019.4 8.4a1.7 1.7 0 00.6 1 1.7 1.7 0 001.1.4h.1v4h-.1A1.7 1.7 0 0019.4 15z"></path>
             </svg>
         </button>
+        <button id="screenSaverBtn" type="button" aria-pressed="false" aria-label="进入屏保" title="进入屏保"
+            class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 transition-all">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4M6 13l4-4 3 3 3-4 3 5"/></svg>
+        </button>
+    </div>
+    <div id="layoutRecovery" class="layout-recovery" hidden>
+        <button id="leaveScreenSaver" type="button" class="recovery-button" hidden>退出屏保</button>
+        <button id="recoverSettings" type="button" class="recovery-button" title="按 S 打开设置">设置</button>
     </div>
 
     <!-- 主体内容区 (左侧) -->
     <main
         class="relative z-10 flex flex-col items-center justify-center w-full min-h-[540px] px-5 pt-24 pb-12 md:flex-1 md:min-h-0 md:p-8 md:pb-20">
+        <div id="heroContent" class="hero-content">
         <!-- 时间与天气 -->
-        <div class="flex flex-col items-center mb-7 md:mb-10" data-enter style="--enter-delay:0.05s">
+        <div id="clockGroup" class="flex flex-col items-center mb-7 md:mb-10" data-enter style="--enter-delay:0.05s">
             <div id="clock"
-                class="text-6xl md:text-7xl font-semibold tracking-tight numeric drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]">00:00
+                class="text-6xl md:text-[5.25rem] leading-none font-semibold tracking-tight numeric select-none drop-shadow-[0_4px_12px_rgba(0,0,0,0.6)]">00<span class="clock-colon">:</span>00
             </div>
-            <div
-                class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-white/90 text-sm mt-4 tracking-wider drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] font-medium">
-                <span id="dateInfo">获取日期中...</span>
-                <span class="opacity-40">|</span>
-                <span id="weatherInfo">获取天气中...</span>
+            <div id="heroMeta" class="hero-meta-pill mt-4">
+                <span id="dateInfo" class="hero-meta-item">获取日期中...</span>
+                <span id="heroMetaDivider" class="hero-meta-divider" aria-hidden="true"></span>
+                <button id="weatherInfoBtn" type="button" class="hero-meta-item hero-weather-btn" title="查看七天天气预报" aria-expanded="false" aria-controls="weatherForecast">
+                    <span id="weatherIconSlot" class="hero-weather-icon" aria-hidden="true"></span>
+                    <span id="weatherInfo">获取天气中...</span>
+                </button>
             </div>
         </div>
 
         <!-- 融合搜索框 (内嵌引擎选择) -->
-        <div id="search-bar" data-enter data-tilt="7" style="--enter-delay:0.14s"
-            class="glass-spot w-full max-w-2xl glass-panel rounded-full flex items-center p-1.5 pr-2 md:pr-4 mb-8 md:mb-12 transition-all duration-300 hover:scale-[1.01] focus-within:scale-[1.02] focus-within:ring-4 focus-within:ring-white/20 focus-within:bg-white/10 overflow-hidden">
+        <div id="search-bar" data-enter style="--enter-delay:0.14s"
+            class="w-full max-w-2xl glass-panel rounded-full flex items-center p-1.5 pr-2 md:pr-2.5 mb-8 md:mb-12 transition-colors duration-300">
             <svg class="w-5 h-5 text-white/50 ml-3 md:ml-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
@@ -172,24 +185,15 @@
             <kbd class="hidden md:inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md border border-white/15 bg-white/5 px-1.5 mr-2 text-[11px] font-mono text-white/40"
                 title="按 / 键聚焦搜索框" aria-hidden="true">/</kbd>
 
-            <select id="searchEngineSelect" aria-label="搜索引擎"
-                class="md:hidden h-10 max-w-[5.5rem] shrink-0 rounded-full border border-white/15 bg-black/25 px-3 text-sm font-medium text-white outline-none">
-                <option value="bing">必应</option>
-                <option value="baidu">百度</option>
-                <option value="google">谷歌</option>
-                <option value="duck">Duck</option>
-            </select>
-
-            <!-- 内嵌引擎切换 -->
-            <div class="hidden md:flex gap-2 pr-1 shrink-0">
-                <button type="button" data-engine="bing" id="eng-bing" aria-pressed="false"
-                    class="engine-btn px-3 py-1 rounded-full text-[11px] font-medium transition-all shrink-0">必应</button>
-                <button type="button" data-engine="baidu" id="eng-baidu" aria-pressed="false"
-                    class="engine-btn px-3 py-1 rounded-full text-[11px] font-medium transition-all shrink-0">百度</button>
-                <button type="button" data-engine="google" id="eng-google" aria-pressed="false"
-                    class="engine-btn px-3 py-1 rounded-full text-[11px] font-medium transition-all shrink-0">谷歌</button>
-                <button type="button" data-engine="duck" id="eng-duck" aria-label="使用 DuckDuckGo 搜索" aria-pressed="false"
-                    class="engine-btn px-3 py-1 rounded-full text-[11px] font-medium transition-all shrink-0">D</button>
+            <button id="searchEngineButton" type="button" class="search-engine-button" aria-haspopup="menu" aria-expanded="false" aria-controls="searchEngineMenu" title="切换搜索引擎">
+                <span id="searchEngineIcon" aria-hidden="true"></span><span id="searchEngineName">必应</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div id="searchEngineMenu" class="search-engine-menu glass-floating-surface" role="menu" aria-label="搜索引擎" hidden>
+                <button id="eng-bing" type="button" data-engine="bing" role="menuitemradio" aria-checked="true"><span data-engine-icon aria-hidden="true"></span>必应</button>
+                <button id="eng-baidu" type="button" data-engine="baidu" role="menuitemradio" aria-checked="false"><span data-engine-icon aria-hidden="true"></span>百度</button>
+                <button id="eng-google" type="button" data-engine="google" role="menuitemradio" aria-checked="false"><span data-engine-icon aria-hidden="true"></span>Google</button>
+                <button id="eng-duck" type="button" data-engine="duck" role="menuitemradio" aria-checked="false"><span data-engine-icon aria-hidden="true"></span>DuckDuckGo</button>
             </div>
         </div>
 
@@ -257,24 +261,26 @@
                     class="text-xs text-white/90 font-medium drop-shadow-md group-hover:text-white transition-colors">Discord</span>
             </a>
         </div>
+        </div>
     </main>
 
     <!-- 右侧：金融快讯面板 -->
-    <aside class="relative z-10 w-full px-3 pt-3 pb-16 flex flex-col group/aside md:w-[450px] md:h-screen md:p-6">
-        <!-- 拖拽手柄 -->
-        <div id="resizer" tabindex="0" role="separator" aria-orientation="vertical"
-            aria-label="调整资讯面板宽度：左右箭头微调，双击恢复默认"
-            class="hidden md:block absolute left-0 top-0 w-1.5 h-full cursor-ew-resize z-20 hover:bg-white/30 transition-colors group-hover/aside:bg-white/10">
-        </div>
-
+    <aside id="newsAside" class="relative z-10 w-full px-3 pt-3 pb-16 flex flex-col group/aside md:w-[450px] md:h-screen md:p-6">
+        <button id="newsPanelEdge" class="news-panel-edge" type="button" aria-label="拖动资讯左侧边缘；左右箭头调整，Enter 全屏，Home 还原" title="拖动左侧边缘调整宽度；双击还原"></button>
         <!-- 上内边距比左右小：面板顶部本来就有标题行，24px 纯留白在信息密集面板里太奢侈 -->
-        <div id="news-panel" data-enter data-tilt="3" style="--enter-delay:0.30s"
+        <div id="news-panel" data-enter style="--enter-delay:0.30s"
             class="glass-spot glass-panel flex-none rounded-2xl md:rounded-3xl p-4 pt-3 md:p-6 md:pt-4 flex flex-col overflow-visible md:overflow-hidden relative md:flex-1">
             <!-- 紧凑标题栏：一行放完标题 / 运行状态 / 更新时间 / 筛选与暂停。
                  搜索、来源、只看重要收进下面的折叠行——绝大多数时候不需要占垂直空间。 -->
             <div class="mb-1.5 border-b border-white/10 pb-1.5">
-                <div class="flex items-center gap-2">
-                    <h2 class="shrink-0 whitespace-nowrap text-sm md:text-base font-bold tracking-wide text-white/90">7×24 快讯</h2>
+                <div id="newsPanelHeader" class="flex items-center gap-2">
+                    <h2 class="news-panel-title">
+                        <button id="newsPanelDrag" type="button" title="向左拖动展开，向右拖动收起；双击还原"
+                            aria-label="拖动资讯面板；左右箭头调整，Enter 全屏，Home 还原">
+                            <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="4" r="1"/><circle cx="9" cy="4" r="1"/><circle cx="3" cy="8" r="1"/><circle cx="9" cy="8" r="1"/><circle cx="3" cy="12" r="1"/><circle cx="9" cy="12" r="1"/></svg>
+                            <span>7×24 快讯</span>
+                        </button>
+                    </h2>
                     <button id="systemStatusButton" type="button" aria-expanded="false" aria-controls="systemStatusPopover"
                         class="h-7 w-7 shrink-0 flex items-center justify-center rounded-md border border-white/10 bg-white/5 transition-colors hover:bg-white/10"
                         title="数据运行状态">
@@ -282,6 +288,15 @@
                         <span id="systemStatusText" class="sr-only">检查中</span>
                     </button>
                     <span id="lastUpdateTime" class="ml-auto shrink-0 text-[10px] numeric text-white/40" title="最近一次成功同步时间">更新中...</span>
+                    <button id="newsPanelRestore" type="button" class="panel-action panel-restore" title="还原面板" aria-label="还原面板" hidden>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h18"/></svg>
+                    </button>
+                    <button id="newsPanelExpand" type="button" class="panel-action" title="全屏阅读" aria-label="全屏阅读" aria-pressed="false">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg>
+                    </button>
+                    <button id="newsPanelSettings" type="button" class="panel-action" title="字体与设置" aria-label="字体与设置" hidden>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></svg>
+                    </button>
                     <button id="newsFilterToggle" type="button" aria-expanded="false" aria-controls="newsFilterRow"
                         title="搜索与筛选" aria-label="搜索与筛选"
                         class="news-icon-button h-7 w-7 shrink-0 rounded-md border border-white/10 bg-white/5 text-white/70 transition-colors hover:bg-white/10 flex items-center justify-center">
@@ -343,8 +358,17 @@
                 <button type="button" id="tab-tech" data-filter="tech" role="tab" aria-selected="false" aria-controls="newsList" tabindex="-1"
                     class="tab-btn relative z-10 flex-1 min-h-7 py-0.5 text-[11px] rounded-md transition-all duration-300 shrink-0 min-w-[56px] flex items-center justify-center gap-1">
                     <span>科技</span><span id="count-tech" class="tab-badge"></span></button>
+                <button type="button" id="tab-community" data-filter="community" role="tab" aria-selected="false" aria-controls="newsList" tabindex="-1"
+                    class="tab-btn relative z-10 flex-1 min-h-7 py-0.5 text-[11px] rounded-md transition-all duration-300 shrink-0 min-w-[48px] flex items-center justify-center gap-1">
+                    <span>社区</span><span id="count-community" class="tab-badge"></span></button>
             </div>
 
+            <div id="newsReadingBar" class="news-reading-bar" role="group" aria-label="阅读状态">
+                <button type="button" data-reading-view="all" aria-pressed="true">全部</button>
+                <button type="button" data-reading-view="unread" aria-pressed="false">未读 <span id="readingUnreadCount">0</span></button>
+                <button type="button" data-reading-view="saved" aria-pressed="false">收藏 <span id="readingSavedCount">0</span></button>
+                <button id="markAllNewsRead" type="button" title="将当前分类标为已读" aria-label="将当前分类标为已读">全部已读</button>
+            </div>
             <!-- 列表外壳：承载顶部"新快讯"提示与上下渐隐遮罩，滚动条在内层 #newsList 上 -->
             <div id="newsListShell" class="news-list-shell flex-none flex flex-col md:flex-1 md:min-h-0">
                 <button id="newsUnseenPill" type="button" disabled aria-hidden="true" class="news-unseen-pill">
@@ -371,7 +395,7 @@
 
         </div>
         <div id="systemStatusPopover" hidden
-            class="fixed z-[100] w-[min(320px,calc(100vw-24px))] rounded-xl border border-white/15 bg-slate-950/95 p-3 text-xs shadow-2xl backdrop-blur-xl">
+            class="glass-floating-surface fixed z-[100] w-[min(320px,calc(100vw-24px))] rounded-2xl p-3.5 text-xs shadow-2xl">
             <div class="mb-3 flex items-center justify-between">
                 <span class="font-semibold text-white/90">数据运行状态</span>
                 <span id="pipelineUpdatedAt" class="numeric text-[10px] text-white/40">检查中</span>
@@ -400,9 +424,9 @@
     </aside>
 
     <!-- 设置中心 -->
-    <div id="settingsOverlay" hidden class="fixed inset-0 z-[80] bg-black/55 backdrop-blur-sm">
+    <div id="settingsOverlay" hidden class="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm">
         <section id="settingsDrawer" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"
-            class="absolute right-0 top-0 flex h-full w-full max-w-[460px] flex-col border-l border-white/15 bg-slate-950/95 text-white shadow-2xl">
+            class="glass-drawer-surface absolute right-0 top-0 flex h-full w-full max-w-[460px] flex-col text-white shadow-2xl">
             <header class="flex h-16 shrink-0 items-center justify-between border-b border-white/10 px-5">
                 <h2 id="settingsTitle" class="text-lg font-semibold">设置</h2>
                 <button id="closeSettingsButton" type="button" aria-label="关闭设置"
@@ -428,6 +452,14 @@
 
             <div class="min-h-0 flex-1 overflow-y-auto no-scrollbar">
                 <div data-settings-panel="general" class="settings-panel">
+                    <section class="settings-section">
+                        <div class="flex items-center justify-between gap-2">
+                            <h3 class="settings-section-title">页面控件</h3>
+                            <button id="settingsScreenSaver" type="button" class="recovery-button text-xs">一键屏保</button>
+                        </div>
+                        <p class="mb-3 text-xs text-white/50">按需显示。全部关闭后只保留壁纸与时间，按 S 或轻触页面可唤出设置。</p>
+                        <div id="widgetSettingsList" class="grid grid-cols-2 gap-2"></div>
+                    </section>
                     <section class="settings-section">
                         <h3 class="settings-section-title">天气城市</h3>
                         <div class="settings-segmented" role="group" aria-label="天气城市来源">
@@ -471,6 +503,7 @@
                             <select id="settingsNewsCategory">
                                 <option value="all">全部</option><option value="news">国内</option>
                                 <option value="foreign">外媒</option><option value="tech">科技</option>
+                                <option value="community">社区</option>
                             </select>
                         </label>
                         <label class="settings-field-row">
@@ -492,6 +525,25 @@
                         <label class="settings-toggle-row">
                             <span>按时段分组快讯</span><input id="settingsGroupByTime" type="checkbox"><i></i>
                         </label>
+                        <div class="mt-4 border-t border-white/10 pt-3">
+                            <h4 class="mb-2 text-sm text-white/75">社区来源</h4>
+                            <label class="settings-toggle-row"><span>NodeSeek</span><input id="settingsNodeSeek" type="checkbox"><i></i></label>
+                            <label class="settings-toggle-row"><span>Linux DO</span><input id="settingsLinuxDo" type="checkbox"><i></i></label>
+                            <p class="mt-2 text-xs text-white/40">展示公开订阅内容，点击帖子可到论坛阅读全文。</p>
+                        </div>
+                    </section>
+                    <section class="settings-section">
+                        <details id="crawlerAdmin">
+                            <summary class="settings-section-title">抓取频率 <span class="admin-global-note">服务器设置</span></summary>
+                            <p class="settings-note">修改后影响所有访客；浏览器的资讯刷新仍每 30 秒检查一次。</p>
+                            <div id="adminStatus" class="admin-status" role="status">展开后读取服务器设置</div>
+                            <form id="adminLoginForm" class="admin-login">
+                                <label for="adminPassword">管理密码</label>
+                                <div class="settings-input-shell"><input id="adminPassword" type="password" autocomplete="current-password" maxlength="256" placeholder="输入密码解锁修改"><button type="submit" id="adminUnlock">解锁</button></div>
+                            </form>
+                            <div id="crawlerIntervalFields"></div>
+                            <div class="admin-actions"><button id="adminSave" type="button" class="settings-command-button" disabled>保存频率</button><button id="adminReload" type="button" class="settings-command-button">重新加载</button><button id="adminLogout" type="button" class="settings-command-button" hidden>锁定</button></div>
+                        </details>
                     </section>
                 </div>
 
@@ -551,7 +603,21 @@
 
                 <div data-settings-panel="appearance" class="settings-panel" hidden>
                     <section class="settings-section">
+                        <h3 class="settings-section-title">字体与阅读</h3>
+                        <label class="settings-field-row"><span>界面字体</span><select id="settingsInterfaceFont"></select></label>
+                        <label class="settings-field-row"><span>阅读密度</span><select id="settingsNewsDensity" aria-label="阅读密度"><option value="compact">紧凑</option><option value="standard">标准</option><option value="relaxed">舒展</option></select></label>
+                        <label class="settings-field-row"><span>资讯字体</span><select id="settingsNewsFont"></select></label>
+                        <label class="settings-field-row"><span>时钟字体</span><select id="settingsClockFont"></select></label>
+                        <div class="font-preview">
+                            <p class="font-preview-copy">把日常资讯，读成自己的节奏。</p>
+                            <span class="font-preview-clock">23:08</span>
+                        </div>
+                        <p class="font-availability-note">文楷已内置。宋体等样式使用设备字体，缺少时自动回退。</p>
+                    </section>
+                    <section class="settings-section">
                         <h3 class="settings-section-title">视觉效果</h3>
+                        <label class="settings-opacity"><span>资讯面板不透明度 <output id="settingsPanelOpacityValue">60%</output></span><input id="settingsPanelOpacity" aria-label="资讯面板不透明度" type="range" min="20" max="95" step="5" value="60"></label>
+                        <p class="settings-note">数值越低，壁纸越清楚。亮壁纸建议适当提高不透明度。</p>
                         <label class="settings-toggle-row">
                             <span>天气氛围</span><input id="settingsWeatherEffects" type="checkbox"><i></i>
                         </label>
@@ -593,7 +659,7 @@
 
     <!-- 底部：实时行情条 (静态双行滑动布局) -->
     <footer id="bottom-ticker" data-enter style="--enter-delay:0.38s"
-        class="fixed bottom-0 left-0 w-full h-[38px] z-50 glass-panel !rounded-none border-x-0 border-b-0 bg-gradient-to-t from-black/50 to-transparent group/ticker">
+        class="fixed bottom-0 left-0 w-full h-[44px] z-50 glass-panel !rounded-none border-x-0 border-b-0 bg-gradient-to-t from-black/55 to-transparent group/ticker">
 
         <!-- 修复后的翻页按钮：左 -->
         <button type="button" data-ticker-scroll="-500" aria-label="行情向左滚动"
@@ -605,16 +671,16 @@
 
         <!-- 真正的横向滚动容器 -->
         <div id="tickerScroll"
-            class="flex items-center gap-8 px-2 py-1.5 w-full h-full overflow-x-auto no-scrollbar scroll-smooth">
-            <div id="tickerContent" class="flex items-center gap-8 min-w-max">
-                <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
-                <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
-                <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
-                <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
-                <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
-                <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
-                <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
-                <div class="skeleton" style="width:80px;height:32px;border-radius:6px"></div>
+            class="flex items-center gap-4 px-3 py-1 w-full h-full overflow-x-auto no-scrollbar scroll-smooth">
+            <div id="tickerContent" class="flex items-center gap-3 min-w-max">
+                <div class="skeleton" style="width:92px;height:34px;border-radius:8px"></div>
+                <div class="skeleton" style="width:92px;height:34px;border-radius:8px"></div>
+                <div class="skeleton" style="width:92px;height:34px;border-radius:8px"></div>
+                <div class="skeleton" style="width:92px;height:34px;border-radius:8px"></div>
+                <div class="skeleton" style="width:92px;height:34px;border-radius:8px"></div>
+                <div class="skeleton" style="width:92px;height:34px;border-radius:8px"></div>
+                <div class="skeleton" style="width:92px;height:34px;border-radius:8px"></div>
+                <div class="skeleton" style="width:92px;height:34px;border-radius:8px"></div>
             </div>
         </div>
 
@@ -628,7 +694,7 @@
     </footer>
 
     <!-- 应用入口：ES Module。各功能模块在 js/modules/ 下，由 main.js 按依赖顺序启动。 -->
-    <script type="module" src="./js/main.js?v=polish-20260811a"></script>
+    <script type="module" src="./js/main.js?v=workspace-20261108a"></script>
 </body>
 
 </html>

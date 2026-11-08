@@ -1,25 +1,37 @@
 // ================== 底部行情双行排版 ==================
 // 数字滚动 / sparkline 画入通过 window.__animateNumber / __drawInSparkline 桥接
 // （由 ambience 模块初始化时挂载，未就绪时各调用点自带降级）。
-import { getSettings } from './settings-store.js';
+import { getSettings, isWidgetVisible, getEffectiveAppearance } from './settings-store.js';
 
 const SPARKLINE_MIN_POINTS = 3;
 const TICKER_POLL_INTERVAL = 20000;
 let tickerPollTimer = null;
 let tickerRequestInFlight = false;
 
-function buildSparklineSVG(history, isUp) {
+function buildSparklineSVG(history, isUp, symbol = '') {
     if (!history || history.length < 2) return '';
-    const w = 36, h = 14;
+    const w = 44, h = 15;
     const min = Math.min(...history), max = Math.max(...history);
     const range = max - min || 1;
-    const pts = history.map((v, i) => {
+    const coords = history.map((v, i) => {
         const x = (i / (history.length - 1)) * w;
-        const y = h - ((v - min) / range) * (h - 2) - 1;
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
-    const color = isUp ? '#f87171' : '#34d399';
-    return `<svg class="sparkline-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline class="sparkline-poly" points="${pts}" stroke="${color}" opacity="0.6"/></svg>`;
+        const y = h - ((v - min) / range) * (h - 3) - 1.5;
+        return [x, y];
+    });
+    const pts = coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+    const areaPts = `0,${h} ${pts} ${w},${h}`;
+    const [lastX, lastY] = coords[coords.length - 1];
+    const color = isUp ? '#fb7185' : '#34d399';
+    const gradId = `sg-${String(symbol).replace(/[^a-zA-Z0-9_-]/g, '') || (isUp ? 'u' : 'd')}`;
+    return `<svg class="sparkline-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
+        `<defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">` +
+        `<stop offset="0%" stop-color="${color}" stop-opacity="0.34"/>` +
+        `<stop offset="100%" stop-color="${color}" stop-opacity="0"/>` +
+        `</linearGradient></defs>` +
+        `<polygon points="${areaPts}" fill="url(#${gradId})"/>` +
+        `<polyline class="sparkline-poly" points="${pts}" stroke="${color}" opacity="0.88"/>` +
+        `<circle cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="1.4" fill="${color}"/>` +
+        `</svg>`;
 }
 
 async function fetchTickerData() {
@@ -67,13 +79,16 @@ async function fetchTickerData() {
             items.forEach(item => {
                 const showSparkline = item.price_history && item.price_history.length >= SPARKLINE_MIN_POINTS;
                 const wrapper = document.createElement('div');
-                wrapper.className = 'flex flex-col justify-center min-w-max px-1.5 gap-0';
+                wrapper.className = 'ticker-item-card flex flex-col justify-center min-w-max gap-0.5';
                 wrapper.dataset.symbol = item.symbol;
+                wrapper.addEventListener('animationend', () => {
+                    wrapper.classList.remove('ticker-flash-up', 'ticker-flash-down');
+                });
 
                 const topRow = document.createElement('div');
-                topRow.className = 'flex items-center gap-1';
+                topRow.className = 'flex items-center justify-between gap-2';
                 const nameSpan = document.createElement('span');
-                nameSpan.className = 'text-[10px] leading-tight text-white/55 tracking-wide drop-shadow-md name-val whitespace-nowrap';
+                nameSpan.className = 'text-[10px] leading-tight text-white/60 font-medium tracking-wide drop-shadow-md name-val whitespace-nowrap';
                 nameSpan.textContent = item.name;
                 topRow.appendChild(nameSpan);
                 if (showSparkline) {
@@ -85,7 +100,7 @@ async function fetchTickerData() {
                 wrapper.appendChild(topRow);
 
                 const botRow = document.createElement('div');
-                botRow.className = 'flex items-baseline gap-1';
+                botRow.className = 'flex items-baseline gap-1.5';
                 const priceSpan = document.createElement('span');
                 priceSpan.className = 'text-[11px] leading-tight font-bold text-white drop-shadow-md numeric price-val whitespace-nowrap';
                 priceSpan.textContent = '--';
@@ -106,6 +121,15 @@ async function fetchTickerData() {
                 const nameEl = el.querySelector('.name-val');
                 if (nameEl) nameEl.innerText = item.name;
                 const priceEl = el.querySelector('.price-val');
+                const nextPriceNum = parseFloat(String(item.price).replace(/[^0-9.\-]/g, ''));
+                const prevPriceNum = parseFloat(el.dataset.lastPrice || '');
+                if (!getEffectiveAppearance().powerSaving && !window.matchMedia('(prefers-reduced-motion: reduce)').matches && Number.isFinite(nextPriceNum) && Number.isFinite(prevPriceNum) && nextPriceNum !== prevPriceNum) {
+                    el.classList.remove('ticker-flash-up', 'ticker-flash-down');
+                    void el.offsetWidth;
+                    el.classList.add(nextPriceNum > prevPriceNum ? 'ticker-flash-up' : 'ticker-flash-down');
+                }
+                if (Number.isFinite(nextPriceNum)) el.dataset.lastPrice = String(nextPriceNum);
+
                 // 价格变化时做数字滚动插值（保留货币符号/千分位格式）
                 if (window.__animateNumber) window.__animateNumber(priceEl, item.price);
                 else priceEl.innerText = item.price;
@@ -119,7 +143,7 @@ async function fetchTickerData() {
                     const sig = item.price_history.join(',');
                     if (sparkContainer.dataset.sig !== sig) {
                         sparkContainer.dataset.sig = sig;
-                        sparkContainer.innerHTML = DOMPurify.sanitize(buildSparklineSVG(item.price_history, isUp));
+                        sparkContainer.innerHTML = DOMPurify.sanitize(buildSparklineSVG(item.price_history, isUp, item.symbol));
                         if (window.__drawInSparkline) window.__drawInSparkline(sparkContainer);
                     }
                 }
@@ -176,13 +200,13 @@ async function fetchTickerStatus() {
 
 export function initTicker() {
     const poll = async () => {
-        if (document.hidden || tickerRequestInFlight) return;
+        if (document.hidden || !isWidgetVisible('ticker') || tickerRequestInFlight) return;
         tickerRequestInFlight = true;
         try {
             await Promise.allSettled([fetchTickerData(), fetchTickerStatus()]);
         } finally {
             tickerRequestInFlight = false;
-            if (!document.hidden) tickerPollTimer = window.setTimeout(poll, TICKER_POLL_INTERVAL);
+            if (!document.hidden && isWidgetVisible('ticker')) tickerPollTimer = window.setTimeout(poll, TICKER_POLL_INTERVAL);
         }
     };
     document.addEventListener('visibilitychange', () => {
@@ -191,7 +215,15 @@ export function initTicker() {
         if (!document.hidden) poll();
     });
     window.addEventListener('gx:settings-changed', event => {
-        if (event.detail?.section === 'ticker' || event.detail?.section === 'all') fetchTickerData();
+        if (isWidgetVisible('ticker') && ['ticker', 'all'].includes(event.detail?.section)) fetchTickerData();
+    });
+    let tickerVisible = isWidgetVisible('ticker');
+    window.addEventListener('gx:layout-changed', () => {
+        const next = isWidgetVisible('ticker');
+        if (next === tickerVisible) return;
+        tickerVisible = next;
+        window.clearTimeout(tickerPollTimer);
+        if (next) poll();
     });
     poll();
 }

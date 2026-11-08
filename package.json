@@ -6,6 +6,9 @@
   "scripts": {
     "build:css": "tailwindcss -c tailwind.config.js -i build/tailwind-input.css -o public/vendor/app.css --minify",
     "watch:css": "tailwindcss -c tailwind.config.js -i build/tailwind-input.css -o public/vendor/app.css --watch",
+    "preview": "python tools/preview.py --demo",
+    "test:settings": "node --test tests/settings.test.mjs",
+    "check:forums": "python tools/check_forums.py",
     "vendor:sync": "node .github/scripts/sync-vendor.mjs",
     "vendor:check": "node .github/scripts/sync-vendor.mjs --check",
     "check:css": "node .github/scripts/check-css.mjs",
@@ -13,7 +16,7 @@
     "check": "npm run vendor:check && npm run check:css && npm run check:js"
   },
   "devDependencies": {
-    "dompurify": "3.4.12",
+    "dompurify": "3.4.17",
     "tailwindcss": "3.4.17"
   }
 }

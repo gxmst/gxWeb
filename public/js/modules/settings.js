@@ -1,10 +1,13 @@
 import {
     getSettings,
+    getEffectiveAppearance,
+    FONT_OPTIONS,
     normalizeShortcutUrl,
     resetSettings,
     updateSettings,
 } from './settings-store.js';
-import { applyFavorite, removeFavorite, requestFavorites } from './wallpaper.js?v=polish-20260811a';
+import { applyFavorite, removeFavorite, requestFavorites } from './wallpaper.js?v=workspace-20261108a';
+import { initAdminSettings } from './admin-settings.js';
 
 let shortcutTemplates = new Map();
 let availableTickers = [];
@@ -17,10 +20,46 @@ let wallpaperFavorites = { items: [], limit: 24, available: true, bytes: 0, curr
 
 function applyAppearanceClasses(settings = getSettings()) {
     const root = document.documentElement;
-    root.classList.toggle('weather-effects-off', !settings.appearance.weatherEffects);
-    root.classList.toggle('tilt-off', !settings.appearance.tilt);
-    root.classList.toggle('glass-glow-off', !settings.appearance.glassGlow);
-    root.classList.toggle('power-saving', settings.appearance.powerSaving);
+    const appearance = getEffectiveAppearance();
+    root.classList.toggle('weather-effects-off', !appearance.weatherEffects);
+    root.classList.toggle('tilt-off', !appearance.tilt);
+    root.classList.toggle('glass-glow-off', !appearance.glassGlow);
+    root.classList.toggle('power-saving', appearance.powerSaving);
+    const typography = settings.typography;
+    const family = id => FONT_OPTIONS.find(font => font.id === id).family;
+    document.body.style.setProperty('--ui-font', family(typography.interfaceFont));
+    document.body.style.setProperty('--news-font', family(typography.newsFont === 'inherit' ? typography.interfaceFont : typography.newsFont));
+    document.body.style.setProperty('--clock-font', family(typography.clockFont));
+    document.body.style.setProperty('--user-reading-opacity', String(settings.appearance.panelOpacity/100));
+    root.dataset.newsDensity = settings.news.density;
+}
+
+function renderFontControls() {
+    for (const [id, inherit] of [['settingsInterfaceFont', false], ['settingsNewsFont', true], ['settingsClockFont', false]]) {
+        const select = document.getElementById(id);
+        if (inherit) select.add(new Option('跟随界面', 'inherit'));
+        FONT_OPTIONS.forEach(font => select.add(new Option(font.label, font.id)));
+    }
+}
+
+function renderWidgetControls() {
+    const labels = {
+        date: '日期', weather: '天气', search: '搜索框', shortcuts: '快捷入口', news: '资讯面板', ticker: '行情条',
+        wallpaperButton: '切换壁纸按钮', favoriteButton: '壁纸收藏按钮', filterButton: '滤镜按钮', settingsButton: '设置按钮',
+    };
+    const list = document.getElementById('widgetSettingsList');
+    Object.entries(labels).forEach(([key, text]) => {
+        const label = document.createElement('label');
+        label.className = 'widget-toggle';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.dataset.widget = key;
+        const span = document.createElement('span');
+        span.textContent = text;
+        label.append(input, span);
+        list.appendChild(label);
+        input.addEventListener('change', () => updateSettings('widgets', { [key]: input.checked }));
+    });
 }
 
 function captureShortcutTemplates() {
@@ -370,14 +409,23 @@ function renderNewsSources(settings = getSettings()) {
 }
 
 function syncControls(settings = getSettings()) {
+    document.querySelectorAll('[data-widget]').forEach(input => { input.checked = settings.widgets[input.dataset.widget]; });
     const setValue = (id, value) => { const element = document.getElementById(id); if (element) element.value = value; };
     const setChecked = (id, value) => { const element = document.getElementById(id); if (element) element.checked = Boolean(value); };
     setValue('settingsSearchEngine', settings.search.engine);
     setValue('settingsNewsCategory', settings.news.category);
     setValue('settingsNewsFontSize', settings.news.fontSize);
+    setValue('settingsInterfaceFont', settings.typography.interfaceFont);
+    setValue('settingsNewsFont', settings.typography.newsFont);
+    setValue('settingsClockFont', settings.typography.clockFont);
+    setValue('settingsNewsDensity', settings.news.density);
+    setValue('settingsPanelOpacity', settings.appearance.panelOpacity);
+    document.getElementById('settingsPanelOpacityValue').textContent = `${settings.appearance.panelOpacity}%`;
     setChecked('settingsImportantOnly', settings.news.importantOnly);
     setChecked('settingsAutoRefresh', settings.news.autoRefresh);
     setChecked('settingsGroupByTime', settings.news.groupByTime);
+    setChecked('settingsNodeSeek', !settings.news.hiddenSources.includes('nodeseek'));
+    setChecked('settingsLinuxDo', !settings.news.hiddenSources.includes('linuxdo'));
     setValue('settingsWallpaperRotation', settings.wallpaper.rotation);
     setChecked('settingsWeatherEffects', settings.appearance.weatherEffects);
     setChecked('settingsTilt', settings.appearance.tilt);
@@ -482,7 +530,8 @@ function setDrawerOpen(open) {
         syncControls();
         document.getElementById('closeSettingsButton')?.focus();
     } else if (lastFocusedElement instanceof HTMLElement) {
-        lastFocusedElement.focus();
+        if (lastFocusedElement.getClientRects().length) lastFocusedElement.focus();
+        else document.getElementById('recoverSettings')?.focus();
     }
 }
 
@@ -509,6 +558,21 @@ function trapDrawerFocus(event) {
 }
 
 function bindControls() {
+    document.getElementById('settingsNewsDensity').addEventListener('change',event => updateSettings('news',{density:event.target.value}));
+    document.getElementById('settingsPanelOpacity').addEventListener('input',event => updateSettings('appearance',{panelOpacity:Number(event.target.value)}));
+    for (const [id, key] of [['settingsInterfaceFont', 'interfaceFont'], ['settingsNewsFont', 'newsFont'], ['settingsClockFont', 'clockFont']]) {
+        document.getElementById(id).addEventListener('change', event => updateSettings('typography', { [key]: event.target.value }));
+    }
+    window.addEventListener('gx:open-settings', () => setDrawerOpen(true));
+    window.addEventListener('gx:close-settings', () => setDrawerOpen(false));
+    [['settingsNodeSeek', 'nodeseek'], ['settingsLinuxDo', 'linuxdo']].forEach(([id, source]) => {
+        document.getElementById(id)?.addEventListener('change', event => {
+            const hidden = new Set(getSettings().news.hiddenSources);
+            if (event.target.checked) hidden.delete(source);
+            else hidden.add(source);
+            updateSettings('news', { hiddenSources: Array.from(hidden) });
+        });
+    });
     document.getElementById('settingsBtn')?.addEventListener('click', () => setDrawerOpen(true));
     document.getElementById('closeSettingsButton')?.addEventListener('click', () => setDrawerOpen(false));
     document.getElementById('settingsOverlay')?.addEventListener('click', event => {
@@ -591,6 +655,9 @@ function bindControls() {
 }
 
 export function initSettings() {
+    initAdminSettings();
+    renderFontControls();
+    renderWidgetControls();
     captureShortcutTemplates();
     renderDock();
     applyAppearanceClasses();

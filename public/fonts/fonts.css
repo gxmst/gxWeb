@@ -1,3 +1,5 @@
+@import url('./wenkai/500.css');
+
 /* 自托管字体：Inter（正文）+ JetBrains Mono（数字）
    均为可变字体(variable font)，单文件覆盖全部字重。
    仅含 latin / latin-ext 子集，中文走系统字体回退。 */
