@@ -1,4 +1,4 @@
-import { getSettings, getEffectiveAppearance } from './settings-store.js';
+import { getSettings, getEffectiveAppearance } from './settings-store.js?v=workspace-20261114a';
 
 // ================== 视觉增强：进场 / 光斑 / 磁吸 / 时段 / 雷暴 / 星空 / 数字滚动 ==================
 // 暴露给其它模块的钩子：window.__setAmbiance / __animateNumber / __drawInSparkline
@@ -18,36 +18,94 @@ export function initAmbience() {
         });
     }
 
-    // ---- 玻璃面板鼠标光斑：跟随指针的柔光 ----
+    // ---- 玻璃面板鼠标光斑：rAF 合并指针更新并缓存容器边界，避免高频触发重排 ----
     const spotEls = Array.from(document.querySelectorAll('.glass-spot'));
+    const spotState = new WeakMap();
+    const invalidateSpots = () => {
+        spotEls.forEach(el => {
+            const state = spotState.get(el);
+            if (state) state.rect = null;
+        });
+    };
     spotEls.forEach(el => {
+        const state = { rect: null, frame: null, x: 0, y: 0 };
+        spotState.set(el, state);
+        el.addEventListener('pointerenter', () => {
+            state.rect = el.getBoundingClientRect();
+        });
         el.addEventListener('pointermove', (e) => {
             if (powerSaving || !appearance.glassGlow) return;
-            const r = el.getBoundingClientRect();
-            el.style.setProperty('--mx', ((e.clientX - r.left) / r.width * 100).toFixed(1) + '%');
-            el.style.setProperty('--my', ((e.clientY - r.top) / r.height * 100).toFixed(1) + '%');
-            el.style.setProperty('--spot', '1');
+            state.x = e.clientX;
+            state.y = e.clientY;
+            if (state.frame !== null) return;
+            state.frame = requestAnimationFrame(() => {
+                state.frame = null;
+                const r = state.rect || (state.rect = el.getBoundingClientRect());
+                if (r.width <= 0 || r.height <= 0) return;
+                el.style.setProperty('--mx', ((state.x - r.left) / r.width * 100).toFixed(1) + '%');
+                el.style.setProperty('--my', ((state.y - r.top) / r.height * 100).toFixed(1) + '%');
+                el.style.setProperty('--spot', '1');
+            });
+        }, { passive: true });
+        el.addEventListener('pointerleave', () => {
+            if (state.frame !== null) {
+                cancelAnimationFrame(state.frame);
+                state.frame = null;
+            }
+            el.style.setProperty('--spot', '0');
         });
-        el.addEventListener('pointerleave', () => el.style.setProperty('--spot', '0'));
     });
 
-    // ---- Dock 图标磁吸放大：靠近指针的图标按距离放大 ----
+    // ---- Dock 图标磁吸放大：rAF 合批 + 缓存图标中心点 ----
     const dockRow = document.getElementById('dockRow');
+    let dockCache = null;
+    const invalidateGeometry = () => {
+        invalidateSpots();
+        dockCache = null;
+    };
+    window.addEventListener('resize', invalidateGeometry);
+    window.addEventListener('scroll', invalidateGeometry, { passive: true });
+    window.addEventListener('gx:layout-changed', invalidateGeometry);
+    window.addEventListener('gx:panel-layout', invalidateGeometry);
+    window.addEventListener('gx:settings-changed', event => {
+        const section = event.detail?.section;
+        if (section === 'shortcuts' || section === 'widgets' || section === 'all') dockCache = null;
+    });
+
     if (dockRow && !reduceMotion) {
         const MAX = 1.32, RANGE = 110; // 最大放大倍率 / 影响半径(px)
+        let dockFrame = null;
+        let pointerX = 0;
+        const measureDock = () => Array.from(dockRow.querySelectorAll('.dock-ico')).map(ico => {
+            const r = ico.getBoundingClientRect();
+            return { ico, cx: r.left + r.width / 2 };
+        });
+        dockRow.addEventListener('pointerenter', () => {
+            dockCache = measureDock();
+        });
         dockRow.addEventListener('pointermove', (e) => {
             if (powerSaving) return;
-            dockRow.querySelectorAll('.dock-ico').forEach(ico => {
-                const r = ico.getBoundingClientRect();
-                const cx = r.left + r.width / 2;
-                const d = Math.abs(e.clientX - cx);
-                const f = Math.max(0, 1 - d / RANGE);
-                const scale = 1 + (MAX - 1) * f;
-                ico.style.transform = `scale(${scale.toFixed(3)})`;
+            pointerX = e.clientX;
+            if (dockFrame !== null) return;
+            dockFrame = requestAnimationFrame(() => {
+                dockFrame = null;
+                if (!dockCache) dockCache = measureDock();
+                for (const item of dockCache) {
+                    const d = Math.abs(pointerX - item.cx);
+                    const f = Math.max(0, 1 - d / RANGE);
+                    const scale = 1 + (MAX - 1) * f;
+                    item.ico.style.transform = `scale(${scale.toFixed(3)})`;
+                }
             });
-        });
+        }, { passive: true });
         dockRow.addEventListener('pointerleave', () => {
-            dockRow.querySelectorAll('.dock-ico').forEach(ico => { ico.style.transform = ''; });
+            if (dockFrame !== null) {
+                cancelAnimationFrame(dockFrame);
+                dockFrame = null;
+            }
+            const items = dockCache || Array.from(dockRow.querySelectorAll('.dock-ico')).map(ico => ({ ico }));
+            items.forEach(item => { item.ico.style.transform = ''; });
+            dockCache = null;
         });
     }
 

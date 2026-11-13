@@ -32,6 +32,7 @@ sh tools/deploy.sh main
 
 首次取得脚本时先执行 `git pull --ff-only origin main`。脚本拒绝覆盖服务器已修改的跟踪文件，
 先构建成功再更新容器，保留爬虫生成的数据、私有 `.env` 和 `crawler-state` 命名卷。
+每次部署都强制重建 Web 容器并执行 `nginx -t`，保证 Git 更新的代理和安全配置被加载。
 不要使用 `git reset --hard`、`git clean` 或 `docker compose down -v` 更新服务。
 
 Web 绑定 `127.0.0.1:1881`，爬虫以 `1000:1000` 运行。服务器 `.env` 仅保存在本机，

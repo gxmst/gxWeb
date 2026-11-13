@@ -5,5 +5,7 @@
 !.dockerignore
 !requirements.txt
 !spider.py
+!crawler/
+!crawler/**
 !runtime_config.py
 !control_api.py

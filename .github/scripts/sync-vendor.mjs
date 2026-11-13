@@ -27,7 +27,7 @@ if (installedPackage.version !== declaredVersion) {
   );
 }
 
-const files = ['purify.min.js', 'purify.min.js.map'];
+const files = ['purify.min.js'];
 const sourceDir = join(root, 'node_modules', 'dompurify', 'dist');
 const targetDir = join(root, 'public', 'vendor');
 

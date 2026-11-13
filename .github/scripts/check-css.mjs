@@ -15,7 +15,7 @@ try {
     [
       tailwindCli,
       '-c',
-      'tailwind.config.js',
+      'tailwind.config.cjs',
       '-i',
       'build/tailwind-input.css',
       '-o',

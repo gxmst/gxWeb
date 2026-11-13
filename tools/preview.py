@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from control_api import AdminHandlerMixin, AdminState
+from control_api import AdminHandlerMixin, AdminState  # noqa: E402
 DATA_FILES = {"finance-news.json", "ticker.json", "ticker-status.json", "pipeline-status.json", "weather.txt", "wallpapers.json"}
 
 
@@ -35,7 +35,7 @@ def demo_wallpaper():
 def demo_news(now):
     examples = [
         ("nodeseek", "community", "分享一个轻量的 VPS 监控面板", "支持 Docker 部署和多节点监控，讨论安装体验与资源占用。", "技术"),
-        ("linuxdo", "community", "自托管服务的备份与恢复，你有哪些实践？", "从定时备份到恢复验证，聊聊长期运行个人服务的经验。", "开发调优"),
+        ("linuxdo", "community", "自托管服务的备份与恢复：从数据库、配置文件到照片，怎样设计一套可长期维护的方案？", "从定时备份到恢复验证，聊聊长期运行个人服务的经验。除了把文件复制到另一台机器，还需要考虑数据库的一致性、备份加密、异地副本和保留周期。最近做了一次完整的恢复演练，才发现有些服务只保存了数据，没有保存配置和启动顺序。这里整理了演练过程和遇到的问题，也想听听大家如何在有限预算下安排自动备份。", "开发调优"),
         ("sina", "news", "主要股指上涨1.25%，科技板块领涨", "", ""),
         ("BBC", "foreign", "全球科技与能源市场观察", "", ""),
         ("nodeseek", "community", "最近有哪些适合个人主页的开源项目？", "整理一些简单、稳定、方便日常使用的个人主页工具。", "日常"),

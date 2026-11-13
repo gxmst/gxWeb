@@ -1,4 +1,4 @@
-import { safeStorageGet, safeStorageSet } from './storage.js';
+import { safeStorageGet, safeStorageSet } from './storage.js?v=workspace-20261114a';
 
 const SETTINGS_KEY = 'gxSettingsV1';
 
@@ -34,6 +34,7 @@ export const DEFAULT_SETTINGS = {
     news: {
         category: 'all',
         source: 'all',
+        communitySource: 'all',
         fontSize: 'sm',
         importantOnly: false,
         autoRefresh: true,
@@ -55,7 +56,6 @@ export const DEFAULT_SETTINGS = {
     },
     appearance: {
         weatherEffects: true,
-        tilt: true,
         ripple: false,
         glassGlow: true,
         glassRefraction: true,
@@ -69,11 +69,13 @@ export const DEFAULT_SETTINGS = {
     layout: {
         newsPanelWidth: null,
         newsPanelMode: 'compact',
+        fullScreenLayout: 'split',
     },
     shortcuts: DEFAULT_SHORTCUTS,
 };
 
 function clone(value) {
+    if (typeof structuredClone === 'function') return structuredClone(value);
     return JSON.parse(JSON.stringify(value));
 }
 
@@ -119,6 +121,8 @@ function sanitizeSettings(value) {
     const latitude = Number(weather.latitude);
     const longitude = Number(weather.longitude);
     const news = source.news && typeof source.news === 'object' ? source.news : {};
+    const legacyForumSource = news.communitySource === undefined && news.category === 'community'
+        && ['nodeseek', 'linuxdo'].includes(news.source);
     const wallpaper = source.wallpaper && typeof source.wallpaper === 'object' ? source.wallpaper : {};
     const ticker = source.ticker && typeof source.ticker === 'object' ? source.ticker : {};
     const appearance = source.appearance && typeof source.appearance === 'object' ? source.appearance : {};
@@ -143,7 +147,9 @@ function sanitizeSettings(value) {
         },
         news: {
             category: ['all', 'news', 'foreign', 'tech', 'community'].includes(news.category) ? news.category : 'all',
-            source: String(news.source || 'all').slice(0, 80),
+            source: legacyForumSource ? 'all' : String(news.source || 'all').slice(0, 80),
+            communitySource: ['all', 'nodeseek', 'linuxdo'].includes(news.communitySource)
+                ? news.communitySource : legacyForumSource ? news.source : 'all',
             fontSize: ['sm', 'base', 'lg'].includes(news.fontSize) ? news.fontSize : 'sm',
             importantOnly: Boolean(news.importantOnly),
             autoRefresh: news.autoRefresh !== false,
@@ -163,7 +169,6 @@ function sanitizeSettings(value) {
         },
         appearance: {
             weatherEffects: appearance.weatherEffects !== false,
-            tilt: appearance.tilt !== false,
             ripple: Boolean(appearance.ripple),
             glassGlow: appearance.glassGlow !== false,
             glassRefraction: appearance.glassRefraction !== false,
@@ -181,6 +186,7 @@ function sanitizeSettings(value) {
         layout: {
             newsPanelWidth: Number.isFinite(panelWidth) && panelWidth >= 280 ? Math.min(panelWidth, 10000) : null,
             newsPanelMode: ['compact', 'wide', 'full'].includes(layout.newsPanelMode) ? layout.newsPanelMode : 'compact',
+            fullScreenLayout: ['split', 'single'].includes(layout.fullScreenLayout) ? layout.fullScreenLayout : 'split',
         },
         shortcuts: sanitizeShortcuts(source.shortcuts),
     };

@@ -168,11 +168,7 @@ html.glass-refract .glass-panel {
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(185%) brightness(1.05) url(#glassDisplace);
 }
 
-html.glass-refract #news-panel {
-    --glass-blur: 4px;
-    backdrop-filter: blur(var(--glass-blur)) saturate(150%) brightness(1.06) url(#glassDisplace);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%) brightness(1.06) url(#glassDisplace);
-}
+/* news-panel 高斯模糊与毛玻璃样式由 workspace.css 统一控制 */
 
 /* 浮层与设置抽屉：接入壁纸取色（--wall-rgb）的高模糊深色液态玻璃，
    既保证表单控件的高对比度可读性，又消除硬编码纯黑板砖的割裂感。 */

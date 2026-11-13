@@ -1,8 +1,9 @@
 // ================== 天气与粒子物理引擎 ==================
 // 氛围切换通过 window.__setAmbiance 钩子桥接到 ambience 模块（含未就绪降级）。
-import { getSettings, getEffectiveAppearance, isWidgetVisible } from './settings-store.js';
-import { initForecast } from './forecast.js';
-import { createWeatherScene } from './weather-scene.js';
+import { getSettings, getEffectiveAppearance, isWidgetVisible } from './settings-store.js?v=workspace-20261114a';
+import { initForecast } from './forecast.js?v=workspace-20261114a';
+import { createWeatherScene } from './weather-scene.js?v=workspace-20261114a';
+import { showControlToast } from './toast.js?v=workspace-20261114a';
 
 const scene = createWeatherScene(document.getElementById('weatherCanvas'));
 const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -70,7 +71,6 @@ const filterModes = ['auto', '晴', '阴', '雾', '雨', '雷', '雪'];
 const filterIconKinds = ['auto', 'sun', 'cloudy', 'fog', 'rain', 'storm', 'snow'];
 const filterLabels = ['自动（跟随实况）', '晴', '阴', '雾', '雨', '雷暴', '雪'];
 let currentFilterIndex = 0;
-let filterToastTimer = null;
 
 const WEATHER_SVGS = {
     sun: '<svg class="w-4 h-4 text-amber-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4" fill="currentColor" fill-opacity="0.25"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>',
@@ -95,16 +95,6 @@ function renderWeatherHero(rawText) {
         ? String(rawText || '').replace(/[☀️☁️🌫️🌧️⛈️❄️]\s*/g, '').trim()
         : String(rawText || '').trim();
     infoEl.innerText = cleaned || String(rawText || '');
-}
-
-// 点击滤镜按钮时短暂显示当前模式名，否则用户只看到 emoji 变化猜不出状态
-function showControlToast(text) {
-    const toast = document.getElementById('controlToast');
-    if (!toast) return;
-    toast.textContent = text;
-    toast.classList.add('show');
-    window.clearTimeout(filterToastTimer);
-    filterToastTimer = window.setTimeout(() => toast.classList.remove('show'), 1400);
 }
 
 function toggleWeatherFilter() {

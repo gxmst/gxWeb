@@ -1,5 +1,6 @@
 # 数据与生成文件
 public/*.json
+!public/manifest.json
 public/*.txt
 public/*.jpg
 public/*.tmp

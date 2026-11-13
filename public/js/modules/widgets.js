@@ -1,4 +1,4 @@
-import { getSettings, isQuietScene, isScreenSaver, isWidgetVisible, setScreenSaver } from './settings-store.js';
+import { getSettings, isQuietScene, isScreenSaver, isWidgetVisible, setScreenSaver } from './settings-store.js?v=workspace-20261114a';
 
 const targets = {
     date: '#dateInfo', weather: '#weatherInfoBtn', search: '#search-bar', shortcuts: '#dockRow',
@@ -9,7 +9,20 @@ const targets = {
 export function initWidgets() {
     const root = document.documentElement;
     const recovery = document.getElementById('layoutRecovery');
+    const controls = document.getElementById('controlCenter');
+    const controlsToggle = document.getElementById('controlCenterToggle');
+    const controlsDrawer = document.getElementById('controlCenterDrawer');
     let recoveryTimer;
+
+    function setControlsOpen(open) {
+        if (!controls || !controlsToggle || !controlsDrawer) return;
+        controls.classList.toggle('is-open', open);
+        controlsToggle.setAttribute('aria-expanded', String(open));
+        controlsToggle.setAttribute('aria-label', open ? '收起快捷控制栏' : '展开快捷控制栏');
+        controlsToggle.title = open ? '收起快捷控制栏' : '快捷控制栏';
+        controlsDrawer.inert = !open;
+    }
+
     function sync() {
         Object.entries(targets).forEach(([name, selector]) => {
             const el = document.querySelector(selector);
@@ -25,8 +38,9 @@ export function initWidgets() {
         if (meta) meta.hidden = !isWidgetVisible('date') && !isWidgetVisible('weather');
         const divider = document.getElementById('heroMetaDivider');
         if (divider) divider.hidden = !isWidgetVisible('date') || !isWidgetVisible('weather');
-        const controls = document.getElementById('controlCenter');
-        if (controls) controls.hidden = saver || isQuietScene();
+        const hideControls = saver || isQuietScene();
+        if (controls) controls.hidden = hideControls;
+        if (hideControls) setControlsOpen(false);
         recovery.hidden = !saver && visible.settingsButton;
         document.getElementById('leaveScreenSaver').hidden = !saver;
         document.getElementById('screenSaverBtn').setAttribute('aria-pressed', String(saver));
@@ -41,6 +55,20 @@ export function initWidgets() {
                 root.classList.remove('recovery-visible');
             }
         }, 3000);
+    }
+    if (controls && controlsToggle && controlsDrawer) {
+        controlsToggle.addEventListener('click', event => {
+            event.stopPropagation();
+            setControlsOpen(!controls.classList.contains('is-open'));
+        });
+        document.addEventListener('pointerdown', event => {
+            if (controls.classList.contains('is-open') && !controls.contains(event.target)) {
+                setControlsOpen(false);
+            }
+        }, { passive: true });
+        for (const id of ['settingsBtn', 'screenSaverBtn']) {
+            document.getElementById(id)?.addEventListener('click', () => setControlsOpen(false));
+        }
     }
     document.getElementById('screenSaverBtn').addEventListener('click', () => setScreenSaver(true));
     document.getElementById('settingsScreenSaver').addEventListener('click', () => {
@@ -57,7 +85,10 @@ export function initWidgets() {
     document.addEventListener('keydown', event => {
         revealRecovery();
         const editing = event.target instanceof Element && event.target.closest('input,textarea,select,[contenteditable="true"]');
-        if (event.key === 'Escape' && isScreenSaver()) setScreenSaver(false);
+        if (event.key === 'Escape') {
+            if (isScreenSaver()) setScreenSaver(false);
+            else if (controls?.classList.contains('is-open')) setControlsOpen(false);
+        }
         if (!editing && event.key.toLowerCase() === 's' && !event.ctrlKey && !event.metaKey && !event.altKey) {
             event.preventDefault();
             setScreenSaver(false);
@@ -67,5 +98,6 @@ export function initWidgets() {
     window.addEventListener('gx:settings-changed', event => {
         if (['widgets', 'all'].includes(event.detail?.section)) sync();
     });
+    setControlsOpen(false);
     sync();
 }

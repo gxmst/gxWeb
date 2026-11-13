@@ -1,6 +1,6 @@
 // ================== 辅助交互与快捷键 ==================
-import { getSettings, getEffectiveAppearance, isWidgetVisible } from './settings-store.js';
-import { initNewsPanel } from './news-panel.js';
+import { getEffectiveAppearance, isWidgetVisible } from './settings-store.js?v=workspace-20261114a';
+import { initNewsPanel } from './news-panel.js?v=workspace-20261114a';
 
 // 左上角控制按钮的点击反馈：加一次性 .tapped，动画结束自己摘掉。
 // 用 pointerdown 而不是 click——手指/鼠标一按下就有反应，比等 click 更"跟手"；
@@ -57,9 +57,16 @@ export function initInteractions() {
     const newsListEl = document.getElementById('newsList');
     const bttBtn = document.getElementById('backToTop');
     const aside = document.querySelector('aside');
+    const getListScrollTop = () => {
+        const scrollers = newsListEl.querySelectorAll('.news-split-scroll');
+        if (!scrollers.length) return newsListEl.scrollTop;
+        let maxTop = 0;
+        scrollers.forEach(el => { if (el.scrollTop > maxTop) maxTop = el.scrollTop; });
+        return maxTop;
+    };
     const updateBackToTop = () => {
         const mobile = window.innerWidth < 768 && !document.documentElement.classList.contains('news-panel-full');
-        const progress = mobile ? window.scrollY - aside.offsetTop : newsListEl.scrollTop;
+        const progress = mobile ? window.scrollY - aside.offsetTop : getListScrollTop();
         const visible = progress > 300;
         bttBtn.classList.toggle('opacity-0', !visible);
         bttBtn.classList.toggle('pointer-events-none', !visible);
@@ -67,87 +74,51 @@ export function initInteractions() {
         bttBtn.disabled = !visible;
         bttBtn.setAttribute('aria-hidden', String(!visible));
     };
-    newsListEl.addEventListener('scroll', updateBackToTop, { passive: true });
+    newsListEl.addEventListener('scroll', updateBackToTop, { passive: true, capture: true });
     window.addEventListener('scroll', updateBackToTop, { passive: true });
     window.addEventListener('resize', updateBackToTop);
+    window.addEventListener('gx:panel-layout', updateBackToTop);
     bttBtn.addEventListener('click', () => {
-        if (window.innerWidth < 768 && !document.documentElement.classList.contains('news-panel-full')) window.scrollTo({ top: aside.offsetTop, behavior: 'smooth' });
-        else newsListEl.scrollTo({ top: 0, behavior: 'smooth' });
+        if (window.innerWidth < 768 && !document.documentElement.classList.contains('news-panel-full')) {
+            window.scrollTo({ top: aside.offsetTop, behavior: 'smooth' });
+        } else {
+            const scrollers = newsListEl.querySelectorAll('.news-split-scroll');
+            if (scrollers.length) scrollers.forEach(el => el.scrollTo({ top: 0, behavior: 'smooth' }));
+            else newsListEl.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     });
 
     initNewsPanel();
 
-    // 玻璃折射：仅在浏览器支持 url() backdrop-filter、非省电模式、且非窄屏时启用
+    // 玻璃折射：仅在浏览器支持 url() backdrop-filter、非省电模式、且非窄屏时启用，
+    // 并在关闭或页面后台时暂停 SVG SMIL <animate> 避免空耗帧率。
     const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
     const glassSupported = Boolean(window.CSS && CSS.supports &&
             (CSS.supports('backdrop-filter', 'url(#glassDisplace)') ||
              CSS.supports('-webkit-backdrop-filter', 'url(#glassDisplace)')));
+    const glassDisplaceSvg = document.getElementById('glassDisplace')?.closest('svg');
 
-    function syncGlassRefraction(settings = getSettings()) {
-        const enabled = glassSupported && !motionPreference.matches &&
-            window.innerWidth >= 768 && getEffectiveAppearance().glassRefraction && !getEffectiveAppearance().powerSaving;
-        document.documentElement.classList.toggle('glass-refract', enabled);
-    }
-
-    syncGlassRefraction();
-
-    // 指针视差 3D 倾斜：玻璃面板随光标做小角度立体翻转（桌面 + 非省电才启用）
-    const tiltElements = Array.from(document.querySelectorAll('[data-tilt]'));
-    const tiltFrames = new WeakMap();
-
-    function canTilt() {
+    function syncGlassRefraction() {
         const appearance = getEffectiveAppearance();
-        return appearance.tilt && !appearance.powerSaving &&
-            !motionPreference.matches && window.innerWidth >= 768;
+        const enabled = glassSupported && !motionPreference.matches &&
+            window.innerWidth >= 768 && appearance.glassRefraction && !appearance.powerSaving;
+        document.documentElement.classList.toggle('glass-refract', enabled);
+        if (glassDisplaceSvg) {
+            if (enabled && !document.hidden) {
+                if (typeof glassDisplaceSvg.unpauseAnimations === 'function') glassDisplaceSvg.unpauseAnimations();
+            } else if (typeof glassDisplaceSvg.pauseAnimations === 'function') {
+                glassDisplaceSvg.pauseAnimations();
+            }
+        }
     }
 
-    function clearTilt() {
-        tiltElements.forEach(el => {
-            const frame = tiltFrames.get(el);
-            if (frame) cancelAnimationFrame(frame);
-            tiltFrames.delete(el);
-            el.classList.remove('tilting');
-            el.style.transform = '';
-        });
-    }
-
-    tiltElements.forEach(el => {
-            const max = parseFloat(el.dataset.tilt) || 5;
-            el.addEventListener('pointermove', (e) => {
-                if (!canTilt()) return;
-                const r = el.getBoundingClientRect();
-                const px = (e.clientX - r.left) / r.width - 0.5;   // -0.5 ~ 0.5
-                const py = (e.clientY - r.top) / r.height - 0.5;
-                const previousFrame = tiltFrames.get(el);
-                if (previousFrame) cancelAnimationFrame(previousFrame);
-                tiltFrames.set(el, requestAnimationFrame(() => {
-                    el.classList.add('tilting');
-                    // 光标在右→绕 Y 正转；在下→绕 X 负转，符合实体板直觉
-                    el.style.transform =
-                        `rotateX(${(-py * max).toFixed(2)}deg) rotateY(${(px * max).toFixed(2)}deg)`;
-                    tiltFrames.delete(el);
-                }));
-            });
-            el.addEventListener('pointerleave', () => {
-                const frame = tiltFrames.get(el);
-                if (frame) cancelAnimationFrame(frame);
-                tiltFrames.delete(el);
-                el.classList.remove('tilting');
-                el.style.transform = '';
-            });
-    });
-
-    const syncEffects = (settings = getSettings()) => {
-        syncGlassRefraction(settings);
-        if (!canTilt()) clearTilt();
-    };
-    window.addEventListener('resize', () => {
-        syncEffects();
-    });
+    const syncEffects = () => syncGlassRefraction();
+    syncEffects();
+    window.addEventListener('resize', syncEffects);
+    document.addEventListener('visibilitychange', syncEffects);
     window.addEventListener('gx:settings-changed', event => {
         const section = event.detail?.section;
-        const settings = event.detail?.settings || getSettings();
-        if (section === 'appearance' || section === 'widgets' || section === 'all') syncEffects(settings);
+        if (section === 'appearance' || section === 'widgets' || section === 'all') syncEffects();
     });
     const handleMotionPreference = () => syncEffects();
     if (typeof motionPreference.addEventListener === 'function') {

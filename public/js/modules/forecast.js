@@ -1,4 +1,4 @@
-import { getSettings, isWidgetVisible } from './settings-store.js';
+import { getSettings, isWidgetVisible } from './settings-store.js?v=workspace-20261114a';
 
 export function forecastDescription(code) {
     if(code === 0) return {label:'晴',icon:'☀'};
@@ -80,7 +80,7 @@ export function initForecast() {
             const key=`${latitude}:${longitude}`;const cached=cache.get(key);
             if(!force && cached && Date.now()-cached.time<300000) {render(cached.rows);status.textContent='Open-Meteo · 五分钟内缓存';return;}
             const url=new URL('./api/weather/forecast',window.location.href);
-            for(const [name,value] of Object.entries({latitude,longitude,daily:'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',forecast_days:7,timezone:'Asia/Shanghai'})) url.searchParams.set(name,String(value));
+            for(const [name,value] of Object.entries({latitude,longitude,daily:'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',forecast_days:7,timezone:'auto'})) url.searchParams.set(name,String(value));
             const response=await fetch(url,{signal:active.signal,cache:'no-cache'});
             if(!response.ok) throw new Error('天气服务暂不可用，请稍后重试');
             const rows=normalizeForecast(await response.json());if(active.signal.aborted) return;

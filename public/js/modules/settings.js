@@ -5,9 +5,9 @@ import {
     normalizeShortcutUrl,
     resetSettings,
     updateSettings,
-} from './settings-store.js';
-import { applyFavorite, removeFavorite, requestFavorites } from './wallpaper.js?v=workspace-20261108a';
-import { initAdminSettings } from './admin-settings.js';
+} from './settings-store.js?v=workspace-20261114a';
+import { applyFavorite, removeFavorite, requestFavorites } from './wallpaper.js?v=workspace-20261114a';
+import { initAdminSettings } from './admin-settings.js?v=workspace-20261114a';
 
 let shortcutTemplates = new Map();
 let availableTickers = [];
@@ -22,7 +22,6 @@ function applyAppearanceClasses(settings = getSettings()) {
     const root = document.documentElement;
     const appearance = getEffectiveAppearance();
     root.classList.toggle('weather-effects-off', !appearance.weatherEffects);
-    root.classList.toggle('tilt-off', !appearance.tilt);
     root.classList.toggle('glass-glow-off', !appearance.glassGlow);
     root.classList.toggle('power-saving', appearance.powerSaving);
     const typography = settings.typography;
@@ -387,25 +386,31 @@ function renderWallpaperFavorites() {
 function renderNewsSources(settings = getSettings()) {
     const select = document.getElementById('settingsNewsSource');
     if (!select) return;
+    const community = settings.news.category === 'community';
+    const selected = community ? settings.news.communitySource : settings.news.source;
+    const sources = community ? [
+        { value: 'nodeseek', label: 'NodeSeek' },
+        { value: 'linuxdo', label: 'Linux DO' },
+    ] : availableNewsSources;
     const fragment = document.createDocumentFragment();
     const all = document.createElement('option');
     all.value = 'all';
-    all.textContent = '全部来源';
+    all.textContent = community ? '全部论坛' : '全部来源';
     fragment.appendChild(all);
-    availableNewsSources.forEach(source => {
+    sources.forEach(source => {
         const option = document.createElement('option');
         option.value = source.value;
         option.textContent = source.label;
         fragment.appendChild(option);
     });
-    if (settings.news.source !== 'all' && !availableNewsSources.some(item => item.value === settings.news.source)) {
+    if (selected !== 'all' && !sources.some(item => item.value === selected)) {
         const stored = document.createElement('option');
-        stored.value = settings.news.source;
-        stored.textContent = settings.news.source;
+        stored.value = selected;
+        stored.textContent = selected;
         fragment.appendChild(stored);
     }
     select.replaceChildren(fragment);
-    select.value = settings.news.source;
+    select.value = selected;
 }
 
 function syncControls(settings = getSettings()) {
@@ -428,7 +433,6 @@ function syncControls(settings = getSettings()) {
     setChecked('settingsLinuxDo', !settings.news.hiddenSources.includes('linuxdo'));
     setValue('settingsWallpaperRotation', settings.wallpaper.rotation);
     setChecked('settingsWeatherEffects', settings.appearance.weatherEffects);
-    setChecked('settingsTilt', settings.appearance.tilt);
     setChecked('settingsRipple', settings.appearance.ripple);
     setChecked('settingsGlassGlow', settings.appearance.glassGlow);
     setChecked('settingsGlassRefraction', settings.appearance.glassRefraction);
@@ -594,7 +598,10 @@ function bindControls() {
     });
     document.getElementById('settingsSearchEngine')?.addEventListener('change', event => updateSettings('search', { engine: event.target.value }));
     document.getElementById('settingsNewsCategory')?.addEventListener('change', event => updateSettings('news', { category: event.target.value }));
-    document.getElementById('settingsNewsSource')?.addEventListener('change', event => updateSettings('news', { source: event.target.value }));
+    document.getElementById('settingsNewsSource')?.addEventListener('change', event => {
+        const key = getSettings().news.category === 'community' ? 'communitySource' : 'source';
+        updateSettings('news', { [key]: event.target.value });
+    });
     document.getElementById('settingsNewsFontSize')?.addEventListener('change', event => updateSettings('news', { fontSize: event.target.value }));
     document.getElementById('settingsImportantOnly')?.addEventListener('change', event => updateSettings('news', { importantOnly: event.target.checked }));
     document.getElementById('settingsAutoRefresh')?.addEventListener('change', event => updateSettings('news', { autoRefresh: event.target.checked }));
@@ -621,7 +628,6 @@ function bindControls() {
         }
     });
     document.getElementById('settingsWeatherEffects')?.addEventListener('change', event => updateSettings('appearance', { weatherEffects: event.target.checked }));
-    document.getElementById('settingsTilt')?.addEventListener('change', event => updateSettings('appearance', { tilt: event.target.checked }));
     document.getElementById('settingsRipple')?.addEventListener('change', event => updateSettings('appearance', { ripple: event.target.checked }));
     document.getElementById('settingsGlassGlow')?.addEventListener('change', event => updateSettings('appearance', { glassGlow: event.target.checked }));
     document.getElementById('settingsGlassRefraction')?.addEventListener('change', event => updateSettings('appearance', { glassRefraction: event.target.checked }));

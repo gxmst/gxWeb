@@ -1,0 +1,11 @@
+{
+    "name": "gxWeb 实时信息工作台",
+    "short_name": "gxWeb",
+    "start_url": "./",
+    "display": "standalone",
+    "background_color": "#0f172a",
+    "theme_color": "#0f172a",
+    "icons": [
+        { "src": "./favicon.png", "sizes": "256x243", "type": "image/png" }
+    ]
+}

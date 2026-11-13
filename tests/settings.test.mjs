@@ -51,6 +51,30 @@ test('community preferences validate sources and persist separately from widget 
     assert.equal(JSON.parse(values.get('gxSettingsV1')).widgets.weather, false);
 });
 
+test('forum source persists independently of the general news source and rejects unknown forums', () => {
+    settings.updateSettings('news', { source: 'BBC', communitySource: 'linuxdo' });
+    assert.equal(settings.getSettings().news.source, 'BBC');
+    assert.equal(settings.getSettings().news.communitySource, 'linuxdo');
+    assert.equal(JSON.parse(values.get('gxSettingsV1')).news.communitySource, 'linuxdo');
+    settings.updateSettings('news', { communitySource: 'unknown' });
+    assert.equal(settings.getSettings().news.communitySource, 'all');
+    assert.equal(settings.getSettings().news.source, 'BBC');
+    settings.updateSettings('news', { source: 'nodeseek', communitySource: 'unknown' });
+    assert.equal(settings.getSettings().news.communitySource, 'all');
+});
+
+test('legacy community source migrates without filtering unrelated categories', async () => {
+    const original = values.get('gxSettingsV1');
+    try {
+        values.set('gxSettingsV1', JSON.stringify({ news: { category: 'community', source: 'linuxdo' } }));
+        const migrated = await import('../public/js/modules/settings-store.js?legacy-forum-source');
+        assert.equal(migrated.getSettings().news.communitySource, 'linuxdo');
+        assert.equal(migrated.getSettings().news.source, 'all');
+    } finally {
+        values.set('gxSettingsV1', original);
+    }
+});
+
 test('typography choices persist and reject unknown font identifiers', () => {
     settings.updateSettings('typography', { interfaceFont: 'serif', newsFont: 'wenkai', clockFont: 'system' });
     assert.equal(JSON.parse(values.get('gxSettingsV1')).typography.newsFont, 'wenkai');
@@ -62,8 +86,10 @@ test('saved width adapts to smaller screens while full mode covers the viewport'
     assert.equal(panel.panelWidth({newsPanelMode: 'wide', newsPanelWidth: 1400}, 900), 852);
     assert.equal(panel.panelWidth({newsPanelMode: 'full'}, 390), 390);
     assert.equal(panel.panelWidth({newsPanelMode: 'compact'}, 1440), 450);
-    settings.updateSettings('layout', { newsPanelMode: 'invalid', newsPanelWidth: 99999 });
-    assert.deepEqual(settings.getSettings().layout, { newsPanelMode: 'compact', newsPanelWidth: 10000 });
+    settings.updateSettings('layout', { newsPanelMode: 'invalid', newsPanelWidth: 99999, fullScreenLayout: 'bogus' });
+    assert.deepEqual(settings.getSettings().layout, { newsPanelMode: 'compact', newsPanelWidth: 10000, fullScreenLayout: 'split' });
+    settings.updateSettings('layout', { fullScreenLayout: 'single' });
+    assert.equal(settings.getSettings().layout.fullScreenLayout, 'single');
 });
 
 test('pointer resize snaps to compact, wide and full reading', () => {
@@ -79,12 +105,16 @@ test('keyboard resize expands immediately and can return from full mode', () => 
     assert.deepEqual(panel.stepPanelWidth({newsPanelMode:'full'},1440,-100),{newsPanelMode:'wide',newsPanelWidth:1340});
 });
 
-test('hero shrinks with the panel and returns to full size when news is disabled',()=>{
-    const compact=panel.heroGeometry(1440,450);
-    const wide=panel.heroGeometry(1440,930);
-    assert.equal(compact.scale,1);assert.equal(wide.width,486);assert.ok(wide.scale<compact.scale);
-    assert.equal(panel.heroGeometry(1440,930,false).scale,1);
-    assert.equal(panel.heroGeometry(1440,930,false).width,1440);
+test('hero geometry derives responsive layout tier from available width', () => {
+    const normal = panel.heroGeometry(1440, 450);
+    const compact = panel.heroGeometry(1440, 930);
+    const minimal = panel.heroGeometry(1440, 1100);
+    assert.equal(normal.tier, 'normal');
+    assert.equal(compact.width, 486);
+    assert.equal(compact.tier, 'compact');
+    assert.equal(minimal.tier, 'minimal');
+    assert.equal(panel.heroGeometry(1440, 930, false).tier, 'normal');
+    assert.equal(panel.heroGeometry(1440, 930, false).width, 1440);
 });
 
 test('density and panel opacity validate independently',()=>{
@@ -136,6 +166,19 @@ test('snow builds local hills, survives geometry changes, and caps depth',()=>{
     for(let i=0;i<100;i++)weatherPhysics.depositSnow(resized,320,3);
     assert.equal(weatherPhysics.snowHeightAt(resized,320),18);
     assert.equal(weatherPhysics.snowHeightAt(resized,0),0);
+});
+
+test('relaxSnowpack spreads steep mounds horizontally and settles gently without negatives', () => {
+    const pack = weatherPhysics.createSnowpack(320);
+    for (let i = 0; i < 12; i++) weatherPhysics.depositSnow(pack, 160, 2, 16);
+    const peakBefore = weatherPhysics.snowHeightAt(pack, 160);
+    const shoulderBefore = weatherPhysics.snowHeightAt(pack, 136);
+    for (let step = 0; step < 12; step++) weatherPhysics.relaxSnowpack(pack, 0.05, 16);
+    const peakAfter = weatherPhysics.snowHeightAt(pack, 160);
+    const shoulderAfter = weatherPhysics.snowHeightAt(pack, 136);
+    assert.ok(peakAfter < peakBefore);
+    assert.ok(shoulderAfter > shoulderBefore);
+    assert.ok(pack.depth.every(value => value >= 0 && value <= 18));
 });
 
 test('rain impacts throw short lived droplets to both sides',()=>{

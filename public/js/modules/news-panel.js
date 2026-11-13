@@ -1,4 +1,4 @@
-import { getSettings, updateSettings, isWidgetVisible } from './settings-store.js';
+import { getSettings, updateSettings, isWidgetVisible } from './settings-store.js?v=workspace-20261114a';
 
 export function panelBounds(viewport) {
     const maximum = Math.max(280, viewport - 48);
@@ -12,10 +12,13 @@ export function panelWidth(layout, viewport) {
     return Math.max(bounds.minimum, Math.min(bounds.maximum, layout.newsPanelWidth || fallback));
 }
 
-export function heroGeometry(viewport, width, active=true) {
-    const available = active ? Math.max(0,viewport-width-24) : viewport;
-    const base = Math.max(1,viewport-panelBounds(viewport).compact-24-64);
-    return {width:available, base, scale:active ? Math.max(0,Math.min(1,(available-64)/base)) : 1};
+const SPLIT_ICON = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><line x1="8" y1="2.5" x2="8" y2="13.5"/></svg>';
+const SINGLE_ICON = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="2.5" width="10" height="11" rx="2"/><line x1="5.5" y1="6" x2="10.5" y2="6"/><line x1="5.5" y1="9.5" x2="10.5" y2="9.5"/></svg>';
+
+export function heroGeometry(viewport, width, active = true) {
+    const available = active ? Math.max(0, viewport - width - 24) : viewport;
+    const tier = available < 360 ? 'minimal' : available < 540 ? 'compact' : 'normal';
+    return { width: available, tier };
 }
 
 export function finishPanelDrag(width, viewport) {
@@ -40,6 +43,7 @@ export function initNewsPanel() {
     const grip = document.getElementById('newsPanelDrag');
     const edge = document.getElementById('newsPanelEdge');
     const expand = document.getElementById('newsPanelExpand');
+    const layoutToggle = document.getElementById('newsPanelLayoutToggle');
     const restore = document.getElementById('newsPanelRestore');
     const settingsButton = document.getElementById('newsPanelSettings');
     const covered = [document.querySelector('main'), document.getElementById('controlCenter'), document.getElementById('bottom-ticker')];
@@ -48,21 +52,31 @@ export function initNewsPanel() {
     let suppressClick = false;
 
     const desktop = () => window.innerWidth >= 768;
+    const splitSupported = () => window.innerWidth >= 1024;
     function syncGeometry(width) {
-        const geometry = heroGeometry(window.innerWidth,width,isWidgetVisible('news'));
+        const geometry = heroGeometry(window.innerWidth, width, isWidgetVisible('news'));
         document.body.style.setProperty('--main-width', `${geometry.width}px`);
-        document.body.style.setProperty('--hero-base-width', `${isWidgetVisible('news') ? geometry.base : Math.max(1,window.innerWidth-64)}px`);
-        document.body.style.setProperty('--hero-scale', String(geometry.scale));
+        root.dataset.heroTier = geometry.tier;
     }
     function sync() {
         const layout = getSettings().layout;
         const active = isWidgetVisible('news');
         const full = active && layout.newsPanelMode === 'full';
         const wide = active && desktop() && layout.newsPanelMode === 'wide';
+        const desktopFull = full && splitSupported();
+        const splitLayout = (layout.fullScreenLayout || 'split') === 'split';
         root.classList.toggle('news-panel-full', full);
         root.classList.toggle('news-panel-wide', wide);
         aside.style.setProperty('--news-panel-width', `${panelWidth(layout, window.innerWidth)}px`);
-        syncGeometry(panelWidth(layout,window.innerWidth));
+        syncGeometry(panelWidth(layout, window.innerWidth));
+        if (layoutToggle) {
+            layoutToggle.hidden = !desktopFull;
+            layoutToggle.setAttribute('aria-pressed', String(splitLayout));
+            const label = splitLayout ? '双栏阅读中，点击切换单栏居中' : '单栏居中阅读中，点击切换双栏';
+            layoutToggle.setAttribute('aria-label', label);
+            layoutToggle.title = label;
+            layoutToggle.innerHTML = splitLayout ? SPLIT_ICON : SINGLE_ICON;
+        }
         restore.hidden = !full && !wide;
         settingsButton.hidden = !full;
         expand.setAttribute('aria-pressed', String(full));
@@ -138,6 +152,10 @@ export function initNewsPanel() {
     grip.addEventListener('keydown',keyboardResize);
     edge.addEventListener('keydown',keyboardResize);
     expand.addEventListener('click', toggleFull);
+    layoutToggle?.addEventListener('click', () => {
+        const current = getSettings().layout.fullScreenLayout || 'split';
+        updateSettings('layout', { fullScreenLayout: current === 'split' ? 'single' : 'split' });
+    });
     restore.addEventListener('click', () => { reset(); grip.focus(); });
     settingsButton.addEventListener('click', () => window.dispatchEvent(new CustomEvent('gx:open-settings')));
     document.addEventListener('keydown', event => {

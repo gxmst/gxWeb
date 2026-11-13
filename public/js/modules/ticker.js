@@ -1,15 +1,25 @@
 // ================== 底部行情双行排版 ==================
 // 数字滚动 / sparkline 画入通过 window.__animateNumber / __drawInSparkline 桥接
 // （由 ambience 模块初始化时挂载，未就绪时各调用点自带降级）。
-import { getSettings, isWidgetVisible, getEffectiveAppearance } from './settings-store.js';
+import { getSettings, isWidgetVisible, getEffectiveAppearance } from './settings-store.js?v=workspace-20261114a';
 
 const SPARKLINE_MIN_POINTS = 3;
 const TICKER_POLL_INTERVAL = 20000;
+const SVG_NS = 'http://www.w3.org/2000/svg';
 let tickerPollTimer = null;
 let tickerRequestInFlight = false;
+let serverTickerInterval = 60;
 
-function buildSparklineSVG(history, isUp, symbol = '') {
-    if (!history || history.length < 2) return '';
+function svgEl(tag, attrs) {
+    const node = document.createElementNS(SVG_NS, tag);
+    for (const [key, value] of Object.entries(attrs)) {
+        node.setAttribute(key, String(value));
+    }
+    return node;
+}
+
+function buildSparklineNode(history, isUp, symbol = '') {
+    if (!history || history.length < 2) return null;
     const w = 44, h = 15;
     const min = Math.min(...history), max = Math.max(...history);
     const range = max - min || 1;
@@ -23,15 +33,18 @@ function buildSparklineSVG(history, isUp, symbol = '') {
     const [lastX, lastY] = coords[coords.length - 1];
     const color = isUp ? '#fb7185' : '#34d399';
     const gradId = `sg-${String(symbol).replace(/[^a-zA-Z0-9_-]/g, '') || (isUp ? 'u' : 'd')}`;
-    return `<svg class="sparkline-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
-        `<defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">` +
-        `<stop offset="0%" stop-color="${color}" stop-opacity="0.34"/>` +
-        `<stop offset="100%" stop-color="${color}" stop-opacity="0"/>` +
-        `</linearGradient></defs>` +
-        `<polygon points="${areaPts}" fill="url(#${gradId})"/>` +
-        `<polyline class="sparkline-poly" points="${pts}" stroke="${color}" opacity="0.88"/>` +
-        `<circle cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="1.4" fill="${color}"/>` +
-        `</svg>`;
+
+    const svg = svgEl('svg', { class: 'sparkline-svg', width: w, height: h, viewBox: `0 0 ${w} ${h}` });
+    const defs = svgEl('defs', {});
+    const gradient = svgEl('linearGradient', { id: gradId, x1: '0', y1: '0', x2: '0', y2: '1' });
+    gradient.appendChild(svgEl('stop', { offset: '0%', 'stop-color': color, 'stop-opacity': '0.34' }));
+    gradient.appendChild(svgEl('stop', { offset: '100%', 'stop-color': color, 'stop-opacity': '0' }));
+    defs.appendChild(gradient);
+    svg.appendChild(defs);
+    svg.appendChild(svgEl('polygon', { points: areaPts, fill: `url(#${gradId})` }));
+    svg.appendChild(svgEl('polyline', { class: 'sparkline-poly', points: pts, stroke: color, opacity: '0.88' }));
+    svg.appendChild(svgEl('circle', { cx: lastX.toFixed(1), cy: lastY.toFixed(1), r: '1.4', fill: color }));
+    return svg;
 }
 
 async function fetchTickerData() {
@@ -115,8 +128,13 @@ async function fetchTickerData() {
             });
         }
 
+        const cardBySymbol = new Map();
+        for (const child of container.children) {
+            if (child.dataset?.symbol) cardBySymbol.set(child.dataset.symbol, child);
+        }
+
         items.forEach(item => {
-            const el = Array.from(container.children).find(element => element.dataset.symbol === String(item.symbol));
+            const el = cardBySymbol.get(String(item.symbol));
             if (el) {
                 const nameEl = el.querySelector('.name-val');
                 if (nameEl) nameEl.innerText = item.name;
@@ -143,7 +161,9 @@ async function fetchTickerData() {
                     const sig = item.price_history.join(',');
                     if (sparkContainer.dataset.sig !== sig) {
                         sparkContainer.dataset.sig = sig;
-                        sparkContainer.innerHTML = DOMPurify.sanitize(buildSparklineSVG(item.price_history, isUp, item.symbol));
+                        const sparkNode = buildSparklineNode(item.price_history, isUp, item.symbol);
+                        if (sparkNode) sparkContainer.replaceChildren(sparkNode);
+                        else sparkContainer.replaceChildren();
                         if (window.__drawInSparkline) window.__drawInSparkline(sparkContainer);
                     }
                 }
@@ -173,26 +193,45 @@ function setTickerStatus(kind, label, title) {
     window.dispatchEvent(new CustomEvent('gx:status-change', { detail: { source: 'ticker', kind } }));
 }
 
+export function tickerStatusPresentation(status, intervalSeconds = 60, now = Date.now() / 1000) {
+    const interval = Number(intervalSeconds);
+    const validInterval = Number.isInteger(interval) && interval >= 60 && interval <= 3600 ? interval : 60;
+    const staleAfter = Math.max(300, validInterval + 180);
+    const updatedAt = Number(status?.updated_at);
+    if (!Number.isFinite(updatedAt) || updatedAt <= 0 || now - updatedAt > staleAfter) {
+        return { kind: 'offline', label: '离线', title: `行情状态超过 ${staleAfter / 60} 分钟未更新` };
+    }
+    if (status.status === 'failed') {
+        return { kind: 'offline', label: '失败', title: '行情源失败，当前显示上次成功数据' };
+    }
+    if (status.status === 'degraded') {
+        return { kind: 'degraded', label: '降级', title: '行情源降级，部分使用备用源' };
+    }
+    return { kind: 'online', label: 'LIVE', title: '行情源正常' };
+}
+
 async function fetchTickerStatus() {
     try {
-        const resp = await fetch('./ticker-status.json', { cache: 'no-cache' });
+        // 读取实际服务端配置；等待下一轮期间修改频率也能立即影响过期判断。
+        // 配置接口失败时沿用最近读到的间隔，避免临时故障让正常等待被误判为离线。
+        const [resp, intervalSeconds] = await Promise.all([
+            fetch('./ticker-status.json', { cache: 'no-cache' }),
+            fetch('./api/admin/status', { cache: 'no-store' })
+                .then(async response => {
+                    if (response.ok) {
+                        const interval = (await response.json()).settings?.intervals?.fast;
+                        if (Number.isInteger(interval) && interval >= 60 && interval <= 3600) serverTickerInterval = interval;
+                    }
+                    return serverTickerInterval;
+                })
+                .catch(() => serverTickerInterval),
+        ]);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const ts = await resp.json();
         if (!ts || !ts.status) return;
 
-        const ageMinutes = ts.updated_at ? (Date.now() / 1000 - ts.updated_at) / 60 : 0;
-        if (ageMinutes > 5) {
-            setTickerStatus('offline', '离线', '行情数据超过5分钟未更新');
-            return;
-        }
-
-        if (ts.status === 'failed') {
-            setTickerStatus('offline', '失败', '行情源失败，当前显示上次成功数据');
-        } else if (ts.status === 'degraded') {
-            setTickerStatus('degraded', '降级', '行情源降级，部分使用备用源');
-        } else {
-            setTickerStatus('online', 'LIVE', '行情源正常');
-        }
+        const presentation = tickerStatusPresentation(ts, intervalSeconds);
+        setTickerStatus(presentation.kind, presentation.label, presentation.title);
     } catch {
         setTickerStatus('offline', '断连', '行情状态接口不可用');
     }

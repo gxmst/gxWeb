@@ -13,10 +13,12 @@ services:
       - no-new-privileges:true
     volumes:
       - ./spider.py:/app/spider.py:ro
+      - ./crawler:/app/crawler:ro
       - ./requirements.txt:/app/requirements.txt:ro
       - ./public:/app/public
       - ./runtime_config.py:/app/runtime_config.py:ro
       - crawler-state:/app/state:ro
+      - spider-cache:/app/cache
     environment:
       - TZ=Asia/Shanghai
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
@@ -28,15 +30,13 @@ services:
       - FORUM_POLL_INTERVAL_SECONDS=${FORUM_POLL_INTERVAL_SECONDS:-300}
       - FORUM_ITEMS_PER_SOURCE=${FORUM_ITEMS_PER_SOURCE:-30}
       - CRAWLER_CONFIG_PATH=/app/state/crawler-settings.json
+      - SPIDER_CACHE_DIR=/app/cache
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
     # 健康检查：探 heartbeat 文件，快线程等待抓取时也每分钟更新。
-    # 不再探 finance-news.json，因为所有数据源同时挂掉时它不会更新——
-    # Docker 只会标记 unhealthy，不会仅因 health 状态自动重启容器。
-    # 数据新鲜度由 ticker-status.json 等业务文件单独监控。
     healthcheck:
       test: ["CMD", "python", "-c", "import os,time,sys; p='/app/public/heartbeat.txt'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p) < 300 else 1)"]
       interval: 60s
@@ -60,11 +60,23 @@ services:
       - crawler-state:/app/state
     environment:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - ADMIN_COOKIE_SECURE=${ADMIN_COOKIE_SECURE:-true}
       - CRAWLER_CONFIG_PATH=/app/state/crawler-settings.json
       - WEATHER_LATITUDE=${WEATHER_LATITUDE:-41.80}
       - WEATHER_LONGITUDE=${WEATHER_LONGITUDE:-123.43}
       - WEATHER_CITY=${WEATHER_CITY:-默认城市}
       - FORUM_POLL_INTERVAL_SECONDS=${FORUM_POLL_INTERVAL_SECONDS:-300}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:1884/api/admin/status', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # 前端 Web 服务 (Nginx)
   web:
@@ -84,10 +96,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    # 健康检查：探首页可访问性。
-    # 用 127.0.0.1 而非 localhost——容器内 localhost 可能先解析到 IPv6 ::1，
-    # 而 nginx `listen 80;` 只监听 IPv4，会导致 wget 连接被拒、误判 unhealthy。
-    # busybox 版 wget 不支持 --spider/--tries，用 -q -O /dev/null。
+    # 健康检查：探首页可访问性（用 127.0.0.1 避开容器 IPv6 解析）。
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/"]
       interval: 30s
@@ -100,3 +109,4 @@ services:
 
 volumes:
   crawler-state:
+  spider-cache:

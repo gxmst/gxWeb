@@ -21,16 +21,42 @@ export function snowHeightAt(pack,x) {
     return pack.depth[low]+(pack.depth[high]-pack.depth[low])*(position-low);
 }
 
-export function depositSnow(pack,x,radius) {
-    const spread=12+radius*3;
-    for(let i=0;i<pack.depth.length;i++) {
-        const local=i/(pack.depth.length-1)*pack.width;
-        const distance=Math.abs(local-x);
-        if(distance>spread) continue;
-        const edge=Math.min(1,local/12,(pack.width-local)/12);
-        const amount=(0.9+radius*0.22)*Math.exp(-3*(distance/spread)**2)*Math.max(0,edge);
-        pack.depth[i]=Math.min(18,pack.depth[i]+amount);
+export function depositSnow(pack, x, radius, cornerRadius = 0) {
+    const spread = 12 + radius * 3;
+    const taper = Math.max(12, cornerRadius * 0.9);
+    for (let i = 0; i < pack.depth.length; i++) {
+        const local = i / (pack.depth.length - 1) * pack.width;
+        const distance = Math.abs(local - x);
+        if (distance > spread) continue;
+        const edge = Math.min(1, local / taper, (pack.width - local) / taper);
+        const amount = (0.9 + radius * 0.22) * Math.exp(-3 * (distance / spread) ** 2) * Math.max(0, edge);
+        pack.depth[i] = Math.min(18, pack.depth[i] + amount);
     }
+}
+
+export function relaxSnowpack(pack, dt, cornerRadius = 0, meltRate = 0.06) {
+    const depth = pack?.depth;
+    const length = depth?.length || 0;
+    if (!length || dt <= 0) return;
+    if (!pack._scratch || pack._scratch.length !== length) {
+        pack._scratch = new Float32Array(length);
+    }
+    const next = pack._scratch;
+    const blend = Math.min(0.2, dt * 1.8);
+    const melt = Math.max(0, meltRate) * dt;
+    const taper = Math.max(12, cornerRadius * 0.9);
+
+    next[0] = Math.max(0, depth[0] * 0.85 - melt);
+    next[length - 1] = Math.max(0, depth[length - 1] * 0.85 - melt);
+    for (let i = 1; i < length - 1; i++) {
+        const local = i / (length - 1) * pack.width;
+        const edge = Math.max(0, Math.min(1, local / taper, (pack.width - local) / taper));
+        const neighborAvg = 0.25 * depth[i - 1] + 0.5 * depth[i] + 0.25 * depth[i + 1];
+        const smoothed = depth[i] + (neighborAvg - depth[i]) * blend - melt;
+        const maxAtX = 18 * Math.max(0.15, edge);
+        next[i] = Math.max(0, Math.min(maxAtX, smoothed));
+    }
+    depth.set(next);
 }
 
 export function splashDroplets(x,y,random=Math.random) {

@@ -18,10 +18,11 @@ RUN groupadd --gid "${APP_GID}" app \
     && useradd --uid "${APP_UID}" --gid "${APP_GID}" --create-home \
         --shell /usr/sbin/nologin app
 
+COPY --chown=app:app crawler /app/crawler
 COPY --chown=app:app spider.py /app/spider.py
 COPY --chown=app:app runtime_config.py control_api.py /app/
 
-RUN mkdir -p /app/public/favorite /app/state \
+RUN mkdir -p /app/public/favorite /app/state /app/cache \
     && chown -R app:app /app
 
 USER app:app

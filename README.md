@@ -18,7 +18,7 @@
 - 浏览器设置中心：可指定天气城市、调整资讯默认项、管理壁纸收藏、编辑快捷入口和行情顺序，并控制视觉效果与省电模式。
 - 控件独立开关：日期、天气、搜索、快捷入口、资讯、行情及控制按钮可分别隐藏；选择保存在当前浏览器。
 - 一键屏保：只显示壁纸和时间，退出后恢复原配置。鼠标移动/手机轻触可唤出入口，`Esc` 退出屏保，`S` 打开设置。全部控件关闭时也能唤回设置。
-- 社区订阅：接入 NodeSeek 与 Linux DO 官方公开 RSS，按帖子显示标题、摘要、分类和原帖链接；在“社区”分类浏览，在设置里分别开关来源。
+- 社区订阅：接入 NodeSeek 与 Linux DO 官方公开 RSS；“社区”使用居中单列、标题优先的阅读布局，摘要默认最多两行，鼠标悬停展开、移开收起，手机可轻触展开。顶部可切换论坛来源，点击标题打开原帖；在设置里分别开关来源。
 - 阅读偏好：紧凑、标准、舒展三档密度与面板不透明度；资讯支持未读筛选和收藏副本，保存在当前浏览器。
 - 七天天气：点击天气按钮展开当前城市预报，显示最高/最低温与降水概率。
 - 抓取管理：密码解锁后可在前端调整各后台任务的实际频率，配置跨容器重启保留。
@@ -158,10 +158,10 @@ npm run check      # 校验 vendor、CSS 产物和 JavaScript 语法
 
 开发时也可以用 `npm run watch:css` 自动监听重建。
 
-- Tailwind 配置：`tailwind.config.js`（content 扫描 `public/index.html`、`public/js/` 和 `spider.py`）
+- Tailwind 配置：`tailwind.config.cjs`（content 扫描 `public/index.html`、`public/js/`、`spider.py` 和 `crawler/`）
 - 编译入口：`build/tailwind-input.css`
 - `node_modules/` 不提交；`app.css` 必须提交
-- DOMPurify 以精确版本记录在 `package.json`；升级版本后运行 `npm run vendor:sync`，并提交 `purify.min.js` 与 source map。`npm run vendor:check` 可只做一致性检查。
+- DOMPurify 以精确版本记录在 `package.json`；升级版本后运行 `npm run vendor:sync`，并提交 `purify.min.js`。`npm run vendor:check` 可只做一致性检查。
 
 ## 本地预览与 VPS 验证
 
@@ -227,22 +227,24 @@ curl -fsS http://127.0.0.1:1881/pipeline-status.json
 gxWeb/
 ├─ public/
 │  ├─ index.html
+│  ├─ manifest.json
 │  ├─ favicon.png
 │  └─ vendor/
 │     ├─ app.css        # Tailwind 预编译产物（提交）
-│     ├─ purify.min.js  # 由 npm run vendor:sync 生成
-│     └─ purify.min.js.map
+│     └─ purify.min.js  # 由 npm run vendor:sync 生成
+├─ crawler/             # 爬虫采集、翻译、去重与重要度筛选包
 ├─ .github/
 │  ├─ workflows/ci.yml
 │  ├─ scripts/          # 生成产物与语法一致性检查
 │  └─ tests/            # 基础 Python 工具函数测试
 ├─ tests/
-│  └─ test_spider.py    # 失败路径、last-known-good 与看门狗测试
+│  └─ ...               # Python 后端与 Node 前端单元测试
 ├─ build/
 │  └─ tailwind-input.css
-├─ tailwind.config.js
+├─ tailwind.config.cjs
 ├─ package.json
-├─ spider.py
+├─ spider.py            # 爬虫入口与向后兼容门面
+├─ control_api.py       # 控制面板与天气代理 API
 ├─ Dockerfile
 ├─ docker-compose.yml
 ├─ requirements.txt
@@ -276,16 +278,17 @@ docker compose up -d --build
 
 ## Deployment Tips
 
-一个可重复执行的更新与验证流程：
+一个可重复执行的更新与验证流程（先配置私有 `.env`）：
 
 ```bash
-git pull --ff-only
-docker compose up -d --build
-docker compose ps
-docker compose logs --since=10m spider
+sh tools/deploy.sh main
+docker compose -p gxweb ps
+docker compose -p gxweb logs --since=10m spider
 curl -fsS http://127.0.0.1:1881/ticker-status.json
 curl -fsS http://127.0.0.1:1881/pipeline-status.json
 ```
+
+部署脚本构建后更新爬虫与管理服务，并强制重建 Web 容器，让 Nginx 读取最新代理和安全配置，再执行 `nginx -t`；数据卷会保留。行情离线判断读取服务端实际抓取间隔，并留出运行缓冲时间。
 
 `docker compose ps` 会显示容器 health。需要查看完整健康检查结果时：
 

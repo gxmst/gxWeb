@@ -1,5 +1,5 @@
 // ============ 基础 UI 控制：时钟 / 搜索引擎 / 行情条翻页 ============
-import { getSettings, updateSettings } from './settings-store.js';
+import { getSettings, updateSettings } from './settings-store.js?v=workspace-20261114a';
 
 // ---- 实时时钟 ----
 const clockEl = document.getElementById('clock');
@@ -50,17 +50,6 @@ function engineIcon(engine) {
     return `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="${paths[engine]}"/></svg>`;
 }
 
-export function moveEngineIndicator(engine = currentEngine) {
-    const ind = document.getElementById('engineIndicator');
-    const btn = document.getElementById('eng-' + engine);
-    if (!ind || !btn) return;
-    ind.style.left = `${btn.offsetLeft}px`;
-    ind.style.width = `${btn.offsetWidth}px`;
-    ind.style.background = 'rgba(var(--wall-rgb), 0.16)';
-    ind.style.borderColor = 'rgba(var(--wall-rgb), 0.28)';
-    ind.style.boxShadow = 'inset 0 1px 0 rgba(255, 255, 255, 0.12)';
-}
-
 export function setSearchEngine(engine, persist = true) {
     if (!engines[engine]) engine = 'bing';
     currentEngine = engine;
@@ -74,9 +63,6 @@ export function setSearchEngine(engine, persist = true) {
         btn.setAttribute('aria-checked', String(key === engine));
         btn.querySelector('[data-engine-icon]').innerHTML = engineIcon(key);
     });
-    moveEngineIndicator(engine);
-    const mobileSelect = document.getElementById('searchEngineSelect');
-    if (mobileSelect) mobileSelect.value = engine;
     document.getElementById('searchEngineIcon').innerHTML = engineIcon(engine);
     document.getElementById('searchEngineName').textContent = engines[engine].name;
     document.getElementById('searchEngineButton').setAttribute('aria-label', `当前使用${engines[engine].name}，切换搜索引擎`);
@@ -125,15 +111,10 @@ export function initUI() {
     document.addEventListener('pointerdown', event => { if(!menu.hidden && !menu.contains(event.target) && !engineButton.contains(event.target)) closeMenu(); });
     document.addEventListener('focusin', event => { if(!menu.hidden && !menu.contains(event.target) && event.target !== engineButton) closeMenu(); });
     window.addEventListener('gx:layout-changed', () => closeMenu());
-    document.getElementById('searchEngineSelect')?.addEventListener('change', event => {
-        setSearchEngine(event.target.value);
-    });
     window.addEventListener('gx:settings-changed', event => {
         const engine = event.detail?.settings?.search?.engine;
         if (engine && engine !== currentEngine) setSearchEngine(engine, false);
     });
-    window.addEventListener('resize', () => moveEngineIndicator(currentEngine));
-    document.fonts?.ready?.then(() => moveEngineIndicator(currentEngine));
     document.querySelectorAll('[data-ticker-scroll]').forEach(button => {
         button.addEventListener('click', () => scrollTicker(Number(button.dataset.tickerScroll) || 0));
     });

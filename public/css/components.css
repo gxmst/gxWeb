@@ -211,7 +211,7 @@ html.js-reveal .news-feed-item.animate-slide-down {
         transform: none;
         transition: none;
     }
-    .news-unseen-pill, .news-filter-row, .engine-indicator { transition: none; }
+    .news-unseen-pill, .news-filter-row { transition: none; }
     .clock-colon,
     .ticker-item-card.ticker-flash-up,
     .ticker-item-card.ticker-flash-down { animation: none; }
@@ -506,15 +506,6 @@ html.js-motion [data-enter] { opacity: 0; will-change: transform, opacity; }
 html.glass-glow-off .glass-spot::before,
 html.glass-glow-off .glass-spot::after { display: none; }
 
-/* ============ 指针视差 3D 倾斜 ============ */
-main, aside { perspective: 1400px; }
-[data-tilt] {
-    transform-style: preserve-3d;
-    transition: transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
-    will-change: transform;
-}
-[data-tilt].tilting { transition: transform 0.08s linear; }
-
 /* ============ Dock 磁吸 ============ */
 .dock-ico {
     background:
@@ -541,11 +532,6 @@ main, aside { perspective: 1400px; }
 .tab-btn:hover {
     color: rgba(255, 255, 255, 0.92);
     background: rgba(255, 255, 255, 0.1);
-}
-.tab-btn-active {
-    color: #ffffff;
-    background: rgba(var(--wall-rgb), 0.18);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 10px 20px rgba(0, 0, 0, 0.22), 0 0 18px rgba(var(--wall-rgb), 0.18);
 }
 
 .tab-btn { color: rgba(255,255,255,0.42); font-weight: 500; }
@@ -852,7 +838,6 @@ main, aside { perspective: 1400px; }
     outline: none;
 }
 .settings-field-row select option,
-#searchEngineSelect option,
 #newsSourceFilter option { background: rgb(15, 23, 42); color: #fff; }
 .settings-toggle-row { cursor: pointer; }
 .settings-toggle-row input {
@@ -944,7 +929,6 @@ main, aside { perspective: 1400px; }
 .city-result-button:hover { color: rgb(var(--wall-rgb)); }
 .city-result-button small { color: rgba(255, 255, 255, 0.35); }
 html.settings-open { overflow: hidden; }
-html.tilt-off [data-tilt], html.power-saving [data-tilt] { transform: none !important; }
 html.weather-effects-off #weatherCanvas,
 html.weather-effects-off #lightningFlash,
 html.weather-effects-off #sunGlow,
@@ -1033,42 +1017,7 @@ html.power-saving .clock-colon {
     display: none;
 }
 
-/* ============ 搜索引擎滑动胶囊指示器 ============ */
-.engine-indicator {
-    position: absolute;
-    top: 2px;
-    bottom: 2px;
-    left: 0;
-    width: 0;
-    border-radius: 9999px;
-    pointer-events: none;
-    background: rgba(255, 255, 255, 0.16);
-    border: 1px solid rgba(255, 255, 255, 0.24);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.32),
-        0 4px 12px rgba(0, 0, 0, 0.22);
-    transition: left 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
-                width 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
-                background 0.28s ease,
-                border-color 0.28s ease,
-                box-shadow 0.28s ease;
-}
-.engine-btn {
-    color: rgba(255, 255, 255, 0.56);
-    border: 1px solid transparent;
-}
-.engine-btn:hover {
-    color: rgba(255, 255, 255, 0.92);
-}
-.engine-btn.active {
-    color: #ffffff;
-    font-weight: 600;
-}
-.engine-btn.active svg {
-    color: var(--engine-color, rgb(var(--wall-rgb)));
-    opacity: 1;
-    filter: drop-shadow(0 0 6px var(--engine-color, rgba(var(--wall-rgb), 0.5)));
-}
+/* (已移除孤立的 #engineBar / .engine-indicator / .engine-btn 样式) */
 
 @media (max-width: 767px) {
     #news-panel {
@@ -1102,16 +1051,6 @@ html.power-saving .clock-colon {
         linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(var(--wall-rgb), 0.08)),
         rgba(0, 0, 0, 0.20);
     border-color: rgba(255, 255, 255, 0.08);
-}
-
-/* 新闻项悬停优化 */
-.news-item-hover {
-    transition: background 0.2s ease, box-shadow 0.2s ease;
-    border-radius: 0.5rem;
-}
-.news-item-hover:hover {
-    background: rgba(255, 255, 255, 0.06);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 /* ============ 壁纸收藏夹（设置页） ============ */
@@ -1267,10 +1206,9 @@ main { min-width: 0; }
 @media (min-width: 768px) {
     #newsAside { width: min(450px, 42vw); }
 }
-/* 中等宽度沿用下拉引擎，给搜索输入留出空间。 */
+/* 中等宽度隐藏快捷键提示并压缩搜索输入，给右侧边栏留出空间。 */
 @media (min-width: 768px) and (max-width: 1100px) {
-    #engineBar, #search-bar kbd { display: none !important; }
-    #searchEngineSelect { display: inline-flex !important; }
+    #search-bar kbd { display: none !important; }
     #searchInput { min-width: 0; padding: 0 0.65rem; }
 }
 @media (max-width: 767px) {
@@ -1280,5 +1218,5 @@ main { min-width: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
     .clock-colon, .ticker-item-card.ticker-flash-up, .ticker-item-card.ticker-flash-down { animation: none; }
-    .engine-indicator, .layout-recovery { transition: none; }
+    .layout-recovery { transition: none; }
 }

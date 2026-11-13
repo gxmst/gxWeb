@@ -1,13 +1,19 @@
 import hashlib
 import json
 import os
-import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
 from unittest import mock
 
+import crawler.app
+import crawler.feeds
+import crawler.io_utils
+import crawler.markets
+import crawler.media
+import crawler.tech
+import crawler.translator
 import spider
 
 
@@ -33,70 +39,87 @@ class AtomicWriteTests(unittest.TestCase):
             self.assertTrue(spider.atomic_save_json(str(target), {"ok": True}))
             self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"ok": True})
 
+    def test_atomic_save_json_compact_omits_whitespace(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "compact.json"
+
+            self.assertTrue(spider.atomic_save_json(str(target), {"a": 1, "b": [2, 3]}, compact=True))
+            self.assertEqual(target.read_text(encoding="utf-8"), '{"a":1,"b":[2,3]}')
+
     def test_atomic_save_json_propagates_replace_failure_and_keeps_old_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "data.json"
             target.write_text('{"old": true}', encoding="utf-8")
 
-            with mock.patch.object(spider.os, "replace", side_effect=OSError("disk failure")):
+            with mock.patch.object(crawler.io_utils.os, "replace", side_effect=OSError("disk failure")):
                 with self.assertRaisesRegex(OSError, "disk failure"):
                     spider.atomic_save_json(str(target), {"new": True})
 
             self.assertEqual(target.read_text(encoding="utf-8"), '{"old": true}')
             self.assertEqual(list(Path(tmp).glob("*.tmp")), [])
 
+    def test_load_cache_with_legacy_migrates_old_public_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            primary = Path(tmp) / "state" / "cache.json"
+            legacy = Path(tmp) / "public" / "cache.json"
+            legacy.parent.mkdir()
+            legacy.write_text('{"k": "v"}', encoding="utf-8")
+
+            loaded = crawler.io_utils.load_cache_with_legacy(str(primary), str(legacy), default={})
+            self.assertEqual(loaded, {"k": "v"})
+
 
 class TranslationCacheTests(unittest.TestCase):
     def setUp(self):
-        self.old_cache = spider._translate_cache
-        self.old_dirty = spider._translate_dirty
-        spider._translate_cache = {}
-        spider._translate_dirty = False
+        self.old_cache = crawler.translator._translate_cache
+        self.old_dirty = crawler.translator._translate_dirty
+        crawler.translator._translate_cache = {}
+        crawler.translator._translate_dirty = False
 
     def tearDown(self):
-        spider._translate_cache = self.old_cache
-        spider._translate_dirty = self.old_dirty
+        crawler.translator._translate_cache = self.old_cache
+        crawler.translator._translate_dirty = self.old_dirty
 
     def test_batch_translation_failure_falls_back_without_caching_original(self):
         with mock.patch.object(
-            spider, "_translate_text", side_effect=RuntimeError("translator unavailable")
+            crawler.translator, "_translate_text", side_effect=RuntimeError("translator unavailable")
         ):
             result = spider.translate_batch(["hello"], max_workers=1)
 
         key = hashlib.md5(b"hello").hexdigest()
         self.assertEqual(result, {"hello": "hello"})
-        self.assertNotIn(key, spider._translate_cache)
-        self.assertFalse(spider._translate_dirty)
+        self.assertNotIn(key, crawler.translator._translate_cache)
+        self.assertFalse(crawler.translator._translate_dirty)
 
     def test_http_translation_parses_joined_segments(self):
         response = mock.Mock()
-        response.json.return_value = [[['你', 'you'], ['好', 'good']], None, 'en']
+        response.json.return_value = [[["你", "you"], ["好", "good"]], None, "en"]
         session = mock.Mock()
         session.get.return_value = response
 
-        with mock.patch.object(spider, "get_session", return_value=session):
-            self.assertEqual(spider._translate_text("hello"), "你好")
+        with mock.patch.object(crawler.translator, "get_session", return_value=session):
+            self.assertEqual(crawler.translator._translate_text("hello"), "你好")
 
         response.raise_for_status.assert_called_once()
 
     def test_persist_failure_keeps_dirty_flag_for_retry(self):
-        spider._translate_cache = {"key": "value"}
-        spider._translate_dirty = True
+        crawler.translator._translate_cache = {"key": "value"}
+        crawler.translator._translate_dirty = True
 
-        with mock.patch.object(spider, "atomic_save_json", side_effect=OSError("read only")):
+        with mock.patch.object(crawler.translator, "atomic_save_json", side_effect=OSError("read only")):
             with self.assertRaisesRegex(OSError, "read only"):
                 spider._persist_translate_cache()
 
-        self.assertTrue(spider._translate_dirty)
+        self.assertTrue(crawler.translator._translate_dirty)
 
     def test_persist_success_clears_dirty_flag(self):
-        spider._translate_cache = {"key": "value"}
-        spider._translate_dirty = True
+        crawler.translator._translate_cache = {"key": "value"}
+        crawler.translator._translate_dirty = True
 
-        with mock.patch.object(spider, "atomic_save_json", return_value=True):
+        with mock.patch.object(crawler.translator, "atomic_save_json", return_value=True):
             self.assertTrue(spider._persist_translate_cache())
 
-        self.assertFalse(spider._translate_dirty)
+        self.assertFalse(crawler.translator._translate_dirty)
 
 
 class NewsImportanceTests(unittest.TestCase):
@@ -108,6 +131,7 @@ class NewsImportanceTests(unittest.TestCase):
                     "feed": {
                         "list": [
                             {
+                                "id": 9981,
                                 "rich_text": "焦点快讯",
                                 "create_time": "2026-07-16 20:00:00",
                                 "is_focus": 1,
@@ -121,10 +145,11 @@ class NewsImportanceTests(unittest.TestCase):
         session = mock.Mock()
         session.get.return_value = response
 
-        with mock.patch.object(spider, "get_session", return_value=session):
+        with mock.patch.object(crawler.feeds, "get_session", return_value=session):
             news = spider._fetch_sina_page(1)
 
         self.assertTrue(news[0]["is_important"])
+        self.assertEqual(news[0]["id"], "sina-9981")
         self.assertEqual(news[0]["importance_score"], 100)
         self.assertEqual(news[0]["importance_reason"], "新浪焦点")
 
@@ -159,6 +184,84 @@ class NewsImportanceTests(unittest.TestCase):
 
         self.assertEqual(score, 0)
         self.assertEqual(reason, "")
+
+
+class MarketTickerTests(unittest.TestCase):
+    def test_market_tickers_replace_dead_nikkei_and_kospi_codes(self):
+        sina_codes = {item["sina"] for item in spider.MARKET_TICKERS if item.get("sina")}
+        self.assertIn("b_NKY", sina_codes)
+        self.assertIn("b_KOSPI", sina_codes)
+        self.assertNotIn("b_NIKKEI225", sina_codes)
+        self.assertNotIn("b_KS200F", sina_codes)
+
+    def test_global_b_indices_parse_both_full_and_six_field_sina_rows(self):
+        payload = "\n".join([
+            'var hq_str_b_NKY="日经225指数,61142.1300,322.77,0.53,2:12 AM,14:12:00,2026-11-13,14:30:01,61223.4100,60819.3600,61902.5000,61082.2300,0";',
+            'var hq_str_b_TWSE="台湾台北指数,25580.32,-443.53,-1.70,9/26/2025,2025-09-26";',
+        ])
+        response = mock.Mock(text=payload)
+        session = mock.Mock()
+        session.get.return_value = response
+
+        configs = [
+            {"symbol": "n225", "name": "日经225", "category": "亚太", "decimals": 2, "sina": "b_NKY"},
+            {"symbol": "twii", "name": "台湾加权", "category": "亚太", "decimals": 2, "sina": "b_TWSE"},
+        ]
+        with mock.patch.object(crawler.markets, "get_session", return_value=session):
+            parsed = crawler.markets._fetch_sina_all(configs)
+
+        self.assertEqual(parsed["n225"]["price"], "61142.13")
+        self.assertEqual(parsed["n225"]["change"], "+0.53%")
+        self.assertEqual(parsed["twii"]["price"], "25580.32")
+        self.assertEqual(parsed["twii"]["change"], "-1.70%")
+
+
+class RssFeedTests(unittest.TestCase):
+    def setUp(self):
+        self.old_retry = dict(crawler.feeds._rss_retry_state)
+        crawler.feeds._rss_retry_state.clear()
+
+    def tearDown(self):
+        crawler.feeds._rss_retry_state.clear()
+        crawler.feeds._rss_retry_state.update(self.old_retry)
+
+    def test_undated_rss_entries_keep_zero_timestamp_and_failing_source_backs_off(self):
+        rss_xml = (
+            "<rss version='2.0'><channel><title>Demo</title>"
+            "<item><title>Undated Headline</title><link>https://example.com/a</link></item>"
+            "<item><title>Dated Headline</title><link>https://example.com/b</link>"
+            "<pubDate>Sun, 08 Nov 2026 14:00:00 GMT</pubDate></item>"
+            "</channel></rss>"
+        )
+        ok_resp = mock.Mock(status_code=200, text=rss_xml)
+        fail_resp = mock.Mock(status_code=503)
+        fail_resp.raise_for_status.side_effect = RuntimeError("503 service unavailable")
+
+        session = mock.Mock()
+        session.get.side_effect = lambda url, **kwargs: ok_resp if "good" in url else fail_resp
+        sources = [
+            {"name": "Good", "url": "https://good.example/rss"},
+            {"name": "Bad", "url": "https://bad.example/rss"},
+        ]
+
+        with mock.patch.object(crawler.feeds, "get_session", return_value=session), mock.patch.object(
+            crawler.feeds.time, "monotonic", return_value=100.0
+        ):
+            items = spider.fetch_rss_news(sources=sources)
+            self.assertIn("Bad", crawler.feeds._rss_retry_state)
+            self.assertEqual(crawler.feeds._rss_retry_state["Bad"]["until"], 700.0)
+
+            session.get.reset_mock()
+            spider.fetch_rss_news(sources=sources)
+            called_urls = [call.args[0] for call in session.get.call_args_list]
+            self.assertEqual(called_urls, ["https://good.example/rss"])
+
+        self.assertEqual(len(items), 2)
+        self.assertEqual(items[0]["raw_time"], 0)
+        self.assertEqual(items[0]["time"], "")
+        self.assertTrue(items[0]["id"].startswith("rss-"))
+        self.assertEqual(items[1]["raw_time"], 1794146400)
+        self.assertEqual(items[1]["time"], "22:00")
 
 
 class LastKnownGoodTests(unittest.TestCase):
@@ -235,8 +338,8 @@ class RuntimeReliabilityTests(unittest.TestCase):
         session = mock.Mock()
         session.get.return_value = response
 
-        with mock.patch.object(spider, "get_session", return_value=session), mock.patch.object(
-            spider, "atomic_save_text", side_effect=OSError("no space")
+        with mock.patch.object(crawler.media, "get_session", return_value=session), mock.patch.object(
+            crawler.media, "atomic_save_text", side_effect=OSError("no space")
         ):
             with self.assertRaisesRegex(OSError, "no space"):
                 spider.fetch_weather()
@@ -262,8 +365,8 @@ class RuntimeReliabilityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, WorkingDirectory(tmp):
             Path("public").mkdir()
             app = spider.SpiderApp()
-            with mock.patch.object(spider.threading, "Thread", DeadThread), mock.patch.object(
-                spider.signal, "signal"
+            with mock.patch.object(crawler.app.threading, "Thread", DeadThread), mock.patch.object(
+                crawler.app.signal, "signal"
             ):
                 with self.assertRaisesRegex(RuntimeError, "fast worker"):
                     app.run()
@@ -286,37 +389,107 @@ class RuntimeReliabilityTests(unittest.TestCase):
         self.assertGreaterEqual(state["duration"], 20)
 
 
-class TechHtmlBuilderTests(unittest.TestCase):
-    def test_github_hn_and_v2ex_builders_render_structured_cards(self):
-        with mock.patch.object(spider, "translate_batch", return_value={"Fast web UI": "快速 Web 界面"}):
-            gh_html = spider.build_github_html([
-                {
-                    "label": "Last 7 Days",
-                    "items": [
-                        {
-                            "full_name": "org/repo",
-                            "stargazers_count": 2450,
-                            "description": "Fast web UI",
-                            "html_url": "https://github.com/org/repo",
-                        }
-                    ],
-                }
-            ])
+class TechFetchRecoveryTests(unittest.TestCase):
+    def test_empty_http_200_trends_preserve_all_previous_sources_and_do_not_write_cache(self):
+        response = mock.Mock(status_code=200, text="<html><body>Maintenance</body></html>")
+        response.json.return_value = []
+        session = mock.Mock()
+        session.get.return_value = response
+        old = [
+            {"id": source, "source": source, "content": f"old {source}", "raw_time": 1}
+            for source in ("github", "hn", "v2ex")
+        ]
+        with mock.patch.object(crawler.tech, "get_session", return_value=session), mock.patch.object(
+            crawler.tech, "fetch_github_trends", return_value=[]
+        ), mock.patch.object(crawler.tech, "load_cache_with_legacy", return_value={}), mock.patch.object(
+            crawler.tech, "atomic_save_json"
+        ) as save, mock.patch.object(crawler.tech, "_persist_translate_cache", return_value=False):
+            fresh = spider.fetch_tech_news()
 
+        app = spider.SpiderApp.__new__(spider.SpiderApp)
+        self.assertEqual(fresh, [])
+        self.assertEqual(app._merge_by_source(old, fresh, 50), old)
+        save.assert_not_called()
+
+    def test_valid_hn_replaces_only_its_source_when_other_sources_are_empty(self):
+        response = mock.Mock(status_code=200, text="""<rss version="2.0"><channel><title>HN</title>
+            <item><title>Show HN: Useful project</title><link>https://example.com/project</link></item>
+            </channel></rss>""")
+        response.json.return_value = []
+        session = mock.Mock()
+        session.get.return_value = response
+        old = [
+            {"id": source, "source": source, "content": f"old {source}", "raw_time": 1}
+            for source in ("github", "hn", "v2ex")
+        ]
+        with mock.patch.object(crawler.tech, "get_session", return_value=session), mock.patch.object(
+            crawler.tech, "fetch_github_trends", return_value=[]
+        ), mock.patch.object(crawler.tech, "load_cache_with_legacy", return_value={}), mock.patch.object(
+            crawler.tech, "translate_batch", return_value={}
+        ), mock.patch.object(crawler.tech, "_persist_translate_cache", return_value=False):
+            fresh = spider.fetch_tech_news()
+
+        app = spider.SpiderApp.__new__(spider.SpiderApp)
+        merged = app._merge_by_source(old, fresh, 50)
+        self.assertEqual([item["source"] for item in fresh], ["hn"])
+        by_source = {item["source"]: item for item in merged}
+        self.assertIn("Useful project", by_source["hn"]["content"])
+        self.assertEqual(by_source["github"]["content"], "old github")
+        self.assertEqual(by_source["v2ex"]["content"], "old v2ex")
+
+
+class TechDataAndHtmlBuilderTests(unittest.TestCase):
+    def test_structured_tech_builders_produce_plain_data_and_legacy_html(self):
+        sections = [
+            {
+                "label": "Last 7 Days",
+                "items": [
+                    {
+                        "full_name": "org/repo",
+                        "stargazers_count": 2450,
+                        "description": "Fast web UI",
+                        "html_url": "https://github.com/org/repo",
+                    }
+                ],
+            }
+        ]
+        with mock.patch.object(crawler.tech, "translate_batch", return_value={"Fast web UI": "快速 Web 界面"}):
+            gh_summary, gh_data = spider.build_github_data(sections)
+            gh_html = spider.build_github_html(sections)
+
+        self.assertEqual(gh_data["brand"], "GitHub Trends")
+        self.assertEqual(gh_data["sections"][0]["items"][0]["stars"], "2.5k")
+        self.assertEqual(gh_data["sections"][0]["items"][0]["desc_zh"], "快速 Web 界面")
+        self.assertNotIn("<div", gh_summary)
         self.assertIn("tech-card-item", gh_html)
         self.assertIn("★ 2.5k", gh_html)
-        self.assertIn("快速 Web 界面", gh_html)
-        self.assertNotIn("group-hover:max-h-24", gh_html)
 
+        hn_summary, hn_data = spider.build_hn_data(
+            [{"link": "https://news.ycombinator.com/item?id=1"}],
+            ["Show HN: Demo"],
+            {"Show HN: Demo": "展示 HN：演示"},
+        )
         hn_html = spider.build_hn_html(
             [{"link": "https://news.ycombinator.com/item?id=1"}],
             ["Show HN: Demo"],
             {"Show HN: Demo": "展示 HN：演示"},
         )
+        self.assertEqual(hn_data["brand"], "Hacker News")
+        self.assertEqual(hn_data["sections"][0]["items"][0]["desc_zh"], "展示 HN：演示")
+        self.assertIn("展示 HN：演示", hn_summary)
         self.assertIn("Hacker News", hn_html)
-        self.assertIn("展示 HN：演示", hn_html)
 
-        v2ex_html = spider.build_v2ex_html([{"id": 100, "title": "热门话题"}], [{"id": 101, "title": "最新话题"}])
+        v2_summary, v2_data = spider.build_v2ex_data(
+            [{"id": 100, "title": "热门话题"}],
+            [{"id": 101, "title": "最新话题"}],
+        )
+        v2ex_html = spider.build_v2ex_html(
+            [{"id": 100, "title": "热门话题"}],
+            [{"id": 101, "title": "最新话题"}],
+        )
+        self.assertEqual([sec["label"] for sec in v2_data["sections"]], ["Hot Topics", "Latest"])
+        self.assertTrue(v2_data["sections"][0]["compact"])
+        self.assertIn("热门话题", v2_summary)
         self.assertIn("Hot Topics", v2ex_html)
         self.assertIn("Latest", v2ex_html)
 

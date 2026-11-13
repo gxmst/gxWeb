@@ -13,36 +13,44 @@
     <!-- 自托管 Inter、JetBrains Mono 与中文文楷；仅在选用时加载对应字体文件。 -->
     <link rel="stylesheet" href="./fonts/fonts.css">
     <!-- Tailwind：静态预编译产物（由 `npm run build:css` 生成）。改动 class 后需重新构建。 -->
-    <link rel="stylesheet" href="./vendor/app.css?v=workspace-20261108a">
+    <link rel="stylesheet" href="./vendor/app.css?v=workspace-20261114a">
     <!-- 自定义样式：从旧单文件 <style> 拆分为四个职责文件。
          base=字体/时钟/骨架；glass=玻璃材质/折射/氛围；components=时间轴/光斑/磁吸/Tab；effects=时段/雷暴/晴天/星空 -->
-    <link rel="stylesheet" href="./css/base.css?v=workspace-20261108a">
-    <link rel="stylesheet" href="./css/glass.css?v=workspace-20261108a">
-    <link rel="stylesheet" href="./css/components.css?v=workspace-20261108a">
-    <link rel="stylesheet" href="./css/effects.css?v=workspace-20261108a">
-    <link rel="stylesheet" href="./css/workspace.css">
+    <link rel="stylesheet" href="./css/base.css?v=workspace-20261114a">
+    <link rel="stylesheet" href="./css/glass.css?v=workspace-20261114a">
+    <link rel="stylesheet" href="./css/components.css?v=workspace-20261114a">
+    <link rel="stylesheet" href="./css/effects.css?v=workspace-20261114a">
+    <link rel="stylesheet" href="./css/workspace.css?v=workspace-20261114a">
     <!-- DOMPurify：模块化脚本通过全局 DOMPurify 引用，须在 main.js 之前以经典脚本加载 -->
     <script src="./vendor/purify.min.js"></script>
     <!-- 模块预载：ESM 默认是"读到 import 才发请求"，本站的依赖图有三层，
          跨太平洋 120ms RTT 下最深的叶子模块要等到第三轮才开始下载（实测 ~760ms）。
          这里把整张图一次性声明出来，浏览器立刻并行拉，三轮压成一轮。
          注意 href 必须与 JS 里的 import 说明符完全一致（含 ?v=），否则会重复下载。 -->
-    <link rel="modulepreload" href="./js/main.js?v=workspace-20261108a">
-    <link rel="modulepreload" href="./js/modules/ui.js?v=workspace-20261108a">
-    <link rel="modulepreload" href="./js/modules/ambience.js?v=workspace-20261108a">
-    <link rel="modulepreload" href="./js/modules/fluid.js?v=workspace-20261108a">
-    <link rel="modulepreload" href="./js/modules/wallpaper.js?v=workspace-20261108a">
-    <link rel="modulepreload" href="./js/modules/weather.js?v=workspace-20261108a">
-    <link rel="modulepreload" href="./js/modules/ticker.js?v=workspace-20261108a">
-    <link rel="modulepreload" href="./js/modules/news.js?v=workspace-20261108a">
-    <link rel="modulepreload" href="./js/modules/interactions.js?v=workspace-20261108a">
-    <link rel="modulepreload" href="./js/modules/status.js?v=workspace-20261108a">
-    <link rel="modulepreload" href="./js/modules/settings.js?v=workspace-20261108a">
-    <link rel="modulepreload" href="./js/modules/settings-store.js">
-    <link rel="modulepreload" href="./js/modules/widgets.js">
-    <link rel="modulepreload" href="./js/modules/storage.js">
-    <link rel="modulepreload" href="./js/modules/toast.js">
-    <link rel="modulepreload" href="./js/modules/wallpaper-store.js">
+    <link rel="modulepreload" href="./js/main.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/admin-settings.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/ambience.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/fluid.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/forecast.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/interactions.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/news.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/news-logic.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/news-panel.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/news-render.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/news-state.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/settings.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/settings-store.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/status.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/storage.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/ticker.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/toast.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/ui.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/wallpaper.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/wallpaper-store.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/weather.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/weather-physics.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/weather-scene.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/modules/widgets.js?v=workspace-20261114a">
 </head>
 
 <body
@@ -101,51 +109,59 @@
     <!-- 雷暴闪电泛光层（雨模式下偶发，不拦截交互） -->
     <div id="lightningFlash" class="fixed inset-0 z-[41] pointer-events-none opacity-0"></div>
 
-    <!-- 左上角：控制中心 -->
-    <div id="controlCenter" class="absolute top-6 left-6 flex gap-3 z-30">
-        <!-- 滤镜等按钮的瞬时状态提示（由 weather.js 驱动） -->
+    <!-- 左上角：控制中心（默认折叠为一个紧凑触发按钮） -->
+    <div id="controlCenter" class="absolute top-6 left-6 flex items-center z-30">
+        <!-- 滤镜等按钮的瞬时状态提示（由 toast.js 驱动） -->
         <div id="controlToast" class="control-toast" role="status" aria-live="polite"></div>
-        <button id="wallpaperBtn" type="button" disabled style="opacity: 0.5; pointer-events: none;"
-            class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg outline-none focus:outline-none"
-            title="切换壁纸" aria-label="切换壁纸">
-            <svg class="w-5 h-5 text-white/70 group-hover:text-white" fill="none" stroke="currentColor"
-                viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
-                </path>
+        <button id="controlCenterToggle" type="button" aria-expanded="false" aria-controls="controlCenterDrawer"
+            class="control-btn control-center-toggle w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-transform outline-none focus:outline-none"
+            title="快捷工具" aria-label="展开快捷工具">
+            <svg class="w-4 h-4 transition-transform duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h6m4 0h6M10 7a2 2 0 1 0 4 0 2 2 0 1 0-4 0ZM4 17h2m4 0h10M6 17a2 2 0 1 0 4 0 2 2 0 1 0-4 0Z"></path>
             </svg>
         </button>
-        <!-- 壁纸收藏：把当前这张存进本地收藏夹（IndexedDB 存图片本体），之后参与轮换。
-             角标必须放在按钮外层：.glass 带 overflow:hidden，放按钮内会被圆形边界裁掉一半。
-             缩放挂在 wrapper 上，这样按钮和角标一起放大，不会互相脱开。 -->
-        <div id="favoriteControl" class="control-btn-wrap relative shrink-0 transition-transform hover:scale-110 active:scale-95">
-            <button id="favoriteBtn" type="button" disabled aria-pressed="false"
-                class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center transition-colors group shadow-lg outline-none focus:outline-none disabled:opacity-50"
-                title="收藏这张壁纸" aria-label="收藏这张壁纸">
-                <svg class="w-5 h-5 text-white/70 group-hover:text-white transition-colors" fill="none" stroke="currentColor"
-                    viewBox="0 0 24 24" aria-hidden="true">
+        <div id="controlCenterDrawer" class="control-center-drawer" inert>
+            <button id="wallpaperBtn" type="button" disabled style="opacity: 0.5; pointer-events: none;"
+                class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg outline-none focus:outline-none shrink-0"
+                title="切换壁纸" aria-label="切换壁纸">
+                <svg class="w-5 h-5 text-white/70 group-hover:text-white" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
                     </path>
                 </svg>
             </button>
-            <span id="favoriteCount" class="favorite-count numeric" aria-hidden="true"></span>
+            <!-- 壁纸收藏：把当前这张存进本地收藏夹（IndexedDB 存图片本体），之后参与轮换。
+                 角标必须放在按钮外层：.glass 带 overflow:hidden，放按钮内会被圆形边界裁掉一半。 -->
+            <div id="favoriteControl" class="control-btn-wrap relative shrink-0 transition-transform hover:scale-110 active:scale-95">
+                <button id="favoriteBtn" type="button" disabled aria-pressed="false"
+                    class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center transition-colors group shadow-lg outline-none focus:outline-none disabled:opacity-50"
+                    title="收藏这张壁纸" aria-label="收藏这张壁纸">
+                    <svg class="w-5 h-5 text-white/70 group-hover:text-white transition-colors" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
+                        </path>
+                    </svg>
+                </button>
+                <span id="favoriteCount" class="favorite-count numeric" aria-hidden="true"></span>
+            </div>
+            <button id="filterBtn" type="button"
+                class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg text-lg outline-none focus:outline-none shrink-0"
+                title="切换环境滤镜" aria-label="切换环境滤镜"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/></svg></button>
+            <button id="settingsBtn" type="button" aria-expanded="false" aria-controls="settingsOverlay"
+                class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg outline-none focus:outline-none shrink-0"
+                title="设置" aria-label="打开设置">
+                <svg class="w-5 h-5 text-white/70 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19.4 15a1.7 1.7 0 00.34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0015 19.4a1.7 1.7 0 00-1 .6 1.7 1.7 0 00-.4 1.1V21H9.6v-.1A1.7 1.7 0 008.5 19.3a1.7 1.7 0 00-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 004.1 15a1.7 1.7 0 00-.6-1 1.7 1.7 0 00-1.1-.4H2.3V9.6h.1A1.7 1.7 0 004 8.5a1.7 1.7 0 00-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 008.4 4.1a1.7 1.7 0 001-.6 1.7 1.7 0 00.4-1.1V2.3h4v.1A1.7 1.7 0 0015 4a1.7 1.7 0 001.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0019.4 8.4a1.7 1.7 0 00.6 1 1.7 1.7 0 001.1.4h.1v4h-.1A1.7 1.7 0 0019.4 15z"></path>
+                </svg>
+            </button>
+            <button id="screenSaverBtn" type="button" aria-pressed="false" aria-label="进入屏保" title="进入屏保"
+                class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 transition-all shrink-0">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4M6 13l4-4 3 3 3-4 3 5"/></svg>
+            </button>
         </div>
-        <button id="filterBtn" type="button"
-            class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg text-lg outline-none focus:outline-none"
-            title="切换环境滤镜" aria-label="切换环境滤镜"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/></svg></button>
-        <button id="settingsBtn" type="button" aria-expanded="false" aria-controls="settingsOverlay"
-            class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all group shadow-lg outline-none focus:outline-none"
-            title="设置" aria-label="打开设置">
-            <svg class="w-5 h-5 text-white/70 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z"></path>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19.4 15a1.7 1.7 0 00.34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0015 19.4a1.7 1.7 0 00-1 .6 1.7 1.7 0 00-.4 1.1V21H9.6v-.1A1.7 1.7 0 008.5 19.3a1.7 1.7 0 00-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 004.1 15a1.7 1.7 0 00-.6-1 1.7 1.7 0 00-1.1-.4H2.3V9.6h.1A1.7 1.7 0 004 8.5a1.7 1.7 0 00-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 008.4 4.1a1.7 1.7 0 001-.6 1.7 1.7 0 00.4-1.1V2.3h4v.1A1.7 1.7 0 0015 4a1.7 1.7 0 001.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0019.4 8.4a1.7 1.7 0 00.6 1 1.7 1.7 0 001.1.4h.1v4h-.1A1.7 1.7 0 0019.4 15z"></path>
-            </svg>
-        </button>
-        <button id="screenSaverBtn" type="button" aria-pressed="false" aria-label="进入屏保" title="进入屏保"
-            class="control-btn w-10 h-10 glass rounded-full flex items-center justify-center hover:scale-110 transition-all">
-            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4M6 13l4-4 3 3 3-4 3 5"/></svg>
-        </button>
     </div>
     <div id="layoutRecovery" class="layout-recovery" hidden>
         <button id="leaveScreenSaver" type="button" class="recovery-button" hidden>退出屏保</button>
@@ -278,7 +294,7 @@
                         <button id="newsPanelDrag" type="button" title="向左拖动展开，向右拖动收起；双击还原"
                             aria-label="拖动资讯面板；左右箭头调整，Enter 全屏，Home 还原">
                             <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="4" r="1"/><circle cx="9" cy="4" r="1"/><circle cx="3" cy="8" r="1"/><circle cx="9" cy="8" r="1"/><circle cx="3" cy="12" r="1"/><circle cx="9" cy="12" r="1"/></svg>
-                            <span>7×24 快讯</span>
+                            <span id="newsPanelTitleText">7×24 快讯</span>
                         </button>
                     </h2>
                     <button id="systemStatusButton" type="button" aria-expanded="false" aria-controls="systemStatusPopover"
@@ -290,6 +306,9 @@
                     <span id="lastUpdateTime" class="ml-auto shrink-0 text-[10px] numeric text-white/40" title="最近一次成功同步时间">更新中...</span>
                     <button id="newsPanelRestore" type="button" class="panel-action panel-restore" title="还原面板" aria-label="还原面板" hidden>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h18"/></svg>
+                    </button>
+                    <button id="newsPanelLayoutToggle" type="button" class="panel-action news-layout-toggle" title="切换单栏 / 分栏布局" aria-label="切换全屏布局" aria-pressed="true" hidden>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></svg>
                     </button>
                     <button id="newsPanelExpand" type="button" class="panel-action" title="全屏阅读" aria-label="全屏阅读" aria-pressed="false">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg>
@@ -363,6 +382,12 @@
                     <span>社区</span><span id="count-community" class="tab-badge"></span></button>
             </div>
 
+            <div id="communitySourceBar" class="community-source-bar" role="group" aria-label="论坛来源" hidden>
+                <button type="button" data-community-source="all" aria-pressed="true">全部论坛</button>
+                <button type="button" data-community-source="nodeseek" aria-pressed="false">NodeSeek</button>
+                <button type="button" data-community-source="linuxdo" aria-pressed="false">Linux DO</button>
+            </div>
+
             <div id="newsReadingBar" class="news-reading-bar" role="group" aria-label="阅读状态">
                 <button type="button" data-reading-view="all" aria-pressed="true">全部</button>
                 <button type="button" data-reading-view="unread" aria-pressed="false">未读 <span id="readingUnreadCount">0</span></button>
@@ -375,7 +400,7 @@
                     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
                     </svg>
-                    <span><span id="newsUnseenCount">0</span> 条新快讯</span>
+                    <span><span id="newsUnseenCount">0</span> <span id="newsUnseenLabel">条新快讯</span></span>
                 </button>
                 <!-- 滚动列表区 (增加 pb-24 防止被底部行情条挡住) -->
                 <div id="newsList" role="tabpanel" aria-labelledby="tab-all" tabindex="0"
@@ -622,9 +647,6 @@
                             <span>天气氛围</span><input id="settingsWeatherEffects" type="checkbox"><i></i>
                         </label>
                         <label class="settings-toggle-row">
-                            <span>面板倾斜</span><input id="settingsTilt" type="checkbox"><i></i>
-                        </label>
-                        <label class="settings-toggle-row">
                             <span>背景涟漪</span><input id="settingsRipple" type="checkbox"><i></i>
                         </label>
                         <label class="settings-toggle-row">
@@ -694,7 +716,7 @@
     </footer>
 
     <!-- 应用入口：ES Module。各功能模块在 js/modules/ 下，由 main.js 按依赖顺序启动。 -->
-    <script type="module" src="./js/main.js?v=workspace-20261108a"></script>
+    <script type="module" src="./js/main.js?v=workspace-20261114a"></script>
 </body>
 
 </html>

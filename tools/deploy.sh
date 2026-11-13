@@ -17,6 +17,10 @@ test "$(git branch --show-current)" = "$branch" || {
 git pull --ff-only origin "$branch"
 docker compose -p gxweb config --quiet
 docker compose -p gxweb build
-docker compose -p gxweb up -d
+docker compose -p gxweb up -d spider control
+# Git may replace bind-mounted config files with new inodes. Recreate web so
+# Nginx reads the current proxy/security config instead of retaining old mounts.
+docker compose -p gxweb up -d --no-deps --force-recreate web
+docker compose -p gxweb exec -T web nginx -t
 docker compose -p gxweb ps
 git log -1 --format='Deployed commit: %H %s'
