@@ -161,9 +161,9 @@ test('community time includes a date and preserves unknown timestamps', () => {
 });
 
 test('groupLabel formats undated entries as earlier instead of current hour', () => {
-    const now = new Date('2026-11-13T15:30:00+08:00');
+    const now = new Date(2026, 10, 13, 15, 30);
     assert.deepEqual(groupLabel({ raw_time: 0 }, now), { id: 'unknown', label: '较早' });
-    const todayTs = Math.floor(new Date('2026-11-13T09:15:00+08:00').getTime() / 1000);
+    const todayTs = Math.floor(new Date(2026, 10, 13, 9, 15).getTime() / 1000);
     assert.equal(groupLabel({ raw_time: todayTs }, now).label, '今天 09:00');
 });
 
