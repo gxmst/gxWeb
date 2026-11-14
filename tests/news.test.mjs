@@ -24,8 +24,10 @@ const {
     formatCommunityTime,
     groupLabel,
     matchesNewsFilter,
+    matchesSplitColumnFilter,
     normalizeNewsDisplayText,
     sanitizeHttpUrl,
+    supportsSplitView,
 } = await import('../public/js/modules/news-logic.js');
 
 const {
@@ -210,4 +212,31 @@ test('news-state preserves structured tech bookmarks and counts filtered matches
     assert.equal(countSavedMatching(item => item.source === 'github'), 1);
     assert.equal(toggleSaved(techEntry), true);
     assert.equal(countSavedMatching(item => item.source === 'github'), 0);
+});
+
+test('supportsSplitView only enables desktop fullscreen split on unfiltered all and community views', () => {
+    assert.equal(supportsSplitView({ viewportWidth: 1440, newsPanelMode: 'full', category: 'all', source: 'all' }), true);
+    assert.equal(supportsSplitView({ viewportWidth: 1440, newsPanelMode: 'full', category: 'community', communitySource: 'all' }), true);
+    assert.equal(supportsSplitView({ viewportWidth: 1440, newsPanelMode: 'full', category: 'community', communitySource: 'linuxdo' }), false);
+    assert.equal(supportsSplitView({ viewportWidth: 1440, newsPanelMode: 'full', category: 'all', source: 'sina' }), false);
+    assert.equal(supportsSplitView({ viewportWidth: 1440, newsPanelMode: 'full', category: 'tech' }), false);
+    assert.equal(supportsSplitView({ viewportWidth: 1440, newsPanelMode: 'wide', category: 'all' }), false);
+    assert.equal(supportsSplitView({ viewportWidth: 900, newsPanelMode: 'full', category: 'community', communitySource: 'all' }), false);
+});
+
+test('matchesSplitColumnFilter separates categories, deep digest group, and forum sources', () => {
+    const domestic = { category: 'news', source: 'sina' };
+    const foreign = { category: 'foreign', source: 'BBC' };
+    const linuxdo = { category: 'community', source: 'linuxdo' };
+    const nodeseek = { category: 'community', source: 'nodeseek' };
+
+    assert.equal(matchesSplitColumnFilter(domestic, 'cat:news'), true);
+    assert.equal(matchesSplitColumnFilter(foreign, 'cat:news'), false);
+    assert.equal(matchesSplitColumnFilter(domestic, 'group:deep'), false);
+    assert.equal(matchesSplitColumnFilter(foreign, 'group:deep'), true);
+    assert.equal(matchesSplitColumnFilter(linuxdo, 'group:deep'), true);
+    assert.equal(matchesSplitColumnFilter(linuxdo, 'src:linuxdo'), true);
+    assert.equal(matchesSplitColumnFilter(nodeseek, 'src:linuxdo'), false);
+    assert.equal(matchesSplitColumnFilter(nodeseek, 'src:nodeseek'), true);
+    assert.equal(matchesSplitColumnFilter(linuxdo, 'all'), true);
 });

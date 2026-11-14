@@ -1,7 +1,7 @@
 // ================== 底部行情双行排版 ==================
 // 数字滚动 / sparkline 画入通过 window.__animateNumber / __drawInSparkline 桥接
 // （由 ambience 模块初始化时挂载，未就绪时各调用点自带降级）。
-import { getSettings, isWidgetVisible, getEffectiveAppearance } from './settings-store.js?v=workspace-20261114a';
+import { getSettings, isWidgetVisible, getEffectiveAppearance } from './settings-store.js?v=workspace-20261114b';
 
 const SPARKLINE_MIN_POINTS = 3;
 const TICKER_POLL_INTERVAL = 20000;

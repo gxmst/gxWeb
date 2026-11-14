@@ -1,5 +1,5 @@
 // ============ 基础 UI 控制：时钟 / 搜索引擎 / 行情条翻页 ============
-import { getSettings, updateSettings } from './settings-store.js?v=workspace-20261114a';
+import { getSettings, updateSettings } from './settings-store.js?v=workspace-20261114b';
 
 // ---- 实时时钟 ----
 const clockEl = document.getElementById('clock');

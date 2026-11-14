@@ -86,8 +86,24 @@ test('saved width adapts to smaller screens while full mode covers the viewport'
     assert.equal(panel.panelWidth({newsPanelMode: 'wide', newsPanelWidth: 1400}, 900), 852);
     assert.equal(panel.panelWidth({newsPanelMode: 'full'}, 390), 390);
     assert.equal(panel.panelWidth({newsPanelMode: 'compact'}, 1440), 450);
-    settings.updateSettings('layout', { newsPanelMode: 'invalid', newsPanelWidth: 99999, fullScreenLayout: 'bogus' });
-    assert.deepEqual(settings.getSettings().layout, { newsPanelMode: 'compact', newsPanelWidth: 10000, fullScreenLayout: 'split' });
+    settings.updateSettings('layout', {
+        newsPanelMode: 'invalid',
+        newsPanelWidth: 99999,
+        fullScreenLayout: 'bogus',
+        splitLeft: 'cat:invalid',
+        splitRight: 'src:nodeseek',
+        communitySplitLeft: 'cat:news',
+        communitySplitRight: 'src:linuxdo',
+    });
+    assert.deepEqual(settings.getSettings().layout, {
+        newsPanelMode: 'compact',
+        newsPanelWidth: 10000,
+        fullScreenLayout: 'split',
+        splitLeft: 'cat:news',
+        splitRight: 'src:nodeseek',
+        communitySplitLeft: 'src:linuxdo',
+        communitySplitRight: 'src:linuxdo',
+    });
     settings.updateSettings('layout', { fullScreenLayout: 'single' });
     assert.equal(settings.getSettings().layout.fullScreenLayout, 'single');
 });

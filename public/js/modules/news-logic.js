@@ -179,3 +179,27 @@ export function matchesNewsFilter(news, filterState, checkReadFn, ignoreReading 
     }
     return true;
 }
+
+/** Determine whether dual-column fullscreen split layout applies to the active view. */
+export function supportsSplitView({
+    viewportWidth = 0,
+    newsPanelMode = 'compact',
+    category = 'all',
+    source = 'all',
+    communitySource = 'all',
+} = {}) {
+    if (viewportWidth < 1024 || newsPanelMode !== 'full') return false;
+    if (category === 'all') return source === 'all';
+    if (category === 'community') return communitySource === 'all';
+    return false;
+}
+
+/** Match an already-filtered news item against a single split column selector spec. */
+export function matchesSplitColumnFilter(news, spec = 'all') {
+    if (!news) return false;
+    if (!spec || spec === 'all') return true;
+    if (spec === 'group:deep') return news.category !== 'news';
+    if (spec.startsWith('cat:')) return news.category === spec.slice(4);
+    if (spec.startsWith('src:')) return news.source === spec.slice(4);
+    return true;
+}

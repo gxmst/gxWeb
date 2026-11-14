@@ -1,5 +1,5 @@
 // ================== 新闻流交互与实时同步 ==================
-import { getSettings, updateSettings, isWidgetVisible } from './settings-store.js?v=workspace-20261114a';
+import { getSettings, updateSettings, isWidgetVisible } from './settings-store.js?v=workspace-20261114b';
 import {
     BOOKMARK_LIMIT,
     countSavedMatching,
@@ -9,8 +9,8 @@ import {
     markRead,
     savedNews,
     toggleSaved,
-} from './news-state.js?v=workspace-20261114a';
-import { showControlToast } from './toast.js?v=workspace-20261114a';
+} from './news-state.js?v=workspace-20261114b';
+import { showControlToast } from './toast.js?v=workspace-20261114b';
 import {
     NEWS_PAGE_SIZE,
     assignClientKeys,
@@ -19,16 +19,18 @@ import {
     formatLastUpdated,
     groupLabel,
     matchesNewsFilter,
+    matchesSplitColumnFilter,
     newsRenderSignature,
     sourceLabel,
-} from './news-logic.js?v=workspace-20261114a';
+    supportsSplitView,
+} from './news-logic.js?v=workspace-20261114b';
 import {
     createGroupSeparator,
     createLoadMoreButton,
     createNewsElement,
     emptyMessage,
     refreshCommunitySummaries,
-} from './news-render.js?v=workspace-20261114a';
+} from './news-render.js?v=workspace-20261114b';
 
 const NEWS_POLL_INTERVAL = 30000;
 const AT_TOP_THRESHOLD = 24;
@@ -53,7 +55,8 @@ let communitySource = initialNewsSettings.communitySource || 'all';
 let searchTerm = '';
 let importantOnly = Boolean(initialNewsSettings.importantOnly);
 let visibleLimit = NEWS_PAGE_SIZE;
-let splitLimits = { live: NEWS_PAGE_SIZE, deep: NEWS_PAGE_SIZE };
+let splitLimits = { left: NEWS_PAGE_SIZE, right: NEWS_PAGE_SIZE };
+let lastSplitSignature = '';
 let newsPaused = !initialNewsSettings.autoRefresh;
 let newsPollTimer = null;
 let newsRequestInFlight = false;
@@ -124,14 +127,43 @@ function getSplitScrollContainers(container = document.getElementById('newsList'
     return Array.from(container.querySelectorAll('.news-split-scroll'));
 }
 
+function currentSplitConfig() {
+    const layout = getSettings().layout;
+    if (currentFilter === 'community') {
+        return {
+            isCommunity: true,
+            leftKey: 'communitySplitLeft',
+            rightKey: 'communitySplitRight',
+            leftSpec: layout.communitySplitLeft || 'src:linuxdo',
+            rightSpec: layout.communitySplitRight || 'src:nodeseek',
+        };
+    }
+    return {
+        isCommunity: false,
+        leftKey: 'splitLeft',
+        rightKey: 'splitRight',
+        leftSpec: layout.splitLeft || 'cat:news',
+        rightSpec: layout.splitRight || 'group:deep',
+    };
+}
+
+function currentSplitSignature() {
+    const { isCommunity, leftSpec, rightSpec } = currentSplitConfig();
+    return `${isCommunity ? 'community' : 'all'}:${leftSpec}|${rightSpec}`;
+}
+
 function isSplitModeActive(filteredCount = -1) {
     const root = document.documentElement;
     const layout = getSettings().layout;
-    return window.innerWidth >= 1024
-        && root.classList.contains('news-panel-full')
+    return root.classList.contains('news-panel-full')
+        && supportsSplitView({
+            viewportWidth: window.innerWidth,
+            newsPanelMode: layout.newsPanelMode,
+            category: currentFilter,
+            source: currentSource,
+            communitySource,
+        })
         && (layout.fullScreenLayout || 'split') === 'split'
-        && currentFilter === 'all'
-        && currentSource === 'all'
         && filteredCount !== 0;
 }
 
@@ -232,7 +264,6 @@ function observeReveal(element, scrollRoot = null) {
 }
 
 function motionAllowed() {
-    if (currentFilter === 'community') return false;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
     return !document.documentElement.classList.contains('power-saving');
 }
@@ -373,7 +404,7 @@ function buildFeedFragment(items, limit, existingByKey, newKeys, scrollRoot, emp
     };
     let lastGroupId = '';
     visibleNews.forEach((news, index) => {
-        if (groupByTime && currentFilter !== 'community') {
+        if (groupByTime) {
             const group = groupLabel(news);
             if (group.id !== lastGroupId) {
                 lastGroupId = group.id;
@@ -387,6 +418,7 @@ function buildFeedFragment(items, limit, existingByKey, newKeys, scrollRoot, emp
         }
         const signature = newsRenderSignature(news, currentFontSize);
         let element = existingByKey.get(news._clientKey);
+        existingByKey.delete(news._clientKey);
         if (!element || element.dataset.newsSignature !== signature) {
             const summaryExpanded = Boolean(element?.querySelector('.community-summary.is-expanded'));
             element = createNewsElement(news, { ...itemHandlers, isNew: newKeys.has(news._clientKey), summaryExpanded });
@@ -399,20 +431,94 @@ function buildFeedFragment(items, limit, existingByKey, newKeys, scrollRoot, emp
     return fragment;
 }
 
-function createSplitColumn(key, title, totalCount) {
+const ALL_SPLIT_CATEGORY_OPTIONS = [
+    { value: 'cat:news', label: '国内快讯' },
+    { value: 'group:deep', label: '海外 · 科技 · 论坛' },
+    { value: 'cat:foreign', label: '海外资讯' },
+    { value: 'cat:tech', label: '科技热榜' },
+    { value: 'cat:community', label: '论坛社区' },
+    { value: 'all', label: '全部资讯' },
+];
+
+const COMMUNITY_SPLIT_SOURCES = [
+    { id: 'linuxdo', label: 'Linux DO' },
+    { id: 'nodeseek', label: 'NodeSeek' },
+];
+
+function buildSplitSelectGroups(isCommunity, selectedSpec) {
+    if (isCommunity) {
+        return [{
+            label: '',
+            options: [
+                ...COMMUNITY_SPLIT_SOURCES.map(src => ({
+                    value: `src:${src.id}`,
+                    label: hiddenSources.includes(src.id) ? `${src.label}（已隐藏）` : src.label,
+                    disabled: hiddenSources.includes(src.id) && selectedSpec !== `src:${src.id}`,
+                })),
+                { value: 'all', label: '全部论坛' },
+            ],
+        }];
+    }
+    const availableSources = Array.from(new Set(allNewsData.map(item => item.source).filter(Boolean)))
+        .filter(src => !hiddenSources.includes(src) || selectedSpec === `src:${src}`)
+        .sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b), 'zh-CN'));
+    if (selectedSpec.startsWith('src:')) {
+        const selectedSource = selectedSpec.slice(4);
+        if (selectedSource && !availableSources.includes(selectedSource)) {
+            availableSources.push(selectedSource);
+        }
+    }
+    const groups = [{ label: '按分类', options: ALL_SPLIT_CATEGORY_OPTIONS }];
+    if (availableSources.length) {
+        groups.push({
+            label: '按来源',
+            options: availableSources.map(src => ({
+                value: `src:${src}`,
+                label: hiddenSources.includes(src) ? `${sourceLabel(src)}（已隐藏）` : sourceLabel(src),
+            })),
+        });
+    }
+    return groups;
+}
+
+/** Build one independent scrollable split column with a source/category picker header. */
+function createSplitColumn({ key, settingKey, selectedSpec, isCommunity, totalCount, onSelectChange }) {
     const col = document.createElement('section');
     col.className = 'news-split-col';
     col.dataset.splitCol = key;
-    col.setAttribute('aria-label', title);
 
     const header = document.createElement('div');
     header.className = 'news-split-col-header';
-    const titleSpan = document.createElement('span');
-    titleSpan.textContent = title;
+
+    const select = document.createElement('select');
+    select.className = 'news-split-select';
+    select.dataset.splitSelect = key;
+    select.setAttribute('aria-label', `${key === 'left' ? '左栏' : '右栏'}显示来源`);
+
+    let selectedLabel = '';
+    for (const group of buildSplitSelectGroups(isCommunity, selectedSpec)) {
+        const target = group.label ? document.createElement('optgroup') : select;
+        if (group.label) {
+            target.label = group.label;
+            select.appendChild(target);
+        }
+        for (const item of group.options) {
+            const option = document.createElement('option');
+            option.value = item.value;
+            option.textContent = item.label;
+            if (item.disabled) option.disabled = true;
+            if (item.value === selectedSpec) selectedLabel = item.label;
+            target.appendChild(option);
+        }
+    }
+    select.value = selectedSpec;
+    col.setAttribute('aria-label', `${key === 'left' ? '左栏' : '右栏'}：${selectedLabel || selectedSpec}`);
+    select.addEventListener('change', () => onSelectChange(key, settingKey, select.value));
+
     const countSpan = document.createElement('span');
     countSpan.className = 'news-split-col-count';
     countSpan.textContent = `${totalCount} 条`;
-    header.append(titleSpan, countSpan);
+    header.append(select, countSpan);
 
     const scrollEl = document.createElement('div');
     scrollEl.className = 'news-split-scroll';
@@ -460,10 +566,16 @@ function renderNewsList(newKeys = new Set(), mode = 'reset') {
     const splitActive = isSplitModeActive(filtered.length);
     document.documentElement.classList.toggle('news-split-active', splitActive);
 
-    const liveItems = splitActive ? filtered.filter(news => news.category === 'news') : null;
-    const deepItems = splitActive ? filtered.filter(news => news.category !== 'news') : null;
+    const splitConfig = splitActive ? currentSplitConfig() : null;
+    const splitSpecs = splitActive ? [
+        { key: 'left', settingKey: splitConfig.leftKey, spec: splitConfig.leftSpec },
+        { key: 'right', settingKey: splitConfig.rightKey, spec: splitConfig.rightSpec },
+    ].map(entry => ({
+        ...entry,
+        items: filtered.filter(news => matchesSplitColumnFilter(news, entry.spec)),
+    })) : null;
     const renderedCount = splitActive
-        ? Math.min(liveItems.length, splitLimits.live) + Math.min(deepItems.length, splitLimits.deep)
+        ? new Set(splitSpecs.flatMap(col => col.items.slice(0, splitLimits[col.key]).map(news => news._clientKey))).size
         : Math.min(filtered.length, visibleLimit);
 
     updateTabCounts();
@@ -473,6 +585,8 @@ function renderNewsList(newKeys = new Set(), mode = 'reset') {
     listContainer.setAttribute('aria-labelledby', `tab-${currentFilter}`);
     if (!hasLoadedNews && allNewsData.length === 0 && filtered.length === 0) return;
 
+    const activeSplitSelect = document.activeElement?.dataset?.splitSelect;
+    const restoreSplitSelect = activeSplitSelect && listContainer.contains(document.activeElement) ? activeSplitSelect : '';
     const existing = new Map(
         Array.from(listContainer.querySelectorAll('[data-news-key]'))
             .map(element => [element.dataset.newsKey, element])
@@ -480,35 +594,36 @@ function renderNewsList(newKeys = new Set(), mode = 'reset') {
     const emptyText = emptyFilterText();
 
     if (splitActive) {
-        const prevLive = listContainer.querySelector('[data-split-col="live"] .news-split-scroll');
-        const prevDeep = listContainer.querySelector('[data-split-col="deep"] .news-split-scroll');
-        const anchors = mode === 'anchor' ? {
-            live: prevLive ? captureScrollAnchor(prevLive) : null,
-            deep: prevDeep ? captureScrollAnchor(prevDeep) : null,
-        } : null;
+        lastSplitSignature = currentSplitSignature();
+        const colViews = splitSpecs.map(entry => {
+            const prevScroller = listContainer.querySelector(`[data-split-col="${entry.key}"] .news-split-scroll`);
+            const anchor = mode === 'anchor' && prevScroller ? captureScrollAnchor(prevScroller) : null;
+            const colView = createSplitColumn({
+                key: entry.key,
+                settingKey: entry.settingKey,
+                selectedSpec: entry.spec,
+                isCommunity: splitConfig.isCommunity,
+                totalCount: entry.items.length,
+                onSelectChange: (colKey, settingKey, nextSpec) => {
+                    splitLimits[colKey] = NEWS_PAGE_SIZE;
+                    updateSettings('layout', { [settingKey]: nextSpec });
+                },
+            });
+            colView.scrollEl.appendChild(buildFeedFragment(
+                entry.items, splitLimits[entry.key], existing, newKeys, colView.scrollEl,
+                '该分栏暂无匹配内容', rendered => handleLoadMore(entry.key, rendered),
+            ));
+            return { ...colView, anchor };
+        });
 
-        const liveCol = createSplitColumn('live', '实时快讯 · 新浪直播', liveItems.length);
-        const deepCol = createSplitColumn('deep', '海外资讯 · 科技 · 论坛精华', deepItems.length);
-
-        liveCol.scrollEl.appendChild(buildFeedFragment(
-            liveItems, splitLimits.live, existing, newKeys, liveCol.scrollEl,
-            '当前暂无实时快讯', rendered => handleLoadMore('live', rendered),
-        ));
-        deepCol.scrollEl.appendChild(buildFeedFragment(
-            deepItems, splitLimits.deep, existing, newKeys, deepCol.scrollEl,
-            '当前暂无海外、科技或论坛资讯', rendered => handleLoadMore('deep', rendered),
-        ));
-
-        listContainer.replaceChildren(liveCol.col, deepCol.col);
+        listContainer.replaceChildren(...colViews.map(view => view.col));
         refreshCommunitySummaries(listContainer);
-        if (mode === 'anchor' && anchors) {
-            restoreScrollAnchor(liveCol.scrollEl, anchors.live);
-            restoreScrollAnchor(deepCol.scrollEl, anchors.deep);
-        } else {
-            liveCol.scrollEl.scrollTop = 0;
-            deepCol.scrollEl.scrollTop = 0;
+        for (const view of colViews) {
+            if (mode === 'anchor' && view.anchor) restoreScrollAnchor(view.scrollEl, view.anchor);
+            else view.scrollEl.scrollTop = 0;
         }
     } else {
+        lastSplitSignature = '';
         const anchor = mode === 'anchor' ? captureScrollAnchor(listContainer) : null;
         const fragment = buildFeedFragment(
             filtered, visibleLimit, existing, newKeys, listContainer,
@@ -531,6 +646,8 @@ function renderNewsList(newKeys = new Set(), mode = 'reset') {
             target.focus({ preventScroll: true });
         }
         pendingFocusKey = '';
+    } else if (restoreSplitSelect) {
+        listContainer.querySelector(`[data-split-select="${restoreSplitSelect}"]`)?.focus({ preventScroll: true });
     }
     refreshRevealObserver();
     syncScrollShadow();
@@ -609,7 +726,7 @@ function updateSourceOptions() {
 
 function resetNewsView() {
     visibleLimit = NEWS_PAGE_SIZE;
-    splitLimits = { live: NEWS_PAGE_SIZE, deep: NEWS_PAGE_SIZE };
+    splitLimits = { left: NEWS_PAGE_SIZE, right: NEWS_PAGE_SIZE };
     clearUnseen();
     withViewTransition(() => renderNewsList(new Set(), 'reset'));
 }
@@ -935,7 +1052,8 @@ export function initNews() {
         const filteredCount = hasLoadedNews ? readingPool().filter(news => applyFilter(news)).length : 0;
         const nextSplit = isSplitModeActive(filteredCount);
         const currentSplit = document.documentElement.classList.contains('news-split-active');
-        if (hasLoadedNews && nextSplit !== currentSplit) {
+        const nextSignature = nextSplit ? currentSplitSignature() : '';
+        if (hasLoadedNews && (nextSplit !== currentSplit || (nextSplit && nextSignature !== lastSplitSignature))) {
             renderNewsList(new Set(), 'reset');
         }
         moveTabIndicator(currentFilter);

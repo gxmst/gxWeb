@@ -1,4 +1,5 @@
-import { getSettings, updateSettings, isWidgetVisible } from './settings-store.js?v=workspace-20261114a';
+import { getSettings, updateSettings, isWidgetVisible } from './settings-store.js?v=workspace-20261114b';
+import { supportsSplitView } from './news-logic.js?v=workspace-20261114b';
 
 export function panelBounds(viewport) {
     const maximum = Math.max(280, viewport - 48);
@@ -52,25 +53,32 @@ export function initNewsPanel() {
     let suppressClick = false;
 
     const desktop = () => window.innerWidth >= 768;
-    const splitSupported = () => window.innerWidth >= 1024;
     function syncGeometry(width) {
         const geometry = heroGeometry(window.innerWidth, width, isWidgetVisible('news'));
         document.body.style.setProperty('--main-width', `${geometry.width}px`);
         root.dataset.heroTier = geometry.tier;
     }
     function sync() {
-        const layout = getSettings().layout;
+        const settings = getSettings();
+        const layout = settings.layout;
+        const newsSettings = settings.news;
         const active = isWidgetVisible('news');
         const full = active && layout.newsPanelMode === 'full';
         const wide = active && desktop() && layout.newsPanelMode === 'wide';
-        const desktopFull = full && splitSupported();
+        const splitAvailable = active && supportsSplitView({
+            viewportWidth: window.innerWidth,
+            newsPanelMode: layout.newsPanelMode,
+            category: newsSettings.category,
+            source: newsSettings.source,
+            communitySource: newsSettings.communitySource,
+        });
         const splitLayout = (layout.fullScreenLayout || 'split') === 'split';
         root.classList.toggle('news-panel-full', full);
         root.classList.toggle('news-panel-wide', wide);
         aside.style.setProperty('--news-panel-width', `${panelWidth(layout, window.innerWidth)}px`);
         syncGeometry(panelWidth(layout, window.innerWidth));
         if (layoutToggle) {
-            layoutToggle.hidden = !desktopFull;
+            layoutToggle.hidden = !splitAvailable;
             layoutToggle.setAttribute('aria-pressed', String(splitLayout));
             const label = splitLayout ? '双栏阅读中，点击切换单栏居中' : '单栏居中阅读中，点击切换双栏';
             layoutToggle.setAttribute('aria-label', label);
@@ -168,7 +176,7 @@ export function initNewsPanel() {
     window.addEventListener('gx:layout-changed', () => { stopDrag(true); sync(); });
     window.addEventListener('resize', () => { stopDrag(true); sync(); });
     window.addEventListener('gx:settings-changed', event => {
-        if (['layout', 'widgets', 'all'].includes(event.detail?.section)) { stopDrag(true); sync(); }
+        if (['layout', 'widgets', 'news', 'all'].includes(event.detail?.section)) { stopDrag(true); sync(); }
     });
     sync();
 }

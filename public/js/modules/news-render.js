@@ -5,7 +5,7 @@ import {
     normalizeNewsDisplayText,
     sanitizeHttpUrl,
     sourceLabel,
-} from './news-logic.js?v=workspace-20261114a';
+} from './news-logic.js?v=workspace-20261114b';
 
 const MARKET_MOVE_REGEX = /([+-]\d+(?:\.\d+)?%|(?:上涨|下跌|涨超|跌超|涨幅|跌幅)\s*\d+(?:\.\d+)?%)/g;
 const TECH_DOT_COLORS = new Set(['bg-purple-400', 'bg-amber-400', 'bg-sky-400']);
@@ -161,22 +161,22 @@ export function createNewsElement(news, {
     const fs = fontSize === 'sm' ? 'text-sm' : (fontSize === 'base' ? 'text-base' : 'text-lg');
     const item = document.createElement('div');
     const header = document.createElement('div');
-    const body = document.createElement(isCommunity ? 'h3' : 'div');
+    const body = document.createElement('div');
     const displayText = normalizeNewsDisplayText(news);
     const safeUrl = sanitizeHttpUrl(news.url);
     const importantClass = news.is_important ? ' is-important' : '';
 
     item.className = `news-feed-item${importantClass} py-2` + (isCommunity ? ' community-item' : '')
-        + (isNew && !isCommunity ? ' animate-slide-down' : '');
+        + (isNew ? ' animate-slide-down' : '');
     item.dataset.newsKey = news._clientKey;
     item.dataset.newsSignature = newsRenderSignature(news, fontSize);
-    if (!isCommunity && shouldReveal && observeReveal) observeReveal(item);
+    if (shouldReveal && observeReveal) observeReveal(item);
     else item.classList.add('in-view');
 
     header.className = 'text-[11px] text-white/45 font-mono mb-0.5 flex flex-wrap items-center gap-1.5';
     const time = document.createElement('span');
     time.textContent = isCommunity ? formatCommunityTime(news) : news.time || '';
-    if (!isCommunity) header.appendChild(time);
+    if (time.textContent) header.appendChild(time);
     if (news.source) {
         const source = document.createElement('span');
         source.className = 'news-source-badge';
@@ -193,21 +193,8 @@ export function createNewsElement(news, {
         header.appendChild(badge);
     }
 
-    if (isCommunity) header.appendChild(time);
-    body.className = isCommunity ? 'community-title news-readable'
-        : `${fs} leading-relaxed text-white/90 drop-shadow-sm tech-content news-readable`;
-    if (isCommunity) {
-        header.className = 'community-meta';
-        body.dataset.fontSize = fontSize;
-        const title = document.createElement(safeUrl ? 'a' : 'span');
-        title.textContent = displayText;
-        if (safeUrl) {
-            title.href = safeUrl;
-            title.target = '_blank';
-            title.rel = 'noopener noreferrer';
-        }
-        body.appendChild(title);
-    } else if (news.format === 'tech' && news.tech_data) {
+    body.className = `${fs} leading-relaxed text-white/90 drop-shadow-sm tech-content news-readable`;
+    if (news.format === 'tech' && news.tech_data) {
         body.appendChild(createTechContentElement(news.tech_data));
     } else if (news.format === 'html') {
         const rawHtml = String(news.content || '').replace(
@@ -266,7 +253,7 @@ export function createNewsElement(news, {
     actions.append(readButton, saveButton);
     header.appendChild(actions);
 
-    item.append(...(isCommunity ? [body, header] : [header, body]));
+    item.append(header, body);
     if (isCommunity && news.summary) {
         const summary = document.createElement('p');
         summary.className = 'community-summary';

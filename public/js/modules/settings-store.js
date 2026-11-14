@@ -1,4 +1,4 @@
-import { safeStorageGet, safeStorageSet } from './storage.js?v=workspace-20261114a';
+import { safeStorageGet, safeStorageSet } from './storage.js?v=workspace-20261114b';
 
 const SETTINGS_KEY = 'gxSettingsV1';
 
@@ -70,9 +70,35 @@ export const DEFAULT_SETTINGS = {
         newsPanelWidth: null,
         newsPanelMode: 'compact',
         fullScreenLayout: 'split',
+        splitLeft: 'cat:news',
+        splitRight: 'group:deep',
+        communitySplitLeft: 'src:linuxdo',
+        communitySplitRight: 'src:nodeseek',
     },
     shortcuts: DEFAULT_SHORTCUTS,
 };
+
+const VALID_SPLIT_CATEGORIES = new Set(['news', 'foreign', 'tech', 'community']);
+
+function sanitizeSplitColumn(value, fallback, { communityOnly = false } = {}) {
+    if (typeof value !== 'string') return fallback;
+    const candidate = value.trim();
+    if (!candidate || candidate.length > 84) return fallback;
+    if (candidate === 'all') return candidate;
+    if (!communityOnly) {
+        if (candidate === 'group:deep') return candidate;
+        if (candidate.startsWith('cat:')) {
+            return VALID_SPLIT_CATEGORIES.has(candidate.slice(4)) ? candidate : fallback;
+        }
+    }
+    if (candidate.startsWith('src:')) {
+        const source = candidate.slice(4).trim();
+        if (!source || /[\r\n\0]/.test(source)) return fallback;
+        if (communityOnly && !['linuxdo', 'nodeseek'].includes(source)) return fallback;
+        return `src:${source}`;
+    }
+    return fallback;
+}
 
 function clone(value) {
     if (typeof structuredClone === 'function') return structuredClone(value);
@@ -187,6 +213,10 @@ function sanitizeSettings(value) {
             newsPanelWidth: Number.isFinite(panelWidth) && panelWidth >= 280 ? Math.min(panelWidth, 10000) : null,
             newsPanelMode: ['compact', 'wide', 'full'].includes(layout.newsPanelMode) ? layout.newsPanelMode : 'compact',
             fullScreenLayout: ['split', 'single'].includes(layout.fullScreenLayout) ? layout.fullScreenLayout : 'split',
+            splitLeft: sanitizeSplitColumn(layout.splitLeft, DEFAULT_SETTINGS.layout.splitLeft),
+            splitRight: sanitizeSplitColumn(layout.splitRight, DEFAULT_SETTINGS.layout.splitRight),
+            communitySplitLeft: sanitizeSplitColumn(layout.communitySplitLeft, DEFAULT_SETTINGS.layout.communitySplitLeft, { communityOnly: true }),
+            communitySplitRight: sanitizeSplitColumn(layout.communitySplitRight, DEFAULT_SETTINGS.layout.communitySplitRight, { communityOnly: true }),
         },
         shortcuts: sanitizeShortcuts(source.shortcuts),
     };

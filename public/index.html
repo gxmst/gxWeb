@@ -13,44 +13,44 @@
     <!-- 自托管 Inter、JetBrains Mono 与中文文楷；仅在选用时加载对应字体文件。 -->
     <link rel="stylesheet" href="./fonts/fonts.css">
     <!-- Tailwind：静态预编译产物（由 `npm run build:css` 生成）。改动 class 后需重新构建。 -->
-    <link rel="stylesheet" href="./vendor/app.css?v=workspace-20261114a">
+    <link rel="stylesheet" href="./vendor/app.css?v=workspace-20261114b">
     <!-- 自定义样式：从旧单文件 <style> 拆分为四个职责文件。
          base=字体/时钟/骨架；glass=玻璃材质/折射/氛围；components=时间轴/光斑/磁吸/Tab；effects=时段/雷暴/晴天/星空 -->
-    <link rel="stylesheet" href="./css/base.css?v=workspace-20261114a">
-    <link rel="stylesheet" href="./css/glass.css?v=workspace-20261114a">
-    <link rel="stylesheet" href="./css/components.css?v=workspace-20261114a">
-    <link rel="stylesheet" href="./css/effects.css?v=workspace-20261114a">
-    <link rel="stylesheet" href="./css/workspace.css?v=workspace-20261114a">
+    <link rel="stylesheet" href="./css/base.css?v=workspace-20261114b">
+    <link rel="stylesheet" href="./css/glass.css?v=workspace-20261114b">
+    <link rel="stylesheet" href="./css/components.css?v=workspace-20261114b">
+    <link rel="stylesheet" href="./css/effects.css?v=workspace-20261114b">
+    <link rel="stylesheet" href="./css/workspace.css?v=workspace-20261114b">
     <!-- DOMPurify：模块化脚本通过全局 DOMPurify 引用，须在 main.js 之前以经典脚本加载 -->
     <script src="./vendor/purify.min.js"></script>
     <!-- 模块预载：ESM 默认是"读到 import 才发请求"，本站的依赖图有三层，
          跨太平洋 120ms RTT 下最深的叶子模块要等到第三轮才开始下载（实测 ~760ms）。
          这里把整张图一次性声明出来，浏览器立刻并行拉，三轮压成一轮。
          注意 href 必须与 JS 里的 import 说明符完全一致（含 ?v=），否则会重复下载。 -->
-    <link rel="modulepreload" href="./js/main.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/admin-settings.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/ambience.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/fluid.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/forecast.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/interactions.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/news.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/news-logic.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/news-panel.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/news-render.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/news-state.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/settings.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/settings-store.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/status.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/storage.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/ticker.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/toast.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/ui.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/wallpaper.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/wallpaper-store.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/weather.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/weather-physics.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/weather-scene.js?v=workspace-20261114a">
-    <link rel="modulepreload" href="./js/modules/widgets.js?v=workspace-20261114a">
+    <link rel="modulepreload" href="./js/main.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/admin-settings.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/ambience.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/fluid.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/forecast.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/interactions.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/news.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/news-logic.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/news-panel.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/news-render.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/news-state.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/settings.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/settings-store.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/status.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/storage.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/ticker.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/toast.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/ui.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/wallpaper.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/wallpaper-store.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/weather.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/weather-physics.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/weather-scene.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/modules/widgets.js?v=workspace-20261114b">
 </head>
 
 <body
@@ -716,7 +716,7 @@
     </footer>
 
     <!-- 应用入口：ES Module。各功能模块在 js/modules/ 下，由 main.js 按依赖顺序启动。 -->
-    <script type="module" src="./js/main.js?v=workspace-20261114a"></script>
+    <script type="module" src="./js/main.js?v=workspace-20261114b"></script>
 </body>
 
 </html>

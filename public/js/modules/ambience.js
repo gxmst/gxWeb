@@ -1,4 +1,4 @@
-import { getSettings, getEffectiveAppearance } from './settings-store.js?v=workspace-20261114a';
+import { getSettings, getEffectiveAppearance } from './settings-store.js?v=workspace-20261114b';
 
 // ================== 视觉增强：进场 / 光斑 / 磁吸 / 时段 / 雷暴 / 星空 / 数字滚动 ==================
 // 暴露给其它模块的钩子：window.__setAmbiance / __animateNumber / __drawInSparkline
@@ -8,14 +8,25 @@ export function initAmbience() {
     let appearance = getEffectiveAppearance();
     let powerSaving = appearance.powerSaving;
 
-    // ---- 进场错峰动画：逐个触发 .entered ----
+    // ---- 进场错峰动画：逐个触发 .entered，结束后清理 data-enter 避免干扰后续交互动效 ----
     const enterEls = Array.from(document.querySelectorAll('[data-enter]'));
     if (reduceMotion) {
-        enterEls.forEach(el => { el.style.opacity = '1'; });
+        enterEls.forEach(el => {
+            el.style.opacity = '1';
+            el.removeAttribute('data-enter');
+        });
     } else {
+        enterEls.forEach(el => {
+            el.addEventListener('animationend', event => {
+                if (event.animationName === 'fadeUp') el.removeAttribute('data-enter');
+            }, { once: true });
+        });
         requestAnimationFrame(() => {
             enterEls.forEach(el => el.classList.add('entered'));
         });
+        window.setTimeout(() => {
+            enterEls.forEach(el => el.removeAttribute('data-enter'));
+        }, 1600);
     }
 
     // ---- 玻璃面板鼠标光斑：rAF 合并指针更新并缓存容器边界，避免高频触发重排 ----

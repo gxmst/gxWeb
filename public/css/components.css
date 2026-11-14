@@ -465,8 +465,9 @@ html.js-reveal .news-feed-item.animate-slide-down {
     to   { opacity: 1; transform: translateY(0); }
 }
 [data-enter] { opacity: 1; }
-html.js-motion [data-enter] { opacity: 0; will-change: transform, opacity; }
+html.js-motion [data-enter]:not(.entered) { opacity: 0; will-change: transform, opacity; }
 [data-enter].entered {
+    opacity: 1;
     animation: fadeUp 0.62s cubic-bezier(0.22, 0.61, 0.36, 1) both;
     animation-delay: var(--enter-delay, 0s);
 }
@@ -1022,8 +1023,8 @@ html.power-saving .clock-colon {
 @media (max-width: 767px) {
     #news-panel {
         background:
-            linear-gradient(145deg, rgba(255, 255, 255, 0.035), rgba(var(--wall-rgb), 0.018) 48%, rgba(255, 255, 255, 0.01)),
-            rgba(10, 16, 28, 0.30);
+            linear-gradient(145deg, rgba(255, 255, 255, 0.045), rgba(var(--wall-rgb), 0.022) 48%, rgba(255, 255, 255, 0.012)),
+            rgba(10, 16, 28, 0.22);
     }
 
     #newsList {
@@ -1042,7 +1043,9 @@ html.power-saving .clock-colon {
     }
 
     #bottom-ticker {
-        background: rgba(8, 12, 20, 0.78);
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(var(--wall-rgb), 0.025)),
+            rgba(8, 12, 20, 0.34);
     }
 }
 
