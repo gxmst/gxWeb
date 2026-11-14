@@ -1,4 +1,4 @@
-import { getSettings, isWidgetVisible } from './settings-store.js?v=workspace-20261114b';
+import { getSettings, isWidgetVisible } from './settings-store.js?v=workspace-20261114c';
 
 export function forecastDescription(code) {
     if(code === 0) return {label:'晴',icon:'☀'};

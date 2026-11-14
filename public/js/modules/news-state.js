@@ -1,4 +1,4 @@
-import { safeStorageGet, safeStorageSet } from './storage.js?v=workspace-20261114b';
+import { safeStorageGet, safeStorageSet } from './storage.js?v=workspace-20261114c';
 
 const KEY = 'gxNewsReadingV1';
 export const BOOKMARK_LIMIT = 200;

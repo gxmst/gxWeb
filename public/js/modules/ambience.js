@@ -1,4 +1,4 @@
-import { getSettings, getEffectiveAppearance } from './settings-store.js?v=workspace-20261114b';
+import { getSettings, getEffectiveAppearance } from './settings-store.js?v=workspace-20261114c';
 
 // ================== 视觉增强：进场 / 光斑 / 磁吸 / 时段 / 雷暴 / 星空 / 数字滚动 ==================
 // 暴露给其它模块的钩子：window.__setAmbiance / __animateNumber / __drawInSparkline

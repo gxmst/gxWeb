@@ -1,4 +1,4 @@
-import { particleBudget, createSnowpack, depositSnow, relaxSnowpack, snowHeightAt, splashDroplets } from './weather-physics.js?v=workspace-20261114b';
+import { particleBudget, createSnowpack, depositSnow, relaxSnowpack, snowHeightAt, splashDroplets } from './weather-physics.js?v=workspace-20261114c';
 
 export function createWeatherScene(canvas) {
     const ctx = canvas.getContext('2d');

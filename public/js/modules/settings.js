@@ -5,9 +5,9 @@ import {
     normalizeShortcutUrl,
     resetSettings,
     updateSettings,
-} from './settings-store.js?v=workspace-20261114b';
-import { applyFavorite, removeFavorite, requestFavorites } from './wallpaper.js?v=workspace-20261114b';
-import { initAdminSettings } from './admin-settings.js?v=workspace-20261114b';
+} from './settings-store.js?v=workspace-20261114c';
+import { applyFavorite, removeFavorite, requestFavorites } from './wallpaper.js?v=workspace-20261114c';
+import { initAdminSettings } from './admin-settings.js?v=workspace-20261114c';
 
 let shortcutTemplates = new Map();
 let availableTickers = [];

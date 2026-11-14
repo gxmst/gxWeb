@@ -1,4 +1,4 @@
-import { safeStorageGet, safeStorageSet } from './storage.js?v=workspace-20261114b';
+import { safeStorageGet, safeStorageSet } from './storage.js?v=workspace-20261114c';
 
 const SETTINGS_KEY = 'gxSettingsV1';
 

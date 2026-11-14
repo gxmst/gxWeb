@@ -1,4 +1,4 @@
-import { getSettings, updateSettings, getEffectiveAppearance } from './settings-store.js?v=workspace-20261114b';
+import { getSettings, updateSettings, getEffectiveAppearance } from './settings-store.js?v=workspace-20261114c';
 
 // ================== WebGL 轻量涟漪壁纸 ==================
 // 在壁纸图层之上叠一块 WebGL canvas（z-[3]，氛围光/遮罩之下），采样当前壁纸做

@@ -5,7 +5,7 @@ import {
     normalizeNewsDisplayText,
     sanitizeHttpUrl,
     sourceLabel,
-} from './news-logic.js?v=workspace-20261114b';
+} from './news-logic.js?v=workspace-20261114c';
 
 const MARKET_MOVE_REGEX = /([+-]\d+(?:\.\d+)?%|(?:上涨|下跌|涨超|跌超|涨幅|跌幅)\s*\d+(?:\.\d+)?%)/g;
 const TECH_DOT_COLORS = new Set(['bg-purple-400', 'bg-amber-400', 'bg-sky-400']);

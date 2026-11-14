@@ -2,10 +2,10 @@
 // 轮换池 = 服务器列表（public/wallpapers.json：收藏目录 + 今日必应 5 张）+ 本地收藏夹。
 // 本地收藏夹存在 IndexedDB 里（见 wallpaper-store.js），存的是图片字节而不是路径——
 // 因为 bg_0..bg_4.jpg 是滚动窗口，5 天后同名文件已是别的图，存路径等于收藏了一个格子。
-import { safeStorageGet, safeStorageSet } from './storage.js?v=workspace-20261114b';
-import { moveTabIndicator, getCurrentFilter } from './news.js?v=workspace-20261114b';
-import { getSettings } from './settings-store.js?v=workspace-20261114b';
-import { showControlToast } from './toast.js?v=workspace-20261114b';
+import { safeStorageGet, safeStorageSet } from './storage.js?v=workspace-20261114c';
+import { moveTabIndicator, getCurrentFilter } from './news.js?v=workspace-20261114c';
+import { getSettings } from './settings-store.js?v=workspace-20261114c';
+import { showControlToast } from './toast.js?v=workspace-20261114c';
 import {
     FAVORITE_LIMIT,
     deleteFavorite,
@@ -14,7 +14,7 @@ import {
     initFavorites,
     listFavorites,
     putFavorite,
-} from './wallpaper-store.js?v=workspace-20261114b';
+} from './wallpaper-store.js?v=workspace-20261114c';
 
 // 轮换条目统一形态：{ key, kind: 'remote' | 'local', src?, id? }
 let remoteEntries = [];

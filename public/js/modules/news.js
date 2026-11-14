@@ -1,5 +1,5 @@
 // ================== 新闻流交互与实时同步 ==================
-import { getSettings, updateSettings, isWidgetVisible } from './settings-store.js?v=workspace-20261114b';
+import { getSettings, updateSettings, isWidgetVisible } from './settings-store.js?v=workspace-20261114c';
 import {
     BOOKMARK_LIMIT,
     countSavedMatching,
@@ -9,8 +9,8 @@ import {
     markRead,
     savedNews,
     toggleSaved,
-} from './news-state.js?v=workspace-20261114b';
-import { showControlToast } from './toast.js?v=workspace-20261114b';
+} from './news-state.js?v=workspace-20261114c';
+import { showControlToast } from './toast.js?v=workspace-20261114c';
 import {
     NEWS_PAGE_SIZE,
     assignClientKeys,
@@ -23,24 +23,17 @@ import {
     newsRenderSignature,
     sourceLabel,
     supportsSplitView,
-} from './news-logic.js?v=workspace-20261114b';
+} from './news-logic.js?v=workspace-20261114c';
 import {
     createGroupSeparator,
     createLoadMoreButton,
     createNewsElement,
     emptyMessage,
     refreshCommunitySummaries,
-} from './news-render.js?v=workspace-20261114b';
+} from './news-render.js?v=workspace-20261114c';
 
 const NEWS_POLL_INTERVAL = 30000;
 const AT_TOP_THRESHOLD = 24;
-const TAB_ACCENTS = {
-    all: '255,255,255',
-    news: '96,165,250',     // 蓝
-    foreign: '251,191,36',  // 琥珀
-    community: '52,211,153',
-    tech: '167,139,250',    // 紫
-};
 
 let allNewsData = [];
 let hasLoadedNews = false;
@@ -678,13 +671,12 @@ export function moveTabIndicator(filter) {
     const ind = document.getElementById('tabIndicator');
     if (!bar || !btn || !ind) return;
     const styles = getComputedStyle(document.body);
-    const dynamicAccent = `${styles.getPropertyValue('--wall-r').trim() || 255},${styles.getPropertyValue('--wall-g').trim() || 255},${styles.getPropertyValue('--wall-b').trim() || 255}`;
-    const accent = filter === 'all' ? dynamicAccent : (TAB_ACCENTS[filter] || dynamicAccent);
+    const accent = `${styles.getPropertyValue('--wall-r').trim() || 255},${styles.getPropertyValue('--wall-g').trim() || 255},${styles.getPropertyValue('--wall-b').trim() || 255}`;
     ind.style.left = btn.offsetLeft + 'px';
     ind.style.width = btn.offsetWidth + 'px';
     ind.style.background = `rgba(${accent},0.18)`;
-    ind.style.border = `1px solid rgba(${accent},0.45)`;
-    ind.style.boxShadow = `0 0 14px rgba(${accent},0.35), inset 0 1px 0 rgba(255,255,255,0.15)`;
+    ind.style.border = `1px solid rgba(${accent},0.42)`;
+    ind.style.boxShadow = `0 0 12px rgba(${accent},0.28), inset 0 1px 0 rgba(255,255,255,0.16)`;
 }
 
 function updateTabCounts() {

@@ -13,44 +13,44 @@
     <!-- 自托管 Inter、JetBrains Mono 与中文文楷；仅在选用时加载对应字体文件。 -->
     <link rel="stylesheet" href="./fonts/fonts.css">
     <!-- Tailwind：静态预编译产物（由 `npm run build:css` 生成）。改动 class 后需重新构建。 -->
-    <link rel="stylesheet" href="./vendor/app.css?v=workspace-20261114b">
+    <link rel="stylesheet" href="./vendor/app.css?v=workspace-20261114c">
     <!-- 自定义样式：从旧单文件 <style> 拆分为四个职责文件。
          base=字体/时钟/骨架；glass=玻璃材质/折射/氛围；components=时间轴/光斑/磁吸/Tab；effects=时段/雷暴/晴天/星空 -->
-    <link rel="stylesheet" href="./css/base.css?v=workspace-20261114b">
-    <link rel="stylesheet" href="./css/glass.css?v=workspace-20261114b">
-    <link rel="stylesheet" href="./css/components.css?v=workspace-20261114b">
-    <link rel="stylesheet" href="./css/effects.css?v=workspace-20261114b">
-    <link rel="stylesheet" href="./css/workspace.css?v=workspace-20261114b">
+    <link rel="stylesheet" href="./css/base.css?v=workspace-20261114c">
+    <link rel="stylesheet" href="./css/glass.css?v=workspace-20261114c">
+    <link rel="stylesheet" href="./css/components.css?v=workspace-20261114c">
+    <link rel="stylesheet" href="./css/effects.css?v=workspace-20261114c">
+    <link rel="stylesheet" href="./css/workspace.css?v=workspace-20261114c">
     <!-- DOMPurify：模块化脚本通过全局 DOMPurify 引用，须在 main.js 之前以经典脚本加载 -->
     <script src="./vendor/purify.min.js"></script>
     <!-- 模块预载：ESM 默认是"读到 import 才发请求"，本站的依赖图有三层，
          跨太平洋 120ms RTT 下最深的叶子模块要等到第三轮才开始下载（实测 ~760ms）。
          这里把整张图一次性声明出来，浏览器立刻并行拉，三轮压成一轮。
          注意 href 必须与 JS 里的 import 说明符完全一致（含 ?v=），否则会重复下载。 -->
-    <link rel="modulepreload" href="./js/main.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/admin-settings.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/ambience.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/fluid.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/forecast.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/interactions.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/news.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/news-logic.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/news-panel.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/news-render.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/news-state.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/settings.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/settings-store.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/status.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/storage.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/ticker.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/toast.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/ui.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/wallpaper.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/wallpaper-store.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/weather.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/weather-physics.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/weather-scene.js?v=workspace-20261114b">
-    <link rel="modulepreload" href="./js/modules/widgets.js?v=workspace-20261114b">
+    <link rel="modulepreload" href="./js/main.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/admin-settings.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/ambience.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/fluid.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/forecast.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/interactions.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/news.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/news-logic.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/news-panel.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/news-render.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/news-state.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/settings.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/settings-store.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/status.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/storage.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/ticker.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/toast.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/ui.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/wallpaper.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/wallpaper-store.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/weather.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/weather-physics.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/weather-scene.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/modules/widgets.js?v=workspace-20261114c">
 </head>
 
 <body
@@ -288,50 +288,76 @@
             class="glass-spot glass-panel flex-none rounded-2xl md:rounded-3xl p-4 pt-3 md:p-6 md:pt-4 flex flex-col overflow-visible md:overflow-hidden relative md:flex-1">
             <!-- 紧凑标题栏：一行放完标题 / 运行状态 / 更新时间 / 筛选与暂停。
                  搜索、来源、只看重要收进下面的折叠行——绝大多数时候不需要占垂直空间。 -->
-            <div class="mb-1.5 border-b border-white/10 pb-1.5">
-                <div id="newsPanelHeader" class="flex items-center gap-2">
-                    <h2 class="news-panel-title">
-                        <button id="newsPanelDrag" type="button" title="向左拖动展开，向右拖动收起；双击还原"
-                            aria-label="拖动资讯面板；左右箭头调整，Enter 全屏，Home 还原">
-                            <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="4" r="1"/><circle cx="9" cy="4" r="1"/><circle cx="3" cy="8" r="1"/><circle cx="9" cy="8" r="1"/><circle cx="3" cy="12" r="1"/><circle cx="9" cy="12" r="1"/></svg>
-                            <span id="newsPanelTitleText">7×24 快讯</span>
+            <div class="news-header-shell mb-1.5 border-b border-white/10 pb-1.5">
+                <div id="newsPanelHeader">
+                    <div class="news-header-brand">
+                        <h2 class="news-panel-title">
+                            <button id="newsPanelDrag" type="button" title="向左拖动展开，向右拖动收起；双击还原"
+                                aria-label="拖动资讯面板；左右箭头调整，Enter 全屏，Home 还原">
+                                <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="4" r="1"/><circle cx="9" cy="4" r="1"/><circle cx="3" cy="8" r="1"/><circle cx="9" cy="8" r="1"/><circle cx="3" cy="12" r="1"/><circle cx="9" cy="12" r="1"/></svg>
+                                <span id="newsPanelTitleText">7×24 快讯</span>
+                            </button>
+                        </h2>
+                        <button id="systemStatusButton" type="button" aria-expanded="false" aria-controls="systemStatusPopover"
+                            class="h-7 w-7 shrink-0 flex items-center justify-center rounded-md border border-white/10 bg-white/5 transition-colors hover:bg-white/10"
+                            title="数据运行状态">
+                            <span id="systemStatusDot" class="h-2 w-2 rounded-full bg-amber-400"></span>
+                            <span id="systemStatusText" class="sr-only">检查中</span>
                         </button>
-                    </h2>
-                    <button id="systemStatusButton" type="button" aria-expanded="false" aria-controls="systemStatusPopover"
-                        class="h-7 w-7 shrink-0 flex items-center justify-center rounded-md border border-white/10 bg-white/5 transition-colors hover:bg-white/10"
-                        title="数据运行状态">
-                        <span id="systemStatusDot" class="h-2 w-2 rounded-full bg-amber-400"></span>
-                        <span id="systemStatusText" class="sr-only">检查中</span>
-                    </button>
-                    <span id="lastUpdateTime" class="ml-auto shrink-0 text-[10px] numeric text-white/40" title="最近一次成功同步时间">更新中...</span>
-                    <button id="newsPanelRestore" type="button" class="panel-action panel-restore" title="还原面板" aria-label="还原面板" hidden>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h18"/></svg>
-                    </button>
-                    <button id="newsPanelLayoutToggle" type="button" class="panel-action news-layout-toggle" title="切换单栏 / 分栏布局" aria-label="切换全屏布局" aria-pressed="true" hidden>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></svg>
-                    </button>
-                    <button id="newsPanelExpand" type="button" class="panel-action" title="全屏阅读" aria-label="全屏阅读" aria-pressed="false">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg>
-                    </button>
-                    <button id="newsPanelSettings" type="button" class="panel-action" title="字体与设置" aria-label="字体与设置" hidden>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></svg>
-                    </button>
-                    <button id="newsFilterToggle" type="button" aria-expanded="false" aria-controls="newsFilterRow"
-                        title="搜索与筛选" aria-label="搜索与筛选"
-                        class="news-icon-button h-7 w-7 shrink-0 rounded-md border border-white/10 bg-white/5 text-white/70 transition-colors hover:bg-white/10 flex items-center justify-center">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h18M6 12h12M10 19h4"></path>
-                        </svg>
-                    </button>
-                    <button id="pauseNewsButton" type="button" aria-pressed="false" title="暂停快讯刷新" aria-label="暂停快讯刷新"
-                        class="h-7 w-7 shrink-0 rounded-md border border-white/10 bg-white/5 text-white/70 transition-colors hover:bg-white/10 flex items-center justify-center">
-                        <svg data-pause-icon class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M7 5h3v14H7zm7 0h3v14h-3z"></path>
-                        </svg>
-                        <svg data-play-icon class="hidden h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M8 5v14l11-7z"></path>
-                        </svg>
-                    </button>
+                    </div>
+                    <!-- 选项卡切换：滑动高亮指示器 + 实时数量角标；桌面全屏居中嵌入顶栏 -->
+                    <div id="tabBar" role="tablist" aria-label="快讯分类"
+                        class="news-tab-bar relative flex px-0.5 py-px bg-black/20 rounded-lg border border-white/5 backdrop-blur-md overflow-x-auto no-scrollbar">
+                        <span id="tabIndicator"
+                            class="absolute top-px bottom-px left-0 rounded-lg transition-all duration-300 ease-out pointer-events-none"
+                            style="width:0"></span>
+                        <button type="button" id="tab-all" data-filter="all" role="tab" aria-selected="true" aria-controls="newsList" tabindex="0"
+                            class="tab-btn relative z-10 flex-1 min-h-7 py-0.5 text-[11px] rounded-md transition-all duration-300 shrink-0 min-w-[56px] flex items-center justify-center gap-1">
+                            <span>全部</span><span id="count-all" class="tab-badge"></span></button>
+                        <button type="button" id="tab-news" data-filter="news" role="tab" aria-selected="false" aria-controls="newsList" tabindex="-1"
+                            class="tab-btn relative z-10 flex-1 min-h-7 py-0.5 text-[11px] rounded-md transition-all duration-300 shrink-0 min-w-[56px] flex items-center justify-center gap-1">
+                            <span>国内</span><span id="count-news" class="tab-badge"></span></button>
+                        <button type="button" id="tab-foreign" data-filter="foreign" role="tab" aria-selected="false" aria-controls="newsList" tabindex="-1"
+                            class="tab-btn relative z-10 flex-1 min-h-7 py-0.5 text-[11px] rounded-md transition-all duration-300 shrink-0 min-w-[56px] flex items-center justify-center gap-1">
+                            <span>外媒</span><span id="count-foreign" class="tab-badge"></span></button>
+                        <button type="button" id="tab-tech" data-filter="tech" role="tab" aria-selected="false" aria-controls="newsList" tabindex="-1"
+                            class="tab-btn relative z-10 flex-1 min-h-7 py-0.5 text-[11px] rounded-md transition-all duration-300 shrink-0 min-w-[56px] flex items-center justify-center gap-1">
+                            <span>科技</span><span id="count-tech" class="tab-badge"></span></button>
+                        <button type="button" id="tab-community" data-filter="community" role="tab" aria-selected="false" aria-controls="newsList" tabindex="-1"
+                            class="tab-btn relative z-10 flex-1 min-h-7 py-0.5 text-[11px] rounded-md transition-all duration-300 shrink-0 min-w-[48px] flex items-center justify-center gap-1">
+                            <span>社区</span><span id="count-community" class="tab-badge"></span></button>
+                    </div>
+                    <div class="news-header-actions">
+                        <span id="lastUpdateTime" class="shrink-0 text-[10px] numeric text-white/40" title="最近一次成功同步时间">更新中...</span>
+                        <button id="newsPanelRestore" type="button" class="panel-action panel-restore" title="还原面板" aria-label="还原面板" hidden>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h18"/></svg>
+                        </button>
+                        <button id="newsPanelLayoutToggle" type="button" class="panel-action news-layout-toggle" title="切换单栏 / 分栏布局" aria-label="切换全屏布局" aria-pressed="true" hidden>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></svg>
+                        </button>
+                        <button id="newsPanelExpand" type="button" class="panel-action" title="全屏阅读" aria-label="全屏阅读" aria-pressed="false">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg>
+                        </button>
+                        <button id="newsPanelSettings" type="button" class="panel-action" title="字体与设置" aria-label="字体与设置" hidden>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></svg>
+                        </button>
+                        <button id="newsFilterToggle" type="button" aria-expanded="false" aria-controls="newsFilterRow"
+                            title="搜索与筛选" aria-label="搜索与筛选"
+                            class="news-icon-button h-7 w-7 shrink-0 rounded-md border border-white/10 bg-white/5 text-white/70 transition-colors hover:bg-white/10 flex items-center justify-center">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h18M6 12h12M10 19h4"></path>
+                            </svg>
+                        </button>
+                        <button id="pauseNewsButton" type="button" aria-pressed="false" title="暂停快讯刷新" aria-label="暂停快讯刷新"
+                            class="h-7 w-7 shrink-0 rounded-md border border-white/10 bg-white/5 text-white/70 transition-colors hover:bg-white/10 flex items-center justify-center">
+                            <svg data-pause-icon class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M7 5h3v14H7zm7 0h3v14h-3z"></path>
+                            </svg>
+                            <svg data-play-icon class="hidden h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M8 5v14l11-7z"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 <!-- 折叠筛选行：默认收起，高度为 0；展开由 #newsFilterRow.open 驱动过渡 -->
                 <div id="newsFilterRow" class="news-filter-row" inert>
@@ -359,49 +385,27 @@
                 </div>
             </div>
 
-            <!-- 选项卡切换：滑动高亮指示器 + 分类强调色 + 实时数量角标 -->
-            <div id="tabBar" role="tablist" aria-label="快讯分类"
-                class="relative flex px-0.5 py-px mb-1.5 bg-black/20 rounded-lg border border-white/5 backdrop-blur-md overflow-x-auto no-scrollbar">
-                <span id="tabIndicator"
-                    class="absolute top-px bottom-px left-0 rounded-lg transition-all duration-300 ease-out pointer-events-none"
-                    style="width:0"></span>
-                <button type="button" id="tab-all" data-filter="all" role="tab" aria-selected="true" aria-controls="newsList" tabindex="0"
-                    class="tab-btn relative z-10 flex-1 min-h-7 py-0.5 text-[11px] rounded-md transition-all duration-300 shrink-0 min-w-[56px] flex items-center justify-center gap-1">
-                    <span>全部</span><span id="count-all" class="tab-badge"></span></button>
-                <button type="button" id="tab-news" data-filter="news" role="tab" aria-selected="false" aria-controls="newsList" tabindex="-1"
-                    class="tab-btn relative z-10 flex-1 min-h-7 py-0.5 text-[11px] rounded-md transition-all duration-300 shrink-0 min-w-[56px] flex items-center justify-center gap-1">
-                    <span>国内</span><span id="count-news" class="tab-badge"></span></button>
-                <button type="button" id="tab-foreign" data-filter="foreign" role="tab" aria-selected="false" aria-controls="newsList" tabindex="-1"
-                    class="tab-btn relative z-10 flex-1 min-h-7 py-0.5 text-[11px] rounded-md transition-all duration-300 shrink-0 min-w-[56px] flex items-center justify-center gap-1">
-                    <span>外媒</span><span id="count-foreign" class="tab-badge"></span></button>
-                <button type="button" id="tab-tech" data-filter="tech" role="tab" aria-selected="false" aria-controls="newsList" tabindex="-1"
-                    class="tab-btn relative z-10 flex-1 min-h-7 py-0.5 text-[11px] rounded-md transition-all duration-300 shrink-0 min-w-[56px] flex items-center justify-center gap-1">
-                    <span>科技</span><span id="count-tech" class="tab-badge"></span></button>
-                <button type="button" id="tab-community" data-filter="community" role="tab" aria-selected="false" aria-controls="newsList" tabindex="-1"
-                    class="tab-btn relative z-10 flex-1 min-h-7 py-0.5 text-[11px] rounded-md transition-all duration-300 shrink-0 min-w-[48px] flex items-center justify-center gap-1">
-                    <span>社区</span><span id="count-community" class="tab-badge"></span></button>
-            </div>
-
-            <div id="communitySourceBar" class="community-source-bar" role="group" aria-label="论坛来源" hidden>
-                <button type="button" data-community-source="all" aria-pressed="true">全部论坛</button>
-                <button type="button" data-community-source="nodeseek" aria-pressed="false">NodeSeek</button>
-                <button type="button" data-community-source="linuxdo" aria-pressed="false">Linux DO</button>
-            </div>
-
-            <div id="newsReadingBar" class="news-reading-bar" role="group" aria-label="阅读状态">
-                <button type="button" data-reading-view="all" aria-pressed="true">全部</button>
-                <button type="button" data-reading-view="unread" aria-pressed="false">未读 <span id="readingUnreadCount">0</span></button>
-                <button type="button" data-reading-view="saved" aria-pressed="false">收藏 <span id="readingSavedCount">0</span></button>
-                <button id="markAllNewsRead" type="button" title="将当前分类标为已读" aria-label="将当前分类标为已读">全部已读</button>
-            </div>
-            <!-- 列表外壳：承载顶部"新快讯"提示与上下渐隐遮罩，滚动条在内层 #newsList 上 -->
-            <div id="newsListShell" class="news-list-shell flex-none flex flex-col md:flex-1 md:min-h-0">
+            <div id="newsToolbarRow" class="news-toolbar-row">
+                <div id="communitySourceBar" class="community-source-bar" role="group" aria-label="论坛来源" hidden>
+                    <button type="button" data-community-source="all" aria-pressed="true">全部论坛</button>
+                    <button type="button" data-community-source="nodeseek" aria-pressed="false">NodeSeek</button>
+                    <button type="button" data-community-source="linuxdo" aria-pressed="false">Linux DO</button>
+                </div>
+                <div id="newsReadingBar" class="news-reading-bar" role="group" aria-label="阅读状态">
+                    <button type="button" data-reading-view="all" aria-pressed="true">全部</button>
+                    <button type="button" data-reading-view="unread" aria-pressed="false">未读 <span id="readingUnreadCount">0</span></button>
+                    <button type="button" data-reading-view="saved" aria-pressed="false">收藏 <span id="readingSavedCount">0</span></button>
+                    <button id="markAllNewsRead" type="button" title="将当前分类标为已读" aria-label="将当前分类标为已读">全部已读</button>
+                </div>
                 <button id="newsUnseenPill" type="button" disabled aria-hidden="true" class="news-unseen-pill">
                     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
                     </svg>
                     <span><span id="newsUnseenCount">0</span> <span id="newsUnseenLabel">条新快讯</span></span>
                 </button>
+            </div>
+            <!-- 列表外壳：承载上下渐隐遮罩，滚动条在内层 #newsList 上 -->
+            <div id="newsListShell" class="news-list-shell flex-none flex flex-col md:flex-1 md:min-h-0">
                 <!-- 滚动列表区 (增加 pb-24 防止被底部行情条挡住) -->
                 <div id="newsList" role="tabpanel" aria-labelledby="tab-all" tabindex="0"
                     class="gx-scroll flex-none overflow-visible flex flex-col pb-8 transition-opacity duration-300 md:flex-1 md:overflow-y-auto md:pb-24">
@@ -716,7 +720,7 @@
     </footer>
 
     <!-- 应用入口：ES Module。各功能模块在 js/modules/ 下，由 main.js 按依赖顺序启动。 -->
-    <script type="module" src="./js/main.js?v=workspace-20261114b"></script>
+    <script type="module" src="./js/main.js?v=workspace-20261114c"></script>
 </body>
 
 </html>

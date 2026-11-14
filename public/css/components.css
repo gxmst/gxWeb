@@ -103,16 +103,15 @@
         z-index: 5;
         background:
             linear-gradient(180deg,
-                rgba(var(--wall-rgb), 0.10) 0%,
-                rgba(var(--wall-rgb), 0.06) 62%,
-                rgba(var(--wall-rgb), 0) 100%),
-            linear-gradient(180deg, rgba(12, 18, 30, 0.30), rgba(12, 18, 30, 0.10));
-        backdrop-filter: blur(14px) saturate(150%);
-        -webkit-backdrop-filter: blur(14px) saturate(150%);
-        border-radius: 0.3rem;
-        color: rgba(255, 255, 255, 0.72);
-        /* 半透明底下文字要立得住，靠投影而不是加深背景 */
-        text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75), 0 0 2px rgba(0, 0, 0, 0.5);
+                rgba(var(--wall-rgb), 0.12) 0%,
+                rgba(var(--wall-rgb), 0.05) 100%),
+            linear-gradient(180deg, rgba(10, 16, 28, 0.72), rgba(10, 16, 28, 0.56));
+        backdrop-filter: blur(16px) saturate(155%);
+        -webkit-backdrop-filter: blur(16px) saturate(155%);
+        border-bottom: 1px solid rgba(var(--wall-rgb), 0.12);
+        border-radius: 0.35rem;
+        color: rgba(255, 255, 255, 0.76);
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
     }
     .news-group-sep .news-group-count {
         background: rgba(var(--wall-rgb), 0.20);
@@ -140,29 +139,33 @@ html.js-reveal .news-feed-item.animate-slide-down {
     transform: none;
 }
 
-/* ---- 顶部"N 条新快讯" ---- */
-/* 正在往下读时新条目不再静默插队顶掉参照物，改成累计计数、点击才回顶部。 */
+/* ---- "N 条新快讯"（边栏悬停于列表顶端，全屏嵌于工具条中空处，绝不遮挡栏头与下拉） ---- */
 .news-unseen-pill {
     position: absolute;
-    top: 0.35rem;
+    top: calc(100% + 6px);
     left: 50%;
-    z-index: 12;
+    z-index: 16;
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    padding: 0.3rem 0.7rem;
-    border: 1px solid rgba(var(--wall-rgb), 0.42);
+    padding: 0.28rem 0.72rem;
+    border: 1px solid rgba(var(--wall-rgb), 0.46);
     border-radius: 9999px;
-    background: rgba(10, 16, 28, 0.88);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.38), 0 0 14px rgba(var(--wall-rgb), 0.18);
-    color: rgba(255, 255, 255, 0.92);
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.14), rgba(var(--wall-rgb), 0.16)),
+        rgba(10, 16, 28, 0.56);
+    backdrop-filter: blur(14px) saturate(165%);
+    -webkit-backdrop-filter: blur(14px) saturate(165%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.26),
+        0 8px 20px rgba(0, 0, 0, 0.28),
+        0 0 14px rgba(var(--wall-rgb), 0.18);
+    color: rgba(255, 255, 255, 0.94);
     font-size: 11px;
     font-weight: 600;
     white-space: nowrap;
     opacity: 0;
-    transform: translate(-50%, -12px) scale(0.96);
+    transform: translate(-50%, -10px) scale(0.96);
     pointer-events: none;
     transition: opacity 0.24s ease, transform 0.24s cubic-bezier(0.22, 0.61, 0.36, 1);
 }

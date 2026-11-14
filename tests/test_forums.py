@@ -42,6 +42,23 @@ class ForumFeedTests(unittest.TestCase):
         revised = spider.parse_forum_feed(RSS.replace("VPS &amp; Backup", "Edited title"), "nodeseek")
         self.assertEqual(item["id"], revised[0]["id"])
 
+    def test_discourse_footer_noise_is_stripped_from_summary(self):
+        payload = '''<rss version="2.0"><channel><item>
+<title>Linux DO Topic</title>
+<link>https://linux.do/t/topic/99</link>
+<pubDate>Sun, 08 Nov 2026 14:00:00 GMT</pubDate>
+<description><![CDATA[<p>真实正文内容</p><p><small>2 个帖子 - 2 位参与者</small></p><p><a href="https://linux.do/t/topic/99">阅读完整话题</a></p>]]></description>
+</item></channel></rss>'''
+        item = spider.parse_forum_feed(payload, "linuxdo")[0]
+        self.assertEqual(item["summary"], "真实正文内容")
+
+        en_payload = payload.replace(
+            "<p><small>2 个帖子 - 2 位参与者</small></p><p><a href=\"https://linux.do/t/topic/99\">阅读完整话题</a></p>",
+            "<p><small>3 posts - 2 participants</small></p><p><a href=\"https://linux.do/t/topic/99\">Read full topic</a></p>",
+        )
+        en_item = spider.parse_forum_feed(en_payload, "linuxdo")[0]
+        self.assertEqual(en_item["summary"], "真实正文内容")
+
     def test_empty_and_challenge_responses_are_failures(self):
         for payload in ["<rss><channel/></rss>", "<html><title>Just a moment</title></html>"]:
             with self.subTest(payload=payload), self.assertRaises(ValueError):

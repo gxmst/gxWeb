@@ -1,5 +1,5 @@
-import { getSettings, updateSettings, isWidgetVisible } from './settings-store.js?v=workspace-20261114b';
-import { supportsSplitView } from './news-logic.js?v=workspace-20261114b';
+import { getSettings, updateSettings, isWidgetVisible } from './settings-store.js?v=workspace-20261114c';
+import { supportsSplitView } from './news-logic.js?v=workspace-20261114c';
 
 export function panelBounds(viewport) {
     const maximum = Math.max(280, viewport - 48);
@@ -116,7 +116,7 @@ export function initNewsPanel() {
     }
     function beginDrag(event) {
         if (!desktop() || event.button !== 0 || !isWidgetVisible('news')) return;
-        if (event.target.closest('button, input, select, a') && !grip.contains(event.target) && event.currentTarget !== edge) return;
+        if (event.target.closest('button, input, select, a, #tabBar') && !grip.contains(event.target) && event.currentTarget !== edge) return;
         event.preventDefault();
         drag = { id: event.pointerId, x: event.clientX, initial: aside.getBoundingClientRect().width, width: aside.getBoundingClientRect().width, moved: false, capture:event.currentTarget };
         event.currentTarget.setPointerCapture(event.pointerId);

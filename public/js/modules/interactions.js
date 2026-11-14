@@ -1,6 +1,6 @@
 // ================== 辅助交互与快捷键 ==================
-import { getEffectiveAppearance, isWidgetVisible } from './settings-store.js?v=workspace-20261114b';
-import { initNewsPanel } from './news-panel.js?v=workspace-20261114b';
+import { getEffectiveAppearance, isWidgetVisible } from './settings-store.js?v=workspace-20261114c';
+import { initNewsPanel } from './news-panel.js?v=workspace-20261114c';
 
 // 左上角控制按钮的点击反馈：加一次性 .tapped，动画结束自己摘掉。
 // 用 pointerdown 而不是 click——手指/鼠标一按下就有反应，比等 click 更"跟手"；

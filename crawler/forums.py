@@ -5,6 +5,7 @@ from email.utils import parsedate_to_datetime
 import hashlib
 from html.parser import HTMLParser
 import os
+import re
 import time
 from urllib.parse import urlparse
 
@@ -67,10 +68,25 @@ class _FeedTextParser(HTMLParser):
             self.parts.append(data)
 
 
-def _feed_plain_text(value, limit):
+_DISCOURSE_FOOTER_RE = re.compile(
+    r"(?:\s*\d+\s*(?:个帖子|posts?)\s*[-–—]\s*\d+\s*(?:位参与者|participants?))?\s*(?:阅读完整话题|Read full topic)\.?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _extract_plain_text(value):
     parser = _FeedTextParser()
     parser.feed(str(value or "")[:20000])
-    text = " ".join("".join(parser.parts).split())
+    return " ".join("".join(parser.parts).split())
+
+
+def _feed_plain_text(value, limit):
+    text = _extract_plain_text(value)
+    return text[:limit] + ("…" if len(text) > limit else "")
+
+
+def _clean_forum_summary(value, limit=240):
+    text = _DISCOURSE_FOOTER_RE.sub("", _extract_plain_text(value)).strip()
     return text[:limit] + ("…" if len(text) > limit else "")
 
 
@@ -99,7 +115,7 @@ def parse_forum_feed(payload, source, limit=30):
             "time": datetime.fromtimestamp(ts, BJ_TZ).strftime("%H:%M") if ts else "",
             "raw_time": ts,
             "content": title,
-            "summary": _feed_plain_text(entry.get("summary"), 240),
+            "summary": _clean_forum_summary(entry.get("summary"), 240),
             "url": url,
             "is_important": False,
             "category": "community",

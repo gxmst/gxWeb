@@ -1,9 +1,9 @@
 // ================== 天气与粒子物理引擎 ==================
 // 氛围切换通过 window.__setAmbiance 钩子桥接到 ambience 模块（含未就绪降级）。
-import { getSettings, getEffectiveAppearance, isWidgetVisible } from './settings-store.js?v=workspace-20261114b';
-import { initForecast } from './forecast.js?v=workspace-20261114b';
-import { createWeatherScene } from './weather-scene.js?v=workspace-20261114b';
-import { showControlToast } from './toast.js?v=workspace-20261114b';
+import { getSettings, getEffectiveAppearance, isWidgetVisible } from './settings-store.js?v=workspace-20261114c';
+import { initForecast } from './forecast.js?v=workspace-20261114c';
+import { createWeatherScene } from './weather-scene.js?v=workspace-20261114c';
+import { showControlToast } from './toast.js?v=workspace-20261114c';
 
 const scene = createWeatherScene(document.getElementById('weatherCanvas'));
 const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
