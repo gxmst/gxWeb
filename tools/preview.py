@@ -14,7 +14,16 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from control_api import AdminHandlerMixin, AdminState  # noqa: E402
-DATA_FILES = {"finance-news.json", "ticker.json", "ticker-status.json", "pipeline-status.json", "weather.txt", "wallpapers.json"}
+DATA_FILES = {
+    "finance-news.json",
+    "news-archive.json",
+    "ticker.json",
+    "ticker-status.json",
+    "pipeline-status.json",
+    "weather.txt",
+    "wallpapers.json",
+    "wallpapers-meta.json",
+}
 
 
 def demo_wallpaper():
@@ -42,9 +51,10 @@ def demo_news(now):
         ("linuxdo", "community", "用浏览器打造自己的信息工作台", "分享 RSS 聚合、快捷入口和个性化布局的设计思路。", "资源荟萃"),
     ]
     result = []
-    for i in range(84):
+    for i in range(150):
         source, category, title, summary, forum_category = examples[i % len(examples)]
-        ts = now - i * 420
+        # Spread entries across today through 4 days ago so date filters & archive pagination work in preview.
+        ts = now - i * (2100 if i >= 60 else 420)
         result.append({
             "id": f"demo-{i}", "time": datetime.fromtimestamp(ts, timezone(timedelta(hours=8))).strftime("%H:%M"),
             "raw_time": ts, "content": title + (f" · 示例 {i+1}" if i >= len(examples) else ""),
@@ -52,8 +62,12 @@ def demo_news(now):
             "url": "https://www.nodeseek.com/" if source == "nodeseek" else "https://linux.do/" if source == "linuxdo" else "",
             "format": "text", "is_important": source == "sina" and i % 12 == 2,
         })
-    result.append({"id": "demo-tech", "raw_time": now-1200, "time": "", "source": "github", "category": "tech", "format": "html", "content": '<div class="tech-block-header">GitHub Trends · 示例</div><div class="tech-card-item"><a class="tech-title-link" href="https://github.com/gxmst/gxWeb">gxmst/gxWeb</a><div class="tech-desc-zh">实时信息工作台，聚合资讯、行情与社区讨论。</div></div>'})
-    return {"last_updated": now, "news_list": sorted(result, key=lambda item: item["raw_time"], reverse=True)}
+    result.append({"id": "demo-tech", "raw_time": now - 1200, "time": "", "source": "github", "category": "tech", "format": "html", "content": '<div class="tech-block-header">GitHub Trends · 示例</div><div class="tech-card-item"><a class="tech-title-link" href="https://github.com/gxmst/gxWeb">gxmst/gxWeb</a><div class="tech-desc-zh">实时信息工作台，聚合资讯、行情与社区讨论。</div></div>'})
+    all_sorted = sorted(result, key=lambda item: item["raw_time"], reverse=True)
+    return {
+        "hot": {"last_updated": now, "archive_count": len(all_sorted), "news_list": all_sorted[:85]},
+        "archive": {"last_updated": now, "news_list": all_sorted},
+    }
 
 
 class PreviewHandler(AdminHandlerMixin, SimpleHTTPRequestHandler):
@@ -95,11 +109,19 @@ class PreviewHandler(AdminHandlerMixin, SimpleHTTPRequestHandler):
             if path == "/__demo/wallpaper.jpg":
                 self.send_data(self.wallpaper, "image/jpeg")
                 return
+            news_bundle = demo_news(now)
             payloads = {
-                "finance-news.json": demo_news(now),
+                "finance-news.json": news_bundle["hot"],
+                "news-archive.json": news_bundle["archive"],
                 "wallpapers.json": ["/__demo/wallpaper.jpg"],
-                "ticker-status.json": {"updated_at": now, "status": "ok", "final_count": 6, "total_count": 6},
-                "pipeline-status.json": {"updated_at": now, "jobs": {key: {"last_success": now, "count": 30 if key in {"nodeseek", "linuxdo"} else 1} for key in ["heartbeat", "ticker", "sina", "finance_news", "wallpaper", "weather", "wallpaper_list", "rss", "tech", "nodeseek", "linuxdo"]}},
+                "wallpapers-meta.json": {
+                    "/__demo/wallpaper.jpg": {
+                        "title": "夜色群山与明月",
+                        "copyright": "gxWeb 本地预览壁纸",
+                    }
+                },
+                "ticker-status.json": {"updated_at": now, "status": "ok", "interval": 60, "final_count": 6, "total_count": 6},
+                "pipeline-status.json": {"updated_at": now, "jobs": {key: {"last_success": now, "count": 50 if key in {"nodeseek", "linuxdo"} else 1} for key in ["heartbeat", "ticker", "sina", "finance_news", "wallpaper", "weather", "wallpaper_list", "rss", "tech", "nodeseek", "linuxdo"]}},
             }
             payloads["ticker.json"] = [{"symbol": symbol, "name": label, "price": f"{price:.2f}", "change": change, "category": "预览示例", "price_history": [price-8, price-2, price-5, price+2, price]} for symbol, label, price, change in [("gold", "黄金", 2688.5, "+1.25%"), ("btc", "比特币", 76532, "-0.42%"), ("nasdaq", "纳斯达克", 18450, "+0.85%"), ("sp500", "标普500", 5802, "+0.31%"), ("oil", "原油", 71.8, "-1.20%"), ("usdcny", "美元/人民币", 7.15, "+0.02%")]]
             if name in payloads:

@@ -1,13 +1,17 @@
 import {
-    getSettings,
-    getEffectiveAppearance,
+    exportSettingsBackup,
     FONT_OPTIONS,
+    getEffectiveAppearance,
+    getSettings,
+    importSettingsBackup,
     normalizeShortcutUrl,
     resetSettings,
     updateSettings,
-} from './settings-store.js?v=workspace-20261114c';
-import { applyFavorite, removeFavorite, requestFavorites } from './wallpaper.js?v=workspace-20261114c';
-import { initAdminSettings } from './admin-settings.js?v=workspace-20261114c';
+} from './settings-store.js?v=workspace-20261122b';
+import { exportReadingState, importReadingState } from './news-state.js?v=workspace-20261122b';
+import { applyFavorite, removeFavorite, requestFavorites } from './wallpaper.js?v=workspace-20261122b';
+import { initAdminSettings } from './admin-settings.js?v=workspace-20261122b';
+import { showControlToast } from './toast.js?v=workspace-20261122b';
 
 let shortcutTemplates = new Map();
 let availableTickers = [];
@@ -84,7 +88,7 @@ function genericShortcut(shortcut) {
     anchor.className = 'flex flex-col items-center gap-3 group transition-all hover:-translate-y-2 shrink-0 snap-start';
 
     const icon = document.createElement('div');
-    icon.className = 'dock-ico w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:bg-white/20 group-hover:scale-110 transition-all duration-300 font-semibold shadow-lg';
+    icon.className = 'dock-ico dock-ico-custom w-12 h-12 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-2xl flex items-center justify-center group-hover:scale-110 transition-all duration-300 font-semibold shadow-lg';
 
     const showLetter = () => {
         icon.replaceChildren();
@@ -102,7 +106,7 @@ function genericShortcut(shortcut) {
         img.alt = '';
         img.loading = 'lazy';
         img.decoding = 'async';
-        img.className = 'w-6 h-6 rounded-md';
+        img.className = 'w-7 h-7 dock-ico-favicon';
         img.addEventListener('error', showLetter);
         img.src = `https://icons.duckduckgo.com/ip3/${host}.ico`;
         icon.appendChild(img);
@@ -640,6 +644,52 @@ function bindControls() {
         if (next.length >= 12) return;
         next.push({ id: `custom-${Date.now()}`, name: '新链接', url: 'https://example.com/' });
         updateSettings('shortcuts', next);
+    });
+    document.getElementById('exportBackupBtn')?.addEventListener('click', () => {
+        const payload = {
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            settings: exportSettingsBackup(),
+            reading: exportReadingState(),
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `gxweb-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showControlToast('已导出设置与收藏备份');
+    });
+    const importInput = document.getElementById('importBackupInput');
+    document.getElementById('importBackupBtn')?.addEventListener('click', () => {
+        importInput?.click();
+    });
+    importInput?.addEventListener('change', async () => {
+        const file = importInput.files?.[0];
+        importInput.value = '';
+        if (!file) return;
+        if (file.size > 4 * 1024 * 1024) {
+            showControlToast('备份文件过大（上限 4 MB）', 2200);
+            return;
+        }
+        try {
+            const parsed = JSON.parse(await file.text());
+            if (!parsed || typeof parsed !== 'object' || (!parsed.settings && !parsed.reading)) {
+                throw new Error('无效备份');
+            }
+            if (parsed.settings) importSettingsBackup(parsed.settings);
+            let readingInfo = '';
+            if (parsed.reading) {
+                const res = importReadingState(parsed.reading);
+                readingInfo = ` · ${res.savedCount} 条收藏`;
+            }
+            showControlToast(`备份恢复成功${readingInfo}`, 2200);
+        } catch {
+            showControlToast('导入失败：JSON 格式或数据结构无效', 2200);
+        }
     });
     document.getElementById('resetSettingsButton')?.addEventListener('click', event => {
         const button = event.currentTarget;

@@ -15,6 +15,7 @@
     "vendor:check": "node .github/scripts/sync-vendor.mjs --check",
     "check:css": "node .github/scripts/check-css.mjs",
     "check:js": "node .github/scripts/check-js.mjs",
+    "bump:version": "node .github/scripts/bump-version.mjs",
     "check": "npm run vendor:check && npm run check:css && npm run check:js"
   },
   "devDependencies": {

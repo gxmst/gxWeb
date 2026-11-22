@@ -88,6 +88,20 @@ class AdminApiTests(unittest.TestCase):
         self.assertEqual(self.post("logout", {}).status_code, 200)
         self.assertEqual(self.post("settings", {"intervals": {"fast": 300}, "revision": 1}).status_code, 401)
 
+    def test_audit_log_records_security_events_without_secrets(self):
+        with self.assertLogs("gxweb.audit", level="INFO") as logs:
+            self.assertEqual(self.post("login", {"password": "wrong-secret-password"}).status_code, 401)
+            self.assertEqual(self.post("login", {"password": "test-admin-password"}).status_code, 200)
+            self.assertEqual(self.post("settings", {"intervals": {"fast": 180}, "revision": 0}).status_code, 200)
+            self.assertEqual(self.post("logout", {}).status_code, 200)
+        joined = "\n".join(logs.output)
+        self.assertIn("event=login_failed", joined)
+        self.assertIn("event=login_ok", joined)
+        self.assertIn("event=settings_updated", joined)
+        self.assertIn("event=logout", joined)
+        self.assertNotIn("wrong-secret-password", joined)
+        self.assertNotIn("test-admin-password", joined)
+
     def test_disabled_admin_is_read_only(self):
         self.state.enabled = False
         public = self.session.get(self.url + "/api/admin/status", timeout=5).json()

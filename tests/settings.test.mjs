@@ -203,3 +203,51 @@ test('rain impacts throw short lived droplets to both sides',()=>{
     assert.ok(droplets[0].vx<0 && droplets[4].vx>0);
     assert.ok(droplets.every(p=>p.vy<0 && p.maxLife<0.6));
 });
+
+test('findSnowSegments isolates local snow patches instead of spanning bare surface', () => {
+    const empty = weatherPhysics.createSnowpack(320);
+    assert.deepEqual(weatherPhysics.findSnowSegments(empty.depth), []);
+
+    weatherPhysics.depositSnow(empty, 80, 1.8, 8, 0.35);
+    const singleSegs = weatherPhysics.findSnowSegments(empty.depth);
+    assert.equal(singleSegs.length, 1);
+    assert.ok(singleSegs[0].start > 0);
+    assert.ok(singleSegs[0].end < empty.depth.length - 1);
+
+    weatherPhysics.depositSnow(empty, 240, 1.8, 8, 0.35);
+    const twoSegs = weatherPhysics.findSnowSegments(empty.depth);
+    assert.equal(twoSegs.length, 2);
+});
+
+test('disturbSnowpack brushes snow, spawns clumps, and stepSnowWave damps jiggle cleanly', () => {
+    const pack = weatherPhysics.createSnowpack(320);
+    for (let i = 0; i < 14; i++) weatherPhysics.depositSnow(pack, 160, 2.2, 12, 0.9);
+    const before = weatherPhysics.snowHeightAt(pack, 160);
+
+    const shake = weatherPhysics.disturbSnowpack(pack, 160, 0, -100, { shakeOnly: true, random: () => 0.2 });
+    assert.ok(shake.clumps.length > 0);
+    assert.ok(pack.vel.some(v => v !== 0));
+
+    weatherPhysics.stepSnowWave(pack, 0.016);
+    assert.ok(pack.offset.some(o => o !== 0));
+    assert.equal(pack.offset[0], 0);
+
+    for (let step = 0; step < 120; step++) weatherPhysics.stepSnowWave(pack, 0.025);
+    assert.ok(Math.abs(pack.offset[Math.floor(pack.offset.length / 2)]) < 0.05);
+
+    const brush = weatherPhysics.disturbSnowpack(pack, 160, 480, 60, { strength: 1.2, random: () => 0.1 });
+    assert.ok(brush.removed > 0);
+    assert.ok(brush.clumps.length > 0);
+    assert.ok(weatherPhysics.snowHeightAt(pack, 160) < before);
+});
+
+test('exportSettingsBackup and importSettingsBackup validate and restore preferences safely', () => {
+    const backup = settings.exportSettingsBackup();
+    backup.appearance.panelOpacity = 80;
+    backup.search.engine = 'duck';
+    const restored = settings.importSettingsBackup(backup);
+    assert.equal(restored.appearance.panelOpacity, 80);
+    assert.equal(restored.search.engine, 'duck');
+    assert.throws(() => settings.importSettingsBackup(null));
+    assert.throws(() => settings.importSettingsBackup([]));
+});

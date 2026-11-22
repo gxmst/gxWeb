@@ -105,16 +105,16 @@
 }
 .scene-paused #cloudLayer::before,.scene-paused #cloudLayer::after,.scene-paused #fogLayer::before,.scene-paused #fogLayer::after {animation-play-state:paused;}
 
-/* ============ 骨架屏 ============ */
-@keyframes shimmer {
-    0%   { background-position: -400px 0; }
-    100% { background-position: 400px 0; }
+/* ============ 屏保缓慢防烧屏漂移 ============ */
+@keyframes saverDrift {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    25%      { transform: translate3d(10px, -6px, 0); }
+    50%      { transform: translate3d(-8px, -10px, 0); }
+    75%      { transform: translate3d(-10px, 6px, 0); }
 }
-.skeleton {
-    background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.04) 75%);
-    background-size: 400px 100%;
-    animation: shimmer 1.8s infinite linear;
-    border-radius: 0.375rem;
+.screen-saver #clockGroup {
+    animation: saverDrift 72s ease-in-out infinite;
 }
-.skeleton-line { height: 0.75rem; margin-bottom: 0.5rem; }
-.skeleton-line-sm { height: 0.5rem; width: 40%; margin-bottom: 0.75rem; }
+@media (prefers-reduced-motion: reduce) {
+    .screen-saver #clockGroup { animation: none; }
+}

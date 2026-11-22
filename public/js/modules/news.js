@@ -1,17 +1,23 @@
 // ================== 新闻流交互与实时同步 ==================
-import { getSettings, updateSettings, isWidgetVisible } from './settings-store.js?v=workspace-20261114c';
+import { getSettings, updateSettings, isWidgetVisible } from './settings-store.js?v=workspace-20261122b';
 import {
     BOOKMARK_LIMIT,
     countSavedMatching,
+    getReadSnapshot,
     isRead,
     isSaved,
     markAllRead,
     markRead,
+    restoreReadSnapshot,
     savedNews,
     toggleSaved,
-} from './news-state.js?v=workspace-20261114c';
-import { showControlToast } from './toast.js?v=workspace-20261114c';
+} from './news-state.js?v=workspace-20261122b';
+import { showControlToast } from './toast.js?v=workspace-20261122b';
 import {
+    ARCHIVE_CATEGORY_QUOTAS,
+    CATEGORY_QUOTAS,
+    MAX_ARCHIVE_ITEMS,
+    MAX_NEWS_ITEMS,
     NEWS_PAGE_SIZE,
     assignClientKeys,
     computeTabCounts,
@@ -23,16 +29,18 @@ import {
     newsRenderSignature,
     sourceLabel,
     supportsSplitView,
-} from './news-logic.js?v=workspace-20261114c';
+} from './news-logic.js?v=workspace-20261122b';
 import {
     createGroupSeparator,
+    createLoadArchiveButton,
     createLoadMoreButton,
     createNewsElement,
     emptyMessage,
     refreshCommunitySummaries,
-} from './news-render.js?v=workspace-20261114c';
+} from './news-render.js?v=workspace-20261122b';
 
 const NEWS_POLL_INTERVAL = 30000;
+const ARCHIVE_REFRESH_INTERVAL = 120000;
 const AT_TOP_THRESHOLD = 24;
 
 let allNewsData = [];
@@ -61,13 +69,20 @@ let revealObserverMode = '';
 let unseenKeys = new Set();
 let pendingFocusKey = '';
 let readingView = initialNewsSettings.readingView;
+let dateFilter = 'all';
+let archiveLoaded = false;
+let archiveLoading = false;
+let archiveTotalCount = 0;
+let archiveRawItems = [];
+let archiveFetchedAt = 0;
+let hotNewsData = [];
 let readingObservers = [];
 const readingTimers = new Map();
 
 export function getCurrentFilter() { return currentFilter; }
 
 function currentFilterState() {
-    return { readingView, hiddenSources, currentFilter, importantOnly, currentSource, communitySource, searchTerm };
+    return { readingView, hiddenSources, currentFilter, importantOnly, currentSource, communitySource, dateFilter, searchTerm };
 }
 
 function applyFilter(news, ignoreReading = false) {
@@ -363,7 +378,9 @@ function syncScrollShadow() {
 
 function hasNewsFilters() {
     return (currentFilter !== 'community' && importantOnly)
-        || (currentFilter === 'community' ? communitySource !== 'all' : currentSource !== 'all') || Boolean(searchTerm);
+        || (currentFilter === 'community' ? communitySource !== 'all' : currentSource !== 'all')
+        || dateFilter !== 'all'
+        || Boolean(searchTerm);
 }
 
 function emptyFilterText() {
@@ -384,6 +401,7 @@ function buildFeedFragment(items, limit, existingByKey, newKeys, scrollRoot, emp
     const shouldReveal = motionAllowed();
     const itemHandlers = {
         fontSize: currentFontSize,
+        highlightTerm: searchTerm,
         shouldReveal,
         observeReveal: element => observeReveal(element, scrollRoot),
         onMarkRead: news => {
@@ -392,7 +410,16 @@ function buildFeedFragment(items, limit, existingByKey, newKeys, scrollRoot, emp
             markRead(news._clientKey, !isRead(news._clientKey));
         },
         onToggleSave: news => {
-            if (!toggleSaved(news)) showControlToast(`最多收藏 ${BOOKMARK_LIMIT} 条，请先取消部分收藏`);
+            const wasSaved = isSaved(news._clientKey);
+            if (!toggleSaved(news)) {
+                showControlToast(`最多收藏 ${BOOKMARK_LIMIT} 条，请先取消部分收藏`);
+            } else if (wasSaved) {
+                showControlToast('已取消收藏', {
+                    duration: 4000,
+                    actionLabel: '撤销',
+                    onAction: () => toggleSaved(news),
+                });
+            }
         },
     };
     let lastGroupId = '';
@@ -409,7 +436,7 @@ function buildFeedFragment(items, limit, existingByKey, newKeys, scrollRoot, emp
                 fragment.appendChild(createGroupSeparator(group.label, count));
             }
         }
-        const signature = newsRenderSignature(news, currentFontSize);
+        const signature = newsRenderSignature(news, currentFontSize, searchTerm);
         let element = existingByKey.get(news._clientKey);
         existingByKey.delete(news._clientKey);
         if (!element || element.dataset.newsSignature !== signature) {
@@ -420,6 +447,12 @@ function buildFeedFragment(items, limit, existingByKey, newKeys, scrollRoot, emp
     });
     if (visibleNews.length < items.length) {
         fragment.appendChild(createLoadMoreButton(items.length, limit, () => onLoadMore(visibleNews)));
+    } else if (readingView !== 'saved' && !archiveLoaded && archiveTotalCount > allNewsData.length) {
+        fragment.appendChild(createLoadArchiveButton(
+            archiveTotalCount - allNewsData.length,
+            archiveLoading,
+            () => loadNewsArchive(),
+        ));
     }
     return fragment;
 }
@@ -742,30 +775,104 @@ export function setFilter(filter, persist = true, render = true) {
     if (render) resetNewsView();
 }
 
+function normalizeFetchedItem(item) {
+    const normalized = { ...item };
+    if (!normalized.category) {
+        if ((normalized.content || '').includes('GitHub') || (normalized.content || '').includes('HN') || (normalized.content || '').includes('V2EX')) normalized.category = 'tech';
+        else if (normalized.url) normalized.category = 'foreign';
+        else normalized.category = 'news';
+    }
+    if (!normalized.format) {
+        normalized.format = normalized.tech_data ? 'tech'
+            : (normalized.category === 'tech' && !normalized.url ? 'html' : 'text');
+    }
+    return normalized;
+}
+
+function mergeWithArchive(hotRawList) {
+    if (!archiveLoaded || !archiveRawItems.length) {
+        return assignClientKeys(hotRawList, MAX_NEWS_ITEMS, CATEGORY_QUOTAS);
+    }
+    const merged = [];
+    const seen = new Set();
+    for (const item of [...hotRawList, ...archiveRawItems]) {
+        const key = `${item.source || ''}|${item.url || ''}|${item.id || item.content || ''}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        merged.push(item);
+    }
+    merged.sort((a, b) => (Number(b.raw_time) || 0) - (Number(a.raw_time) || 0));
+    return assignClientKeys(merged, MAX_ARCHIVE_ITEMS, ARCHIVE_CATEGORY_QUOTAS);
+}
+
+function syncArchiveButton() {
+    const btn = document.getElementById('loadArchiveBtn');
+    if (!btn) return;
+    const remaining = Math.max(0, archiveTotalCount - allNewsData.length);
+    if (archiveLoaded) {
+        btn.hidden = archiveTotalCount === 0;
+        btn.disabled = archiveLoading;
+        btn.textContent = archiveLoading ? '加载归档中...' : `刷新历史归档 (${allNewsData.length})`;
+    } else if (remaining > 0) {
+        btn.hidden = false;
+        btn.disabled = archiveLoading;
+        btn.textContent = archiveLoading ? '加载归档中...' : `加载归档 (+${remaining})`;
+    } else {
+        btn.hidden = true;
+    }
+}
+
+export async function loadNewsArchive({ silent = false } = {}) {
+    if (archiveLoading) return;
+    archiveLoading = true;
+    syncArchiveButton();
+    try {
+        const response = await fetch('./news-archive.json', { cache: 'no-cache' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        if (!Array.isArray(data.news_list)) throw new Error('归档数据格式错误');
+        archiveRawItems = data.news_list.map(normalizeFetchedItem);
+        archiveLoaded = true;
+        archiveFetchedAt = Date.now();
+        if (silent) return;
+        const merged = mergeWithArchive(hotNewsData);
+        archiveTotalCount = Math.max(archiveTotalCount, merged.length);
+        allNewsData = merged;
+        lastNewsSignature = datasetSignature(allNewsData);
+        updateSourceOptions();
+        renderNewsList(new Set(), 'anchor');
+        showControlToast(`已载入历史归档，当前共 ${allNewsData.length} 条资讯`);
+    } catch (error) {
+        console.warn('历史归档加载失败:', error);
+        if (!silent) showControlToast('历史归档暂不可用');
+    } finally {
+        archiveLoading = false;
+        syncArchiveButton();
+    }
+}
+
 async function fetchRealNews() {
     try {
         const response = await fetch('./finance-news.json', { cache: 'no-cache' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
 
-        const newsList = assignClientKeys((data.news_list || []).map(item => {
-            const normalized = { ...item };
-            if (!normalized.category) {
-                if ((normalized.content || '').includes('GitHub') || (normalized.content || '').includes('HN') || (normalized.content || '').includes('V2EX')) normalized.category = 'tech';
-                else if (normalized.url) normalized.category = 'foreign';
-                else normalized.category = 'news';
-            }
-            if (!normalized.format) {
-                normalized.format = normalized.tech_data ? 'tech'
-                    : (normalized.category === 'tech' && !normalized.url ? 'html' : 'text');
-            }
-            return normalized;
-        }));
+        const hotNormalized = (data.news_list || []).map(normalizeFetchedItem);
+        hotNewsData = hotNormalized;
+        const reportedArchiveCount = Number(data.archive_count);
+        if (Number.isFinite(reportedArchiveCount) && reportedArchiveCount > 0) {
+            archiveTotalCount = reportedArchiveCount;
+        }
+        if (archiveLoaded && Date.now() - archiveFetchedAt >= ARCHIVE_REFRESH_INTERVAL) {
+            await loadNewsArchive({ silent: true });
+        }
+        const newsList = mergeWithArchive(hotNewsData);
         setNewsStatus(newsPaused ? 'paused' : 'online');
         if (!newsList || newsList.length === 0) {
             hasLoadedNews = true;
             allNewsData = [];
             updateSourceOptions();
+            syncArchiveButton();
             lastNewsSignature = datasetSignature([]);
             document.getElementById('lastUpdateTime').innerText = '暂无数据';
             const sk = document.getElementById('newsSkeleton');
@@ -796,6 +903,7 @@ async function fetchRealNews() {
             updateUnseenPill();
             lastNewsSignature = nextSignature;
         }
+        syncArchiveButton();
     } catch (e) {
         console.error('快讯同步失败:', e);
         setNewsStatus('offline');
@@ -838,13 +946,47 @@ export function initNews() {
     document.querySelectorAll('[data-reading-view]').forEach(button => {
         button.addEventListener('click', () => updateSettings('news', { readingView: button.dataset.readingView }));
     });
-    document.getElementById('markAllNewsRead').addEventListener('click', () => {
-        markAllRead(readingPool().filter(news => applyFilter(news, true)));
-        if (readingView === 'unread') renderNewsList();
+    document.getElementById('markAllNewsRead')?.addEventListener('click', () => {
+        const targets = readingPool().filter(news => applyFilter(news, true) && !isRead(news._clientKey));
+        if (!targets.length) {
+            showControlToast('当前列表均已读');
+            return;
+        }
+        const snapshot = getReadSnapshot();
+        markAllRead(targets);
+        showControlToast(`已将 ${targets.length} 条标为已读`, {
+            duration: 4500,
+            actionLabel: '撤销',
+            onAction: () => {
+                restoreReadSnapshot(snapshot);
+            },
+        });
+    });
+    document.querySelectorAll('[data-date-filter]').forEach(button => {
+        button.addEventListener('click', () => {
+            const nextDate = button.dataset.dateFilter || 'all';
+            dateFilter = nextDate;
+            document.querySelectorAll('[data-date-filter]').forEach(el => {
+                el.setAttribute('aria-pressed', String(el.dataset.dateFilter === dateFilter));
+            });
+            syncFilterIndicator();
+            if (['yesterday', '3d', 'older'].includes(dateFilter) && !archiveLoaded && archiveTotalCount > allNewsData.length) {
+                loadNewsArchive();
+            }
+            resetNewsView();
+        });
+    });
+    document.getElementById('loadArchiveBtn')?.addEventListener('click', () => loadNewsArchive());
+    window.addEventListener('gx:load-archive', () => loadNewsArchive());
+    window.addEventListener('gx:focus-news-search', () => {
+        setFilterBarOpen(true);
+        document.getElementById('newsSearchInput')?.focus();
     });
     window.addEventListener('gx:reading-changed', event => {
         updateReadingControls();
-        if (event.detail.kind === 'saved' && readingView === 'saved') renderNewsList(new Set(), 'anchor');
+        if (readingView === 'unread' || (event.detail.kind === 'saved' && readingView === 'saved')) {
+            renderNewsList(new Set(), 'anchor');
+        }
     });
     document.addEventListener('visibilitychange', observeReading);
 

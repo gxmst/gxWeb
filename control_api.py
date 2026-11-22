@@ -5,6 +5,7 @@ from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import ipaddress
 import json
+import logging
 import math
 import os
 import secrets
@@ -16,6 +17,14 @@ from runtime_config import INTERVAL_RULES, ConfigStore, read_config
 
 MAX_TRACKED_FAILURES = 1024
 MAX_ACTIVE_SESSIONS = 128
+
+_audit_logger = logging.getLogger("gxweb.audit")
+
+
+def _audit(event, client_ip, detail=""):
+    """Emit sanitized security audit events (never log credentials, cookies, or tokens)."""
+    suffix = f" detail={detail}" if detail else ""
+    _audit_logger.info("event=%s ip=%s%s", event, client_ip, suffix)
 
 
 def _parse_ip(raw):
@@ -233,7 +242,9 @@ class AdminHandlerMixin:
             if not isinstance(password, str) or len(password) > 256:
                 self.api_json(400, {"error": "密码格式错误"})
                 return True
-            token, limited = state.login(password, self._client_ip())
+            client_ip = self._client_ip()
+            token, limited = state.login(password, client_ip)
+            _audit("login_ok" if token else ("login_rate_limited" if limited else "login_failed"), client_ip)
             self.api_json(
                 200 if token else 429 if limited else 401,
                 {
@@ -248,17 +259,20 @@ class AdminHandlerMixin:
             self.api_json(401, {"error": "请先解锁管理设置"})
             return True
 
+        client_ip = self._client_ip()
         if path == "/api/admin/logout":
             cookies = SimpleCookie(self.headers.get("Cookie", ""))
             with state.lock:
                 if "gx_admin" in cookies:
                     state.sessions.pop(cookies["gx_admin"].value, None)
+            _audit("logout", client_ip)
             self.api_json(200, {"authenticated": False}, state.cookie("", clear=True, secure=https_only))
         elif path == "/api/admin/settings":
             try:
                 if set(payload) != {"intervals", "revision"}:
                     raise ValueError("请求字段错误")
                 saved = state.store.update(payload["intervals"], payload["revision"])
+                _audit("settings_updated", client_ip, f"rev={saved['revision']} keys={','.join(sorted(payload['intervals']))}")
                 self.api_json(200, {"settings": saved})
             except ValueError as error:
                 self.api_json(400, {"error": str(error)})
@@ -288,6 +302,7 @@ class ControlHandler(AdminHandlerMixin, BaseHTTPRequestHandler):
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
     ControlHandler.admin = AdminState(
         os.getenv("ADMIN_PASSWORD", ""),
         secure=_resolve_cookie_secure(),

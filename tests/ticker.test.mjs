@@ -67,3 +67,30 @@ test('ticker polling uses the live server interval and notices changes before th
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(nodes.get('tickerStatusText').textContent, '离线');
 });
+
+test('ticker status prefers inline interval and skips polling /api/admin/status', async () => {
+    const nodes = new Map();
+    globalThis.document = {
+        hidden: false,
+        getElementById(id) {
+            if (!nodes.has(id)) nodes.set(id, { replaceChildren() {} });
+            return nodes.get(id);
+        },
+        createElement: () => ({}),
+        addEventListener() {},
+    };
+    globalThis.window = { addEventListener() {}, dispatchEvent() {}, setTimeout: () => 1, clearTimeout() {} };
+    globalThis.CustomEvent = class { constructor(type, init) { this.type = type; this.detail = init.detail; } };
+    const requests = [];
+    globalThis.fetch = async url => {
+        requests.push(url);
+        const data = url === './ticker.json' ? []
+            : { status: 'ok', interval: 600, updated_at: Date.now() / 1000 - 420 };
+        return { ok: true, json: async () => data };
+    };
+
+    initTicker();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(requests.includes('./api/admin/status'), false);
+    assert.equal(nodes.get('tickerStatusText').textContent, 'LIVE');
+});

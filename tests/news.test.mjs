@@ -18,11 +18,16 @@ globalThis.localStorage = {
 };
 
 const {
+    ARCHIVE_CATEGORY_QUOTAS,
+    MAX_ARCHIVE_ITEMS,
     MAX_NEWS_ITEMS,
     assignClientKeys,
+    computeDateBucketCounts,
     computeTabCounts,
     formatCommunityTime,
+    formatItemTime,
     groupLabel,
+    matchesDateFilter,
     matchesNewsFilter,
     matchesSplitColumnFilter,
     normalizeNewsDisplayText,
@@ -32,26 +37,31 @@ const {
 
 const {
     countSavedMatching,
+    exportReadingState,
+    getReadSnapshot,
+    importReadingState,
+    markRead,
+    restoreReadSnapshot,
     sanitizeReadingState,
     toggleSaved,
 } = await import('../public/js/modules/news-state.js');
 
 test('assignClientKeys reserves capacity for community, foreign, and tech at higher feed limits', () => {
-    const heavySina = Array.from({ length: 900 }, (_, index) => ({
+    const heavySina = Array.from({ length: 1500 }, (_, index) => ({
         id: `sina-${index}`,
         category: 'news',
         source: 'sina',
-        raw_time: 2000 - index,
+        raw_time: 5000 - index,
         content: `快讯 ${index}`,
     }));
-    const community = Array.from({ length: 320 }, (_, index) => ({
+    const community = Array.from({ length: 1150 }, (_, index) => ({
         id: `forum-${index}`,
         category: 'community',
         source: 'linuxdo',
-        raw_time: 1800 - index,
+        raw_time: 4000 - index,
         content: `讨论 ${index}`,
     }));
-    const foreign = Array.from({ length: 280 }, (_, index) => ({
+    const foreign = Array.from({ length: 600 }, (_, index) => ({
         id: `rss-${index}`,
         category: 'foreign',
         source: 'Reuters',
@@ -63,9 +73,17 @@ test('assignClientKeys reserves capacity for community, foreign, and tech at hig
     const assigned = assignClientKeys(combined);
 
     assert.equal(assigned.length, MAX_NEWS_ITEMS);
-    assert.equal(assigned.filter(item => item.category === 'community').length, 300);
-    assert.equal(assigned.filter(item => item.category === 'foreign').length, 250);
+    assert.equal(assigned.filter(item => item.category === 'community').length, 1100);
+    assert.equal(assigned.filter(item => item.category === 'foreign').length, 550);
     assert.equal(assigned[0]._clientKey, 'id-sina-0');
+
+    const archiveCombined = [
+        ...Array.from({ length: 3500 }, (_, index) => ({ id: `s-${index}`, category: 'news', source: 'sina', raw_time: 9000 - index, content: `s ${index}` })),
+        ...Array.from({ length: 3200 }, (_, index) => ({ id: `c-${index}`, category: 'community', source: 'nodeseek', raw_time: 8000 - index, content: `c ${index}` })),
+    ];
+    const archiveAssigned = assignClientKeys(archiveCombined, MAX_ARCHIVE_ITEMS, ARCHIVE_CATEGORY_QUOTAS);
+    assert.equal(archiveAssigned.length, MAX_ARCHIVE_ITEMS);
+    assert.equal(archiveAssigned.filter(item => item.category === 'community').length, 3000);
 });
 
 test('assignClientKeys deduplicates identical explicit ids', () => {
@@ -239,4 +257,45 @@ test('matchesSplitColumnFilter separates categories, deep digest group, and foru
     assert.equal(matchesSplitColumnFilter(nodeseek, 'src:linuxdo'), false);
     assert.equal(matchesSplitColumnFilter(nodeseek, 'src:nodeseek'), true);
     assert.equal(matchesSplitColumnFilter(linuxdo, 'all'), true);
+});
+
+test('multi-day groupLabel, date filters, bucket counts, and read snapshot undo work cleanly', () => {
+    const now = new Date(2026, 10, 22, 14, 0);
+    const ts = (day, hour) => Math.floor(new Date(2026, 10, day, hour, 30).getTime() / 1000);
+    const todayItem = { category: 'news', raw_time: ts(22, 11), time: '11:30' };
+    const yesterdayItem = { category: 'news', raw_time: ts(21, 18), time: '18:30' };
+    const olderItem = { category: 'community', raw_time: ts(18, 20), time: '20:30' };
+
+    assert.equal(groupLabel(todayItem, now).label, '今天 11:00');
+    assert.equal(groupLabel(yesterdayItem, now).label, '昨天 18:00');
+    assert.equal(groupLabel(olderItem, now).label, '11月18日 晚间');
+
+    assert.equal(formatItemTime(todayItem, now), '11:30');
+    assert.equal(formatItemTime(yesterdayItem, now), '昨天 18:30');
+
+    assert.equal(matchesDateFilter(todayItem, 'today', now), true);
+    assert.equal(matchesDateFilter(yesterdayItem, 'today', now), false);
+    assert.equal(matchesDateFilter(yesterdayItem, 'yesterday', now), true);
+    assert.equal(matchesDateFilter(yesterdayItem, '3d', now), true);
+    assert.equal(matchesDateFilter(olderItem, '3d', now), false);
+    assert.equal(matchesDateFilter(olderItem, 'older', now), true);
+
+    assert.deepEqual(computeDateBucketCounts([todayItem, yesterdayItem, olderItem], now), {
+        all: 3,
+        today: 1,
+        yesterday: 1,
+        '3d': 2,
+        older: 1,
+    });
+
+    const snap = getReadSnapshot();
+    markRead('id-undo-test', true);
+    assert.equal(exportReadingState().read['id-undo-test'] > 0, true);
+    restoreReadSnapshot(snap);
+    assert.equal(exportReadingState().read['id-undo-test'], undefined);
+    const imported = importReadingState({
+        read: { 'id-imported-1': 12345 },
+        saved: { 'id-imported-1': { content: 'Imported item', source: 'linuxdo', category: 'community' } },
+    });
+    assert.ok(imported.savedCount >= 1);
 });

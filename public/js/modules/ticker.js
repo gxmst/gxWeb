@@ -1,7 +1,7 @@
 // ================== 底部行情双行排版 ==================
 // 数字滚动 / sparkline 画入通过 window.__animateNumber / __drawInSparkline 桥接
 // （由 ambience 模块初始化时挂载，未就绪时各调用点自带降级）。
-import { getSettings, isWidgetVisible, getEffectiveAppearance } from './settings-store.js?v=workspace-20261114c';
+import { getSettings, isWidgetVisible, getEffectiveAppearance } from './settings-store.js?v=workspace-20261122b';
 
 const SPARKLINE_MIN_POINTS = 3;
 const TICKER_POLL_INTERVAL = 20000;
@@ -45,6 +45,21 @@ function buildSparklineNode(history, isUp, symbol = '') {
     svg.appendChild(svgEl('polyline', { class: 'sparkline-poly', points: pts, stroke: color, opacity: '0.88' }));
     svg.appendChild(svgEl('circle', { cx: lastX.toFixed(1), cy: lastY.toFixed(1), r: '1.4', fill: color }));
     return svg;
+}
+
+function syncTickerScrollControls() {
+    const scroller = document.getElementById('tickerScroll');
+    if (!scroller?.style) return;
+    const maxScroll = Math.max(0, (scroller.scrollWidth || 0) - (scroller.clientWidth || 0));
+    const left = scroller.scrollLeft || 0;
+    const atStart = left <= 4;
+    const atEnd = maxScroll <= 4 || left >= maxScroll - 4;
+    scroller.style.setProperty('--ticker-fade-left', atStart ? '0px' : '22px');
+    scroller.style.setProperty('--ticker-fade-right', atEnd ? '0px' : '22px');
+    const prevBtn = document.querySelector?.('[data-ticker-dir="prev"]');
+    const nextBtn = document.querySelector?.('[data-ticker-dir="next"]');
+    prevBtn?.classList?.toggle('ticker-nav-hidden', atStart);
+    nextBtn?.classList?.toggle('ticker-nav-hidden', atEnd);
 }
 
 async function fetchTickerData() {
@@ -169,6 +184,7 @@ async function fetchTickerData() {
                 }
             }
         });
+        syncTickerScrollControls();
     } catch (error) { console.error("行情同步异常:", error); }
 }
 
@@ -212,11 +228,20 @@ export function tickerStatusPresentation(status, intervalSeconds = 60, now = Dat
 
 async function fetchTickerStatus() {
     try {
-        // 读取实际服务端配置；等待下一轮期间修改频率也能立即影响过期判断。
-        // 配置接口失败时沿用最近读到的间隔，避免临时故障让正常等待被误判为离线。
-        const [resp, intervalSeconds] = await Promise.all([
-            fetch('./ticker-status.json', { cache: 'no-cache' }),
-            fetch('./api/admin/status', { cache: 'no-store' })
+        // 优先使用 ticker-status.json 内嵌的 interval，避免常规 20 秒轮询穿透 Nginx 打到管理容器；
+        // 仅在旧版状态文件未携带 interval 时才回退查询 ./api/admin/status。
+        const resp = await fetch('./ticker-status.json', { cache: 'no-cache' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const ts = await resp.json();
+        if (!ts || !ts.status) return;
+
+        const inlineInterval = Number(ts.interval);
+        let intervalSeconds = serverTickerInterval;
+        if (Number.isInteger(inlineInterval) && inlineInterval >= 60 && inlineInterval <= 3600) {
+            serverTickerInterval = inlineInterval;
+            intervalSeconds = inlineInterval;
+        } else {
+            intervalSeconds = await fetch('./api/admin/status', { cache: 'no-store' })
                 .then(async response => {
                     if (response.ok) {
                         const interval = (await response.json()).settings?.intervals?.fast;
@@ -224,11 +249,8 @@ async function fetchTickerStatus() {
                     }
                     return serverTickerInterval;
                 })
-                .catch(() => serverTickerInterval),
-        ]);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const ts = await resp.json();
-        if (!ts || !ts.status) return;
+                .catch(() => serverTickerInterval);
+        }
 
         const presentation = tickerStatusPresentation(ts, intervalSeconds);
         setTickerStatus(presentation.kind, presentation.label, presentation.title);
@@ -238,6 +260,11 @@ async function fetchTickerStatus() {
 }
 
 export function initTicker() {
+    const scroller = document.getElementById('tickerScroll');
+    scroller?.addEventListener?.('scroll', syncTickerScrollControls, { passive: true });
+    if (typeof ResizeObserver === 'function' && scroller?.nodeType === 1) {
+        new ResizeObserver(syncTickerScrollControls).observe(scroller);
+    }
     const poll = async () => {
         if (document.hidden || !isWidgetVisible('ticker') || tickerRequestInFlight) return;
         tickerRequestInFlight = true;

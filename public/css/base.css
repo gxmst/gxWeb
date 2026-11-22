@@ -17,6 +17,8 @@ body {
     --glass-text-shadow: rgba(0, 0, 0, 0.52);
     --scene-shade: rgba(0, 0, 0, 0.24);
     --scene-vignette: rgba(0, 0, 0, 0.42);
+    --panel-lum-boost: 0;
+    --hero-lum-boost: 0;
 }
 
 :where(button, a, input, [tabindex]):focus-visible {

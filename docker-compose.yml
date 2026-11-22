@@ -9,6 +9,7 @@ services:
     container_name: workspace-spider
     restart: always
     user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    mem_limit: 512m
     security_opt:
       - no-new-privileges:true
     volumes:
@@ -28,7 +29,11 @@ services:
       - WEATHER_LATITUDE=${WEATHER_LATITUDE:-41.80}
       - WEATHER_LONGITUDE=${WEATHER_LONGITUDE:-123.43}
       - FORUM_POLL_INTERVAL_SECONDS=${FORUM_POLL_INTERVAL_SECONDS:-300}
-      - FORUM_ITEMS_PER_SOURCE=${FORUM_ITEMS_PER_SOURCE:-30}
+      - FORUM_ITEMS_PER_SOURCE=${FORUM_ITEMS_PER_SOURCE:-50}
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+      - ALERT_MIN_SCORE=${ALERT_MIN_SCORE:-85}
+      - ALERT_COOLDOWN_SECONDS=${ALERT_COOLDOWN_SECONDS:-1800}
+      - ALERT_CONSECUTIVE_FAILURES=${ALERT_CONSECUTIVE_FAILURES:-3}
       - CRAWLER_CONFIG_PATH=/app/state/crawler-settings.json
       - SPIDER_CACHE_DIR=/app/cache
     logging:
@@ -54,6 +59,7 @@ services:
     command: ["python", "-u", "control_api.py"]
     restart: always
     user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    mem_limit: 128m
     security_opt:
       - no-new-privileges:true
     volumes:
@@ -83,6 +89,9 @@ services:
     image: nginx:alpine
     container_name: workspace-web
     restart: always
+    mem_limit: 128m
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "${WEB_BIND_ADDRESS:-0.0.0.0}:${WEB_PORT:-1881}:80"
     volumes:

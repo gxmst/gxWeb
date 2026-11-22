@@ -44,11 +44,13 @@
 爬虫会持续更新这些前端依赖文件：
 
 - `public/finance-news.json`
+- `public/news-archive.json`
 - `public/ticker.json`
 - `public/ticker-status.json`
 - `public/pipeline-status.json`
 - `public/weather.txt`
 - `public/wallpapers.json`
+- `public/wallpapers-meta.json`
 - `public/github-tech-cache-v2.json`
 
 ## Quick Start
@@ -107,7 +109,9 @@ http://localhost:1881
 - `FORUM_POLL_INTERVAL_SECONDS`
   社区公开 RSS 的初始抓取间隔，默认 `300` 秒，范围 `300–86400` 秒。管理页已保存的频率优先于这个默认值。独立任务抓取两个论坛，不受海外翻译任务阻塞。
 - `FORUM_ITEMS_PER_SOURCE`
-  每个论坛保留的帖子数量，默认 `30`，范围 `1–50`。修改上述环境变量后需重新创建 spider 容器，单纯 restart 不更新环境变量。
+  每个论坛单次抓取保留的帖子数量，默认 `50`，范围 `1–100`。修改上述环境变量后需重新创建 spider 容器，单纯 restart 不更新环境变量。
+- `ALERT_WEBHOOK_URL` / `ALERT_MIN_SCORE` / `ALERT_COOLDOWN_SECONDS` / `ALERT_CONSECUTIVE_FAILURES`
+  可选。设置 `ALERT_WEBHOOK_URL` 后，当出现高分重要快讯（默认 `>= 85` 分）或任务连续失败（默认 `>= 3` 次）时向该地址推送 JSON 通知，同一事件按冷却秒数（默认 `1800`）防刷屏。通知由独立线程发送，队列最多保留 64 条待发消息，满时跳过新增通知，不阻塞新闻发布、抓取或心跳；退出时未发送的消息不持久化。
 - `ADMIN_PASSWORD`
   管理密码，至少 12 个字符；留空时管理页只能查看频率。生产环境通过 HTTPS 使用，密码仅放在服务器 `.env` 中，不写进前端或浏览器存储。修改密码后需重新创建 `control` 容器，已有会话失效。
 - `WEATHER_CITY`
@@ -153,6 +157,7 @@ docker compose up -d --build
 ```bash
 npm ci             # 按 package-lock.json 安装精确版本
 npm run build:css  # 重新编译出 public/vendor/app.css
+npm run bump:version workspace-YYYYMMDDa  # 同步 CSS / JS / modulepreload ?v= 版本标签
 npm run check      # 校验 vendor、CSS 产物和 JavaScript 语法
 ```
 
@@ -178,13 +183,11 @@ npm run preview
 
 示例模式的管理密码是 `gxweb-demo-2026`，仅用于本机测试；保存频率写入 `.local-preview/crawler-settings.json`，不会影响 VPS，也不会启动爬虫。七天天气在示例模式中使用模拟数据。生产环境不使用这个演示密码，需自行配置 `ADMIN_PASSWORD`。
 
-本地交互改版：从资讯标题栏或左侧边缘向左拖动可加宽或进入全屏，向右拖动收起；左侧时钟、搜索与快捷入口随可用空间同比缩放。双击拖动区域或点击还原按钮恢复默认。标题与边缘按钮支持左右箭头调整、Enter 全屏、Home 还原，Esc 退出全屏；手机上点击展开按钮进入全屏，正文在面板内滚动。宽度与布局模式保存在当前浏览器中。全屏且视口至少 1024px 时采用双栏，同一行从左至右按时间倒序，时段小标题跨栏；窄屏保留单栏。搜索框只显示当前引擎，点击展开四个选项；聚焦时以胶囊边缘呼吸柔光提示，减少动态或省电模式下使用静态提示。
+本地交互与存储升级：从资讯标题栏或左侧边缘向左拖动可加宽或进入全屏，全屏与双栏保持与侧栏一致的通透液态玻璃与折射位移（不再切换成暗沉蒙版）；支持 `Ctrl/Cmd + K` 或 `?` 打开全局命令面板，快速切分类、切全屏、切换壁纸/滤镜与加载历史归档。
 
-设置 → 视觉中可分别选择界面、资讯、时钟字体，提供黑体、系统、宋体、文楷和等宽五种预设。中文文楷自托管，首次选择时加载约 7 MB 的 WOFF2；宋体等预设使用设备字体并自动回退。按钮、菜单、时钟不可框选，资讯正文可选择复制，选中颜色随壁纸变化。
+历史归档与备份：实时流提升至最多保留 1000 条社区帖（两坛各 500 条）与 500 条国内快讯、450 条外媒；更早内容自动滚存进 `public/news-archive.json`（社区最多 3000 条、全库约 5780 条），在筛选栏选择「昨天 / 近 3 天 / 更早」或滚到底部点击「加载更早历史归档」即可按需拉取。加载后随资讯轮询每两分钟刷新一次，也可手动刷新；科技归档保留旧热榜快照，实时科技栏仍只展示各源最新一版。搜索支持关键词高亮；「全部已读」与取消收藏支持 4 秒内一键撤销；设置页支持将本机偏好与资讯收藏导出/导入为 JSON 备份。
 
-环境效果：雨线减少并缩短，落在搜索框、快讯与行情顶部时产生小水珠和涟漪；雪花落到已有雪层上继续堆积，形成局部起伏，调整面板尺寸时按位置保留，最大厚度 18px。切换天气或关闭效果后清除雪层。晴天使用淡暖光，阴天和雾使用缓慢移动的轻层次；普通雨不闪屏，雷暴仅偶发柔和泛光。页面隐藏后暂停动态，减少动态或省电模式下停用粒子。
-
-同一页可调整阅读密度与资讯面板不透明度。资讯区提供全部/未读/收藏切换；全部视图中，资讯充分进入视口并停留 1.8 秒后自动标为已读，也可手动切换。最多留存 200 条收藏副本，原帖子离开上游列表后仍可查看；清除浏览器站点数据会丢失这些本地收藏。
+环境与视觉细节：壁纸保留必应摄影标题与出处并在左下角/屏保显示，取色同步计算左右半区亮度以平滑适配明暗壁纸；七天预报展示线性图标与跨日温差范围条；雪花按局部积雪分段平滑堆积，边缘柔化贴合圆角，不再因单点落雪点亮整条边框。
 
 要用 VPS 的真实数据微调，先把 `finance-news.json`、`ticker.json` 等下载到本机 `.local-preview/`（已被 Git 排除），然后：
 
@@ -192,15 +195,15 @@ npm run preview
 python tools/preview.py --data-dir .local-preview
 ```
 
-只读取指定目录中的六个 JSON/TXT 数据文件，其他文件仍由本机 public 提供。壁纸图片仍需按 JSON 内路径放入本地 public，或先用示例模式调布局；本地预览不是生产 Nginx，不提供真实天气代理。
+只读取指定目录中的 JSON/TXT 数据文件，其他文件仍由本机 public 提供。壁纸图片仍需按 JSON 内路径放入本地 public，或先用示例模式调布局；本地预览不是生产 Nginx，不提供真实天气代理。
 
 发布前检查：
 
 ```bash
 npm run check
-npm run test:settings
+npm test
 python -m unittest discover -s tests -v
-python -m unittest discover -s .github/tests -v
+ruff check crawler control_api.py runtime_config.py spider.py tools tests
 npm run check:forums
 ```
 

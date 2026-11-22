@@ -25,17 +25,23 @@ def fetch_bing_wallpaper():
             raise ValueError("必应未返回图片列表")
 
         new_images = []
+        meta_map = {}
         for i, item in enumerate(images):
             img_url = "https://www.bing.com" + item["url"]
             img_resp = get_session().get(img_url, headers={"User-Agent": get_random_ua()}, timeout=15)
             img_resp.raise_for_status()
             new_images.append((i, Image.open(io.BytesIO(img_resp.content)).convert("RGB")))
+            meta_map[f"bg_{i}.jpg"] = {
+                "title": str(item.get("title") or "").strip(),
+                "copyright": str(item.get("copyright") or "").strip(),
+                "startdate": str(item.get("startdate") or "").strip(),
+            }
 
         tmp_paths = []
         try:
             for i, img in new_images:
                 tmp_path = f"./public/bg_{i}.jpg.tmp"
-                img.save(tmp_path, "JPEG", quality=82)
+                img.save(tmp_path, "JPEG", quality=82, optimize=True, progressive=True)
                 tmp_paths.append((i, tmp_path))
         except Exception:
             for _, tmp_path in tmp_paths:
@@ -49,6 +55,8 @@ def fetch_bing_wallpaper():
         for i, tmp_path in tmp_paths:
             os.replace(tmp_path, f"./public/bg_{i}.jpg")
             log(f"✅ [壁纸引擎] bg_{i}.jpg 下载并压缩成功。")
+
+        atomic_save_json("./public/wallpapers-meta.json", meta_map)
 
         for old in os.listdir("./public"):
             if old.startswith("bg_") and old.endswith(".jpg"):

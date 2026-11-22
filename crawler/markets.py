@@ -2,6 +2,8 @@
 import json
 import os
 
+from runtime_config import read_config
+
 from .config import MARKET_TICKERS, TICKER_FILE, TICKER_STATUS_FILE
 from .io_utils import (
     atomic_save_json,
@@ -229,6 +231,7 @@ def fetch_ticker():
     status_payload = {
         "updated_at": int(get_beijing_time().timestamp()),
         "status": status,
+        "interval": read_config()["intervals"]["fast"],
         "primary_provider": "sina",
         "primary_success_count": sina_count,
         "fallback_provider": "tencent",

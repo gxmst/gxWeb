@@ -1,11 +1,17 @@
 // ================== 新闻流纯函数逻辑（可在 Node 单元测试中直接运行） ==================
 
-export const MAX_NEWS_ITEMS = 1000;
+export const MAX_NEWS_ITEMS = 2200;
+export const MAX_ARCHIVE_ITEMS = 6000;
 export const NEWS_PAGE_SIZE = 60;
-const CATEGORY_QUOTAS = [
-    ['community', 300],
-    ['foreign', 250],
-    ['tech', 50],
+export const CATEGORY_QUOTAS = [
+    ['community', 1100],
+    ['foreign', 550],
+    ['tech', 60],
+];
+export const ARCHIVE_CATEGORY_QUOTAS = [
+    ['community', 3000],
+    ['foreign', 1200],
+    ['tech', 80],
 ];
 
 const SOURCE_LABELS = {
@@ -34,12 +40,13 @@ export function newsIdentity(news) {
     ].join('\u241f')) >>> 0}`;
 }
 
-export function assignClientKeys(newsList, maxItems = MAX_NEWS_ITEMS) {
+export function assignClientKeys(newsList, maxItems = MAX_NEWS_ITEMS, quotas = CATEGORY_QUOTAS) {
     const occurrences = new Map();
+    const scaleBase = maxItems >= MAX_ARCHIVE_ITEMS ? MAX_ARCHIVE_ITEMS : MAX_NEWS_ITEMS;
     // 为较慢的来源（社区、海外 RSS、科技热榜）各预留配额，避免大量快讯把这些分类挤空。
     const reserved = new Set();
-    for (const [category, baseQuota] of CATEGORY_QUOTAS) {
-        const quota = maxItems >= MAX_NEWS_ITEMS ? baseQuota : Math.max(1, Math.floor(maxItems * baseQuota / MAX_NEWS_ITEMS));
+    for (const [category, baseQuota] of quotas) {
+        const quota = maxItems >= scaleBase ? baseQuota : Math.max(1, Math.floor(maxItems * baseQuota / scaleBase));
         newsList.filter(item => item.category === category).slice(0, quota).forEach(item => {
             if (reserved.size < maxItems) reserved.add(item);
         });
@@ -56,12 +63,12 @@ export function assignClientKeys(newsList, maxItems = MAX_NEWS_ITEMS) {
     });
 }
 
-export function newsRenderSignature(news, fontSize = 'sm') {
+export function newsRenderSignature(news, fontSize = 'sm', highlightTerm = '') {
     return String(simpleHash(JSON.stringify([
         news._clientKey, news.time, news.display_content, news.content, news.url,
         news.category, news.source, news.format, news.tech_data || null, Boolean(news.is_important),
         news.importance_score, news.importance_reason, news.summary, news.forum_category, fontSize,
-        news.category === 'community' ? formatCommunityTime(news) : ''
+        highlightTerm, formatItemTime(news)
     ])) >>> 0);
 }
 
@@ -82,19 +89,29 @@ export function formatLastUpdated(timestamp, fallback) {
     });
 }
 
+function dayPeriodLabel(hour) {
+    if (hour < 6) return '凌晨';
+    if (hour < 12) return '上午';
+    if (hour < 18) return '下午';
+    return '晚间';
+}
+
 export function groupLabel(news, now = new Date()) {
     const raw = Number(news.raw_time);
     if (!Number.isFinite(raw) || raw <= 0) return { id: 'unknown', label: '较早' };
     const date = new Date(raw * 1000);
     const sameDay = date.toDateString() === now.toDateString();
-    const hour = String(date.getHours()).padStart(2, '0');
-    const id = `${date.toDateString()}-${hour}`;
-    if (sameDay) return { id, label: `今天 ${hour}:00` };
-    const yesterday = new Date(now.getTime() - 86400000);
-    const dayLabel = date.toDateString() === yesterday.toDateString()
-        ? '昨天'
-        : date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
-    return { id, label: `${dayLabel} ${hour}:00` };
+    const hourNum = date.getHours();
+    const hour = String(hourNum).padStart(2, '0');
+    if (sameDay) return { id: `${date.toDateString()}-${hour}`, label: `今天 ${hour}:00` };
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) {
+        return { id: `${date.toDateString()}-${hour}`, label: `昨天 ${hour}:00` };
+    }
+    const dayLabel = `${date.getMonth() + 1}月${date.getDate()}日`;
+    const period = dayPeriodLabel(hourNum);
+    return { id: `${date.toDateString()}-${period}`, label: `${dayLabel} ${period}` };
 }
 
 export function sourceLabel(source) {
@@ -113,6 +130,18 @@ export function formatCommunityTime(news, now = new Date()) {
     return `${day} ${news.time || formatLastUpdated(raw)}`;
 }
 
+export function formatItemTime(news, now = new Date()) {
+    if (news.category === 'community') return formatCommunityTime(news, now);
+    const raw = Number(news.raw_time);
+    if (Number.isFinite(raw) && raw > 0) {
+        const date = new Date(raw * 1000);
+        if (date.toDateString() !== now.toDateString()) {
+            return formatCommunityTime(news, now);
+        }
+    }
+    return news.time || '';
+}
+
 export function sanitizeHttpUrl(url, baseOrigin = (typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1')) {
     if (!url) return '';
     try {
@@ -129,6 +158,36 @@ export function normalizeNewsDisplayText(news) {
         return rawText.replace(/^【[^】]+】\s*/, '');
     }
     return rawText;
+}
+
+export function matchesDateFilter(news, dateFilter = 'all', now = new Date()) {
+    if (!dateFilter || dateFilter === 'all') return true;
+    const raw = Number(news?.raw_time);
+    if (!Number.isFinite(raw) || raw <= 0) return false;
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
+    const yesterdayStart = todayStart - 86400;
+    const threeDaysStart = todayStart - 2 * 86400;
+    if (dateFilter === 'today') return raw >= todayStart;
+    if (dateFilter === 'yesterday') return raw >= yesterdayStart && raw < todayStart;
+    if (dateFilter === '3d') return raw >= threeDaysStart;
+    if (dateFilter === 'older') return raw < threeDaysStart;
+    return true;
+}
+
+export function computeDateBucketCounts(items, now = new Date()) {
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
+    const yesterdayStart = todayStart - 86400;
+    const threeDaysStart = todayStart - 2 * 86400;
+    const counts = { all: items.length, today: 0, yesterday: 0, '3d': 0, older: 0 };
+    for (const item of items) {
+        const raw = Number(item?.raw_time);
+        if (!Number.isFinite(raw) || raw <= 0) continue;
+        if (raw >= todayStart) counts.today++;
+        else if (raw >= yesterdayStart) counts.yesterday++;
+        if (raw >= threeDaysStart) counts['3d']++;
+        else counts.older++;
+    }
+    return counts;
 }
 
 export function computeTabCounts(allNewsData, hiddenSources = []) {
@@ -153,6 +212,7 @@ export function matchesNewsFilter(news, filterState, checkReadFn, ignoreReading 
         importantOnly = false,
         currentSource = 'all',
         communitySource = 'all',
+        dateFilter = 'all',
         searchTerm = '',
     } = filterState || {};
 
@@ -163,6 +223,7 @@ export function matchesNewsFilter(news, filterState, checkReadFn, ignoreReading 
     if (currentFilter !== 'community' && importantOnly && !news.is_important) return false;
     const sourceFilter = currentFilter === 'community' ? communitySource : currentSource;
     if (sourceFilter !== 'all' && news.source !== sourceFilter) return false;
+    if (dateFilter && dateFilter !== 'all' && !matchesDateFilter(news, dateFilter)) return false;
     if (searchTerm) {
         let searchText = [
             news.display_content,

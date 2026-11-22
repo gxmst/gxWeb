@@ -1,6 +1,6 @@
 // ================== 辅助交互与快捷键 ==================
-import { getEffectiveAppearance, isWidgetVisible } from './settings-store.js?v=workspace-20261114c';
-import { initNewsPanel } from './news-panel.js?v=workspace-20261114c';
+import { getEffectiveAppearance, isWidgetVisible } from './settings-store.js?v=workspace-20261122b';
+import { initNewsPanel } from './news-panel.js?v=workspace-20261122b';
 
 // 左上角控制按钮的点击反馈：加一次性 .tapped，动画结束自己摘掉。
 // 用 pointerdown 而不是 click——手指/鼠标一按下就有反应，比等 click 更"跟手"；
@@ -112,9 +112,13 @@ export function initInteractions() {
         }
     }
 
+    let resizeEffectsTimer = null;
     const syncEffects = () => syncGlassRefraction();
     syncEffects();
-    window.addEventListener('resize', syncEffects);
+    window.addEventListener('resize', () => {
+        window.clearTimeout(resizeEffectsTimer);
+        resizeEffectsTimer = window.setTimeout(syncEffects, 120);
+    });
     document.addEventListener('visibilitychange', syncEffects);
     window.addEventListener('gx:settings-changed', event => {
         const section = event.detail?.section;

@@ -1,11 +1,11 @@
 // ================== 新闻流 DOM 渲染构造 ==================
 import {
-    formatCommunityTime,
+    formatItemTime,
     newsRenderSignature,
     normalizeNewsDisplayText,
     sanitizeHttpUrl,
     sourceLabel,
-} from './news-logic.js?v=workspace-20261114c';
+} from './news-logic.js?v=workspace-20261122b';
 
 const MARKET_MOVE_REGEX = /([+-]\d+(?:\.\d+)?%|(?:上涨|下跌|涨超|跌超|涨幅|跌幅)\s*\d+(?:\.\d+)?%)/g;
 const TECH_DOT_COLORS = new Set(['bg-purple-400', 'bg-amber-400', 'bg-sky-400']);
@@ -42,14 +42,57 @@ export function createLoadMoreButton(total, visibleLimit, onClick) {
     return button;
 }
 
-export function appendFormattedNewsText(target, text) {
+export function createLoadArchiveButton(remainingArchive, loading, onClick) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'news-load-archive mx-auto mt-2 mb-3 min-h-9 rounded-lg border border-sky-400/25 bg-sky-400/10 px-4 text-xs text-sky-200 transition-colors hover:bg-sky-400/20 disabled:opacity-50';
+    button.disabled = Boolean(loading);
+    button.textContent = loading
+        ? '正在加载历史归档...'
+        : `加载更早历史归档（库内共多出 ${remainingArchive} 条）`;
+    button.addEventListener('click', onClick);
+    return button;
+}
+
+function appendHighlightedSegment(target, text, highlightTerm) {
+    const str = String(text || '');
+    const needle = String(highlightTerm || '').trim();
+    if (!needle) {
+        target.appendChild(document.createTextNode(str));
+        return;
+    }
+    const lowerStr = str.toLocaleLowerCase('zh-CN');
+    const lowerNeedle = needle.toLocaleLowerCase('zh-CN');
+    if (!lowerNeedle) {
+        target.appendChild(document.createTextNode(str));
+        return;
+    }
+    let pos = 0;
+    while (pos < str.length) {
+        const hit = lowerStr.indexOf(lowerNeedle, pos);
+        if (hit === -1) {
+            target.appendChild(document.createTextNode(str.slice(pos)));
+            break;
+        }
+        if (hit > pos) {
+            target.appendChild(document.createTextNode(str.slice(pos, hit)));
+        }
+        const mark = document.createElement('mark');
+        mark.className = 'news-highlight';
+        mark.textContent = str.slice(hit, hit + lowerNeedle.length);
+        target.appendChild(mark);
+        pos = hit + lowerNeedle.length;
+    }
+}
+
+export function appendFormattedNewsText(target, text, highlightTerm = '') {
     const str = String(text || '');
     let lastIndex = 0;
     MARKET_MOVE_REGEX.lastIndex = 0;
     let match;
     while ((match = MARKET_MOVE_REGEX.exec(str)) !== null) {
         if (match.index > lastIndex) {
-            target.appendChild(document.createTextNode(str.slice(lastIndex, match.index)));
+            appendHighlightedSegment(target, str.slice(lastIndex, match.index), highlightTerm);
         }
         const token = match[0];
         const isDown = token.startsWith('-') || token.includes('跌');
@@ -60,7 +103,7 @@ export function appendFormattedNewsText(target, text) {
         lastIndex = MARKET_MOVE_REGEX.lastIndex;
     }
     if (lastIndex < str.length) {
-        target.appendChild(document.createTextNode(str.slice(lastIndex)));
+        appendHighlightedSegment(target, str.slice(lastIndex), highlightTerm);
     }
 }
 
@@ -151,6 +194,7 @@ export function createTechContentElement(techData) {
 export function createNewsElement(news, {
     isNew = false,
     fontSize = 'sm',
+    highlightTerm = '',
     shouldReveal = true,
     observeReveal = null,
     onMarkRead = null,
@@ -169,13 +213,13 @@ export function createNewsElement(news, {
     item.className = `news-feed-item${importantClass} py-2` + (isCommunity ? ' community-item' : '')
         + (isNew ? ' animate-slide-down' : '');
     item.dataset.newsKey = news._clientKey;
-    item.dataset.newsSignature = newsRenderSignature(news, fontSize);
+    item.dataset.newsSignature = newsRenderSignature(news, fontSize, highlightTerm);
     if (shouldReveal && observeReveal) observeReveal(item);
     else item.classList.add('in-view');
 
     header.className = 'text-[11px] text-white/45 font-mono mb-0.5 flex flex-wrap items-center gap-1.5';
     const time = document.createElement('span');
-    time.textContent = isCommunity ? formatCommunityTime(news) : news.time || '';
+    time.textContent = formatItemTime(news);
     if (time.textContent) header.appendChild(time);
     if (news.source) {
         const source = document.createElement('span');
@@ -225,10 +269,10 @@ export function createNewsElement(news, {
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
         link.className = 'news-link';
-        appendFormattedNewsText(link, displayText);
+        appendFormattedNewsText(link, displayText, highlightTerm);
         body.appendChild(link);
     } else {
-        appendFormattedNewsText(body, displayText);
+        appendFormattedNewsText(body, displayText, highlightTerm);
     }
 
     if (news.forum_category) {
@@ -257,7 +301,7 @@ export function createNewsElement(news, {
     if (isCommunity && news.summary) {
         const summary = document.createElement('p');
         summary.className = 'community-summary';
-        summary.textContent = news.summary;
+        appendHighlightedSegment(summary, news.summary, highlightTerm);
         let hoverTimer;
         const syncSummary = expanded => {
             summary.classList.toggle('is-expanded', expanded);

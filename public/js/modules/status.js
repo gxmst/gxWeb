@@ -1,4 +1,4 @@
-import { isWidgetVisible } from './settings-store.js?v=workspace-20261114c';
+import { isWidgetVisible } from './settings-store.js?v=workspace-20261122b';
 // ================== 数据管线健康状态 ==================
 const STATUS_POLL_INTERVAL = 60000;
 const JOB_LABELS = {

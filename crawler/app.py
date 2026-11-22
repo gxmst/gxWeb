@@ -8,13 +8,18 @@ import time
 from runtime_config import read_config
 
 from .config import (
+    COMMUNITY_ARCHIVE_LIMIT,
     COMMUNITY_NEWS_LIMIT,
     FORUM_SOURCES,
+    NEWS_ARCHIVE_FILE,
     PIPELINE_JOB_TIMEOUT_SECONDS,
     PIPELINE_JOBS,
     PIPELINE_STATUS_FILE,
+    RSS_ARCHIVE_LIMIT,
     RSS_NEWS_LIMIT,
+    SINA_ARCHIVE_LIMIT,
     SINA_NEWS_LIMIT,
+    TECH_ARCHIVE_LIMIT,
     TECH_NEWS_LIMIT,
 )
 from .feeds import fetch_rss_news, fetch_sina
@@ -23,6 +28,7 @@ from .io_utils import atomic_load_json, atomic_save_json, atomic_save_text, get_
 from .log_utils import log
 from .markets import fetch_ticker
 from .media import fetch_bing_wallpaper, fetch_weather, update_wallpaper_list
+from .notify import AlertNotifier
 from .tech import fetch_tech_news
 
 
@@ -36,6 +42,12 @@ class SpiderApp:
         self.rss_news = []
         self.tech_news = []
         self.community_news = []
+        self.sina_archive = []
+        self.rss_archive = []
+        self.tech_archive = []
+        self.community_archive = []
+        self._last_archive_publish = 0.0
+        self._archive_dirty = False
         self.last_wallpaper_date = None
         self.last_rss_time = 0
         self.last_weather_time = 0
@@ -44,6 +56,7 @@ class SpiderApp:
         self.shutdown = False
         self._shutdown_event = threading.Event()
         self.job_timeout_seconds = PIPELINE_JOB_TIMEOUT_SECONDS
+        self.notifier = AlertNotifier()
 
         self._data_lock = threading.Lock()
         self._status_lock = threading.Lock()
@@ -87,32 +100,50 @@ class SpiderApp:
         return unique[:limit]
 
     def _load_last_known_news(self):
-        """从最终发布文件恢复有界快照，容器重启后不必先清空慢源数据。"""
+        """从实时与归档文件恢复有界快照，容器重启后保持多日历史记录。"""
         cached = atomic_load_json("./public/finance-news.json", default={})
-        if not isinstance(cached, dict) or not isinstance(cached.get("news_list"), list):
+        archived = atomic_load_json(NEWS_ARCHIVE_FILE, default={})
+        hot_items = cached.get("news_list") if isinstance(cached, dict) and isinstance(cached.get("news_list"), list) else []
+        arch_items = archived.get("news_list") if isinstance(archived, dict) and isinstance(archived.get("news_list"), list) else []
+        items = list(hot_items) + list(arch_items)
+        if not items:
             return
-        items = cached["news_list"]
-        self.sina_news = self._dedupe_news(
+        self.sina_archive = self._dedupe_news(
             [item for item in items if isinstance(item, dict) and item.get("source") == "sina"],
-            SINA_NEWS_LIMIT,
+            SINA_ARCHIVE_LIMIT,
+            newest_first=True,
         )
-        self.rss_news = self._dedupe_news(
+        self.sina_news = self.sina_archive[:SINA_NEWS_LIMIT]
+        self.rss_archive = self._dedupe_news(
             [item for item in items if isinstance(item, dict) and item.get("category") == "foreign"],
-            RSS_NEWS_LIMIT,
+            RSS_ARCHIVE_LIMIT,
             newest_first=True,
         )
-        self.tech_news = self._dedupe_news(
+        self.rss_news = self.rss_archive[:RSS_NEWS_LIMIT]
+        self.tech_archive = self._dedupe_news(
             [item for item in items if isinstance(item, dict) and item.get("category") == "tech"],
-            TECH_NEWS_LIMIT,
-        )
-        self.community_news = self._dedupe_news(
-            [item for item in items if isinstance(item, dict) and item.get("category") == "community"],
-            COMMUNITY_NEWS_LIMIT,
+            TECH_ARCHIVE_LIMIT,
             newest_first=True,
         )
-        recovered = len(self.sina_news) + len(self.rss_news) + len(self.tech_news) + len(self.community_news)
-        if recovered:
-            log(f"✅ [系统] 从 finance-news.json 恢复 {recovered} 条 last-known-good 数据。")
+        # Historical tech snapshots must not reappear as current trend blocks after restart.
+        tech_sources = set()
+        self.tech_news = []
+        for item in self.tech_archive:
+            source = item.get("source")
+            if source not in tech_sources:
+                tech_sources.add(source)
+                self.tech_news.append(item)
+        self.community_archive = self._dedupe_news(
+            [item for item in items if isinstance(item, dict) and item.get("category") == "community"],
+            COMMUNITY_ARCHIVE_LIMIT,
+            newest_first=True,
+        )
+        self.community_news = self.community_archive[:COMMUNITY_NEWS_LIMIT]
+        self.notifier.seed_news_ids(self.sina_archive + self.rss_archive + self.tech_archive + self.community_archive)
+        recovered_hot = len(self.sina_news) + len(self.rss_news) + len(self.tech_news) + len(self.community_news)
+        recovered_arch = len(self.sina_archive) + len(self.rss_archive) + len(self.tech_archive) + len(self.community_archive)
+        if recovered_hot:
+            log(f"✅ [系统] 恢复 {recovered_hot} 条实时数据 / {recovered_arch} 条归档快照。")
 
     def _load_pipeline_status(self):
         cached = atomic_load_json(PIPELINE_STATUS_FILE, default={})
@@ -169,6 +200,7 @@ class SpiderApp:
             if succeeded:
                 state["last_success"] = int(finished_at)
         self._persist_pipeline_status()
+        self.notifier.record_job_result(name, succeeded=succeeded, error=error or "")
 
     def _run_job(self, name, callback, *, count_fn=None, success_if=None, failure_message=None):
         """执行隔离任务并更新统一状态。"""
@@ -265,6 +297,7 @@ class SpiderApp:
 
         for worker in workers.values():
             worker.join(timeout=5)
+        self.notifier.close()
         log("🛑 已停止所有工作线程。")
 
         if failed_worker is not None:
@@ -328,19 +361,39 @@ class SpiderApp:
             rss_snapshot = list(self.rss_news)
             tech_snapshot = list(self.tech_news)
             community_snapshot = list(self.community_news)
+            sina_arch = list(self.sina_archive) if self.sina_archive else sina_snapshot
+            rss_arch = list(self.rss_archive) if self.rss_archive else rss_snapshot
+            tech_arch = list(self.tech_archive) if self.tech_archive else tech_snapshot
+            community_arch = list(self.community_archive) if self.community_archive else community_snapshot
 
         final_news = sina_snapshot + rss_snapshot + tech_snapshot + community_snapshot
         final_news.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
         if not final_news:
             return []
 
+        archive_news = sina_arch + rss_arch + tech_arch + community_arch
+        archive_news.sort(key=lambda x: x.get("raw_time", 0), reverse=True)
+        now_ts = int(get_beijing_time().timestamp())
+
         output_data = {
-            "last_updated": int(get_beijing_time().timestamp()),
+            "last_updated": now_ts,
+            "archive_count": len(archive_news),
             "news_list": final_news,
         }
         atomic_save_json("./public/finance-news.json", output_data, compact=True)
+        now_mono = time.monotonic()
+        if (self._archive_dirty or not os.path.exists(NEWS_ARCHIVE_FILE)) and (
+            now_mono - self._last_archive_publish >= 120 or not os.path.exists(NEWS_ARCHIVE_FILE)
+        ):
+            atomic_save_json(
+                NEWS_ARCHIVE_FILE,
+                {"last_updated": now_ts, "news_list": archive_news},
+                compact=True,
+            )
+            self._last_archive_publish = now_mono
+            self._archive_dirty = False
         log(
-            f"✅ [fast] 更新完成：总库 {len(final_news)} 条 "
+            f"✅ [fast] 更新完成：实时 {len(final_news)} 条 / 归档 {len(archive_news)} 条 "
             f"(新浪 {len(sina_snapshot)} / RSS {len(rss_snapshot)} / "
             f"科技 {len(tech_snapshot)} / 社区 {len(community_snapshot)})。"
         )
@@ -383,6 +436,11 @@ class SpiderApp:
                     self.sina_news = self._accumulate_news(
                         self.sina_news, sina_news_raw, SINA_NEWS_LIMIT, newest_first=True
                     )
+                    self.sina_archive = self._accumulate_news(
+                        self.sina_archive, sina_news_raw, SINA_ARCHIVE_LIMIT, newest_first=True
+                    )
+                    self._archive_dirty = True
+                self.notifier.notify_important_news(sina_news_raw)
 
             self._run_job(
                 "finance_news",
@@ -443,8 +501,17 @@ class SpiderApp:
                             rss_news_raw,
                             RSS_NEWS_LIMIT,
                             newest_first=True,
-                            per_source_limit=60,
+                            per_source_limit=80,
                         )
+                        self.rss_archive = self._accumulate_news(
+                            self.rss_archive,
+                            rss_news_raw,
+                            RSS_ARCHIVE_LIMIT,
+                            newest_first=True,
+                            per_source_limit=180,
+                        )
+                        self._archive_dirty = True
+                    self.notifier.notify_important_news(rss_news_raw)
                 last_completed["rss"] = time.monotonic()
 
             if last_completed["tech"] is None or now_mono >= last_completed["tech"] + intervals["tech"]:
@@ -460,6 +527,11 @@ class SpiderApp:
                         self.tech_news = self._merge_by_source(
                             self.tech_news, tech_news_raw, TECH_NEWS_LIMIT
                         )
+                        self.tech_archive = self._accumulate_news(
+                            self.tech_archive, tech_news_raw, TECH_ARCHIVE_LIMIT,
+                            newest_first=True, per_source_limit=30,
+                        )
+                        self._archive_dirty = True
                 last_completed["tech"] = time.monotonic()
 
             self._interruptible_sleep(30)
@@ -489,8 +561,16 @@ class SpiderApp:
                             items,
                             COMMUNITY_NEWS_LIMIT,
                             newest_first=True,
-                            per_source_limit=180,
+                            per_source_limit=500,
                         )
+                        self.community_archive = self._accumulate_news(
+                            self.community_archive,
+                            items,
+                            COMMUNITY_ARCHIVE_LIMIT,
+                            newest_first=True,
+                            per_source_limit=1500,
+                        )
+                        self._archive_dirty = True
                 last_completed[source] = time.monotonic()
             self._interruptible_sleep(30)
 

@@ -1,4 +1,4 @@
-import { safeStorageGet, safeStorageSet } from './storage.js?v=workspace-20261114c';
+import { safeStorageGet, safeStorageSet } from './storage.js?v=workspace-20261122b';
 
 const SETTINGS_KEY = 'gxSettingsV1';
 
@@ -306,6 +306,19 @@ export function updateSettings(section, value) {
 
 export function resetSettings() {
     currentSettings = sanitizeSettings(clone(DEFAULT_SETTINGS));
+    publish('all');
+    return getSettings();
+}
+
+export function exportSettingsBackup() {
+    return getSettings();
+}
+
+export function importSettingsBackup(rawSettings) {
+    if (!rawSettings || typeof rawSettings !== 'object' || Array.isArray(rawSettings)) {
+        throw new Error('无效的设置备份格式');
+    }
+    currentSettings = sanitizeSettings(rawSettings);
     publish('all');
     return getSettings();
 }

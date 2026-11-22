@@ -1,5 +1,5 @@
-import { getSettings, updateSettings, isWidgetVisible } from './settings-store.js?v=workspace-20261114c';
-import { supportsSplitView } from './news-logic.js?v=workspace-20261114c';
+import { getSettings, updateSettings, isWidgetVisible } from './settings-store.js?v=workspace-20261122b';
+import { supportsSplitView } from './news-logic.js?v=workspace-20261122b';
 
 export function panelBounds(viewport) {
     const maximum = Math.max(280, viewport - 48);

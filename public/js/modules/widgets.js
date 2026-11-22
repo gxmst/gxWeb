@@ -1,4 +1,4 @@
-import { getSettings, isQuietScene, isScreenSaver, isWidgetVisible, setScreenSaver } from './settings-store.js?v=workspace-20261114c';
+import { getSettings, isQuietScene, isScreenSaver, isWidgetVisible, setScreenSaver } from './settings-store.js?v=workspace-20261122b';
 
 const targets = {
     date: '#dateInfo', weather: '#weatherInfoBtn', search: '#search-bar', shortcuts: '#dockRow',

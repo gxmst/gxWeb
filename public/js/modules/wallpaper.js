@@ -2,10 +2,10 @@
 // 轮换池 = 服务器列表（public/wallpapers.json：收藏目录 + 今日必应 5 张）+ 本地收藏夹。
 // 本地收藏夹存在 IndexedDB 里（见 wallpaper-store.js），存的是图片字节而不是路径——
 // 因为 bg_0..bg_4.jpg 是滚动窗口，5 天后同名文件已是别的图，存路径等于收藏了一个格子。
-import { safeStorageGet, safeStorageSet } from './storage.js?v=workspace-20261114c';
-import { moveTabIndicator, getCurrentFilter } from './news.js?v=workspace-20261114c';
-import { getSettings } from './settings-store.js?v=workspace-20261114c';
-import { showControlToast } from './toast.js?v=workspace-20261114c';
+import { safeStorageGet, safeStorageSet } from './storage.js?v=workspace-20261122b';
+import { moveTabIndicator, getCurrentFilter } from './news.js?v=workspace-20261122b';
+import { getSettings } from './settings-store.js?v=workspace-20261122b';
+import { showControlToast } from './toast.js?v=workspace-20261122b';
 import {
     FAVORITE_LIMIT,
     deleteFavorite,
@@ -14,7 +14,7 @@ import {
     initFavorites,
     listFavorites,
     putFavorite,
-} from './wallpaper-store.js?v=workspace-20261114c';
+} from './wallpaper-store.js?v=workspace-20261122b';
 
 // 轮换条目统一形态：{ key, kind: 'remote' | 'local', src?, id? }
 let remoteEntries = [];
@@ -27,6 +27,7 @@ let currentEntry = null;
 let currentFingerprint = '';
 let activeBgLayer = 1;
 let isSwitchingBg = false;
+let wallpapersMeta = {};
 const vSuffix = new Date().toISOString().slice(0, 10);
 const THEME_KEY = 'gxWallTheme';
 const LAST_KEY = 'lastWallpaperKey';
@@ -125,7 +126,7 @@ function fingerprintFromPixels(pixels, size) {
     return hex;
 }
 
-// 一次 getImageData 同时算出主题色与指纹，避免重复解码。
+// 一次 getImageData 同时算出主题色、左右分区亮度与指纹，避免重复解码。
 function analyzeImage(img) {
     const canvas = document.createElement('canvas');
     const size = 72;
@@ -136,12 +137,19 @@ function analyzeImage(img) {
     const pixels = c.getImageData(0, 0, size, size).data;
     let rSum = 0, gSum = 0, bSum = 0, weightSum = 0;
     let brightSum = 0;
+    let leftBrightSum = 0, leftCount = 0;
+    let rightBrightSum = 0, rightCount = 0;
+    const halfX = size * 0.5;
     for (let i = 0; i < pixels.length; i += 16) {
+        const pxIndex = i / 4;
+        const px = pxIndex % size;
         const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2], a = pixels[i + 3];
         if (a < 180) continue;
         const max = Math.max(r, g, b), min = Math.min(r, g, b);
         const sat = (max - min) / 255;
         const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+        if (px < halfX) { leftBrightSum += lum; leftCount++; }
+        else { rightBrightSum += lum; rightCount++; }
         if (lum < 0.06 || lum > 0.94) continue;
         const weight = 0.35 + sat * 1.8 + (1 - Math.abs(lum - 0.55)) * 0.45;
         rSum += r * weight;
@@ -157,6 +165,8 @@ function analyzeImage(img) {
     let g = gSum / weightSum;
     let b = bSum / weightSum;
     const avgLum = brightSum / weightSum;
+    const heroLum = leftCount ? leftBrightSum / leftCount : avgLum;
+    const panelLum = rightCount ? rightBrightSum / rightCount : avgLum;
     // OKLCH 空间调强调色：L=感知亮度，C=彩度，H=色相。
     // 提亮统一到 L≈0.72-0.82——无论黄绿还是蓝紫，提亮后看着一样亮（HSL 做不到）。
     // 暗壁纸(avgLum<0.34)多抬一点保证玻璃描边可见；C 拉一个下限避免发灰。
@@ -167,7 +177,14 @@ function analyzeImage(img) {
 
     return {
         fingerprint,
-        theme: { r: Math.round(r), g: Math.round(g), b: Math.round(b), lum: Number(avgLum.toFixed(3)) },
+        theme: {
+            r: Math.round(r),
+            g: Math.round(g),
+            b: Math.round(b),
+            lum: Number(avgLum.toFixed(3)),
+            heroLum: Number(heroLum.toFixed(3)),
+            panelLum: Number(panelLum.toFixed(3)),
+        },
     };
 }
 
@@ -178,7 +195,7 @@ function applyWallpaperThemeFromImage(img, entry) {
         currentFingerprint = entry?.kind === 'local' ? String(entry.id) : fingerprint;
         syncFavoriteButton();
         if (!theme) return;
-        applyThemeVars(theme.r, theme.g, theme.b, theme.lum);
+        applyThemeVars(theme.r, theme.g, theme.b, theme.lum, theme.heroLum, theme.panelLum);
         // 持久化最终主题，下次首帧直接应用，避免"默认天蓝 → 取色后跳变"
         safeStorageSet(THEME_KEY, JSON.stringify(theme));
     } catch (e) {
@@ -186,21 +203,55 @@ function applyWallpaperThemeFromImage(img, entry) {
     }
 }
 
-function applyThemeVars(r, g, b, avgLum) {
+function clamp01(value) {
+    return Math.min(1, Math.max(0, Number(value) || 0));
+}
+
+function lerp(a, b, t) {
+    return a + (b - a) * clamp01(t);
+}
+
+function applyThemeVars(r, g, b, avgLum, heroLum = avgLum, panelLum = avgLum) {
     const root = document.body;
+    const lum = clamp01(avgLum);
+    const brightT = clamp01((lum - 0.36) / 0.42);
+    const panelBrightT = clamp01(((Number.isFinite(panelLum) ? panelLum : lum) - 0.42) / 0.40);
+    const heroBrightT = clamp01(((Number.isFinite(heroLum) ? heroLum : lum) - 0.42) / 0.40);
+
     root.style.setProperty('--wall-r', Math.round(r));
     root.style.setProperty('--wall-g', Math.round(g));
     root.style.setProperty('--wall-b', Math.round(b));
     root.style.setProperty('--surface-rgb', `${Math.round(r * 0.12)}, ${Math.round(g * 0.12)}, ${Math.round(b * 0.12)}`);
-    root.style.setProperty('--surface-opacity', (0.32 + Math.min(1, Math.max(0, avgLum)) * 0.22).toFixed(2));
-    root.style.setProperty('--reading-opacity', (0.48 + Math.min(1, Math.max(0, avgLum)) * 0.20).toFixed(2));
-    root.style.setProperty('--glass-fill', avgLum > 0.62 ? 'rgba(8, 15, 25, 0.10)' : 'rgba(255, 255, 255, 0.040)');
-    root.style.setProperty('--glass-fill-strong', avgLum > 0.62 ? 'rgba(12, 20, 32, 0.14)' : 'rgba(255, 255, 255, 0.068)');
-    root.style.setProperty('--glass-border', avgLum > 0.62 ? 'rgba(255, 255, 255, 0.24)' : 'rgba(255, 255, 255, 0.18)');
-    root.style.setProperty('--glass-shadow', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.38)' : 'rgba(0, 0, 0, 0.30)');
-    root.style.setProperty('--scene-shade', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.34)' : 'rgba(0, 0, 0, 0.22)');
-    root.style.setProperty('--scene-vignette', avgLum > 0.62 ? 'rgba(0, 0, 0, 0.52)' : 'rgba(0, 0, 0, 0.38)');
+    root.style.setProperty('--surface-opacity', (0.32 + lum * 0.22).toFixed(2));
+    root.style.setProperty('--reading-opacity', (0.48 + lum * 0.20).toFixed(2));
+    root.style.setProperty('--panel-lum-boost', (panelBrightT * 0.15).toFixed(3));
+    root.style.setProperty('--hero-lum-boost', (heroBrightT * 0.12).toFixed(3));
+    root.style.setProperty('--glass-fill', brightT > 0.55
+        ? `rgba(8, 15, 25, ${lerp(0.04, 0.12, brightT).toFixed(3)})`
+        : `rgba(255, 255, 255, ${lerp(0.045, 0.030, brightT).toFixed(3)})`);
+    root.style.setProperty('--glass-fill-strong', brightT > 0.55
+        ? `rgba(12, 20, 32, ${lerp(0.08, 0.16, brightT).toFixed(3)})`
+        : `rgba(255, 255, 255, ${lerp(0.072, 0.055, brightT).toFixed(3)})`);
+    root.style.setProperty('--glass-border', `rgba(255, 255, 255, ${lerp(0.18, 0.25, brightT).toFixed(3)})`);
+    root.style.setProperty('--glass-shadow', `rgba(0, 0, 0, ${lerp(0.28, 0.40, brightT).toFixed(3)})`);
+    root.style.setProperty('--scene-shade', `rgba(0, 0, 0, ${lerp(0.20, 0.36, Math.max(brightT, heroBrightT)).toFixed(3)})`);
+    root.style.setProperty('--scene-vignette', `rgba(0, 0, 0, ${lerp(0.36, 0.52, brightT).toFixed(3)})`);
     if (typeof moveTabIndicator === 'function') moveTabIndicator(getCurrentFilter());
+}
+
+function renderWallpaperCredit(entry) {
+    const el = document.getElementById('wallpaperCredit');
+    if (!el) return;
+    const meta = entry?.kind === 'remote' ? wallpapersMeta?.[entry.src] : null;
+    const text = meta ? (meta.title || meta.copyright || '').trim() : '';
+    if (!text) {
+        el.hidden = true;
+        el.textContent = '';
+        return;
+    }
+    el.textContent = text;
+    el.title = meta.copyright || text;
+    el.hidden = false;
 }
 
 // 首帧应用上次会话保存的主题色，等真正取色完成后会被覆盖
@@ -208,8 +259,8 @@ function applyStoredTheme() {
     try {
         const saved = JSON.parse(safeStorageGet(THEME_KEY, '') || 'null');
         if (!saved) return;
-        const { r, g, b, lum } = saved;
-        if ([r, g, b, lum].every(Number.isFinite)) applyThemeVars(r, g, b, lum);
+        const { r, g, b, lum, heroLum, panelLum } = saved;
+        if ([r, g, b, lum].every(Number.isFinite)) applyThemeVars(r, g, b, lum, heroLum, panelLum);
     } catch { /* 坏数据直接忽略，保持默认主题 */ }
 }
 
@@ -270,6 +321,7 @@ async function showEntry(entry, { announce = false } = {}) {
             currentEntry = entry;
             safeStorageSet(LAST_KEY, entry.key);
             applyWallpaperThemeFromImage(hiddenLayer, entry);
+            renderWallpaperCredit(entry);
             hiddenLayer.classList.remove('opacity-0');
             hiddenLayer.style.opacity = '1';
             currentLayer.style.opacity = '0';
@@ -456,7 +508,12 @@ export async function initWallpapers() {
         if (layer) layer.style.opacity = '0';
     }
 
-    // 收藏夹（IndexedDB）与壁纸列表（网络）互不依赖，并行拿，别串着等。
+    // 收藏夹（IndexedDB）与壁纸列表/元数据并行拿，别串着等。
+    const metaReady = fetch('./wallpapers-meta.json', { cache: 'no-cache' })
+        .then(resp => (resp.ok ? resp.json() : {}))
+        .then(meta => { wallpapersMeta = meta && typeof meta === 'object' ? meta : {}; })
+        .catch(() => { wallpapersMeta = {}; });
+
     const remoteReady = fetch('./wallpapers.json', { cache: 'no-cache' })
         .then(resp => {
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -470,7 +527,7 @@ export async function initWallpapers() {
         .catch(e => console.error('加载壁纸列表失败:', e));
 
     await initFavorites();
-    await Promise.all([refreshFavorites(), remoteReady]);
+    await Promise.all([refreshFavorites(), remoteReady, metaReady]);
 
     const pool = rotationPool();
     if (pool.length) {

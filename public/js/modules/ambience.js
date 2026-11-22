@@ -1,4 +1,4 @@
-import { getSettings, getEffectiveAppearance } from './settings-store.js?v=workspace-20261114c';
+import { getSettings, getEffectiveAppearance } from './settings-store.js?v=workspace-20261122b';
 
 // ================== 视觉增强：进场 / 光斑 / 磁吸 / 时段 / 雷暴 / 星空 / 数字滚动 ==================
 // 暴露给其它模块的钩子：window.__setAmbiance / __animateNumber / __drawInSparkline
@@ -277,8 +277,13 @@ export function initAmbience() {
             nextMeteorAt = 0;
         }
     }
+    let starResizeTimer = null;
     window.addEventListener('resize', () => {
-        if (starAnimId) { initStars(); }
+        if (!starAnimId) return;
+        window.clearTimeout(starResizeTimer);
+        starResizeTimer = window.setTimeout(() => {
+            if (starAnimId) initStars();
+        }, 120);
     });
 
     // ---- 暴露给天气引擎调用的氛围切换钩子 ----

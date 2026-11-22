@@ -13,44 +13,45 @@
     <!-- 自托管 Inter、JetBrains Mono 与中文文楷；仅在选用时加载对应字体文件。 -->
     <link rel="stylesheet" href="./fonts/fonts.css">
     <!-- Tailwind：静态预编译产物（由 `npm run build:css` 生成）。改动 class 后需重新构建。 -->
-    <link rel="stylesheet" href="./vendor/app.css?v=workspace-20261114c">
+    <link rel="stylesheet" href="./vendor/app.css?v=workspace-20261122b">
     <!-- 自定义样式：从旧单文件 <style> 拆分为四个职责文件。
          base=字体/时钟/骨架；glass=玻璃材质/折射/氛围；components=时间轴/光斑/磁吸/Tab；effects=时段/雷暴/晴天/星空 -->
-    <link rel="stylesheet" href="./css/base.css?v=workspace-20261114c">
-    <link rel="stylesheet" href="./css/glass.css?v=workspace-20261114c">
-    <link rel="stylesheet" href="./css/components.css?v=workspace-20261114c">
-    <link rel="stylesheet" href="./css/effects.css?v=workspace-20261114c">
-    <link rel="stylesheet" href="./css/workspace.css?v=workspace-20261114c">
+    <link rel="stylesheet" href="./css/base.css?v=workspace-20261122b">
+    <link rel="stylesheet" href="./css/glass.css?v=workspace-20261122b">
+    <link rel="stylesheet" href="./css/components.css?v=workspace-20261122b">
+    <link rel="stylesheet" href="./css/effects.css?v=workspace-20261122b">
+    <link rel="stylesheet" href="./css/workspace.css?v=workspace-20261122b">
     <!-- DOMPurify：模块化脚本通过全局 DOMPurify 引用，须在 main.js 之前以经典脚本加载 -->
     <script src="./vendor/purify.min.js"></script>
     <!-- 模块预载：ESM 默认是"读到 import 才发请求"，本站的依赖图有三层，
          跨太平洋 120ms RTT 下最深的叶子模块要等到第三轮才开始下载（实测 ~760ms）。
          这里把整张图一次性声明出来，浏览器立刻并行拉，三轮压成一轮。
          注意 href 必须与 JS 里的 import 说明符完全一致（含 ?v=），否则会重复下载。 -->
-    <link rel="modulepreload" href="./js/main.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/admin-settings.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/ambience.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/fluid.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/forecast.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/interactions.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/news.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/news-logic.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/news-panel.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/news-render.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/news-state.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/settings.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/settings-store.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/status.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/storage.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/ticker.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/toast.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/ui.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/wallpaper.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/wallpaper-store.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/weather.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/weather-physics.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/weather-scene.js?v=workspace-20261114c">
-    <link rel="modulepreload" href="./js/modules/widgets.js?v=workspace-20261114c">
+    <link rel="modulepreload" href="./js/main.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/admin-settings.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/ambience.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/command-palette.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/fluid.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/forecast.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/interactions.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/news-logic.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/news-panel.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/news-render.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/news-state.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/news.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/settings-store.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/settings.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/status.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/storage.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/ticker.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/toast.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/ui.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/wallpaper-store.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/wallpaper.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/weather-physics.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/weather-scene.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/weather.js?v=workspace-20261122b">
+    <link rel="modulepreload" href="./js/modules/widgets.js?v=workspace-20261122b">
 </head>
 
 <body
@@ -109,10 +110,11 @@
     <!-- 雷暴闪电泛光层（雨模式下偶发，不拦截交互） -->
     <div id="lightningFlash" class="fixed inset-0 z-[41] pointer-events-none opacity-0"></div>
 
+    <!-- 全局瞬时提示与可撤销通知（由 toast.js 驱动，独立于控制中心以确保全屏模式下可见） -->
+    <div id="controlToast" class="control-toast" role="status" aria-live="polite"></div>
+
     <!-- 左上角：控制中心（默认折叠为一个紧凑触发按钮） -->
     <div id="controlCenter" class="absolute top-6 left-6 flex items-center z-30">
-        <!-- 滤镜等按钮的瞬时状态提示（由 toast.js 驱动） -->
-        <div id="controlToast" class="control-toast" role="status" aria-live="polite"></div>
         <button id="controlCenterToggle" type="button" aria-expanded="false" aria-controls="controlCenterDrawer"
             class="control-btn control-center-toggle w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-transform outline-none focus:outline-none"
             title="快捷工具" aria-label="展开快捷工具">
@@ -167,6 +169,7 @@
         <button id="leaveScreenSaver" type="button" class="recovery-button" hidden>退出屏保</button>
         <button id="recoverSettings" type="button" class="recovery-button" title="按 S 打开设置">设置</button>
     </div>
+    <div id="wallpaperCredit" class="wallpaper-credit" hidden aria-live="polite"></div>
 
     <!-- 主体内容区 (左侧) -->
     <main
@@ -381,6 +384,14 @@
                             <span>重要</span><span id="count-important" class="tab-badge"></span>
                         </button>
                     </div>
+                    <div id="newsDateBar" class="news-date-bar" role="group" aria-label="时间范围">
+                        <button type="button" data-date-filter="all" aria-pressed="true">全部</button>
+                        <button type="button" data-date-filter="today" aria-pressed="false">今天</button>
+                        <button type="button" data-date-filter="yesterday" aria-pressed="false">昨天</button>
+                        <button type="button" data-date-filter="3d" aria-pressed="false">近3天</button>
+                        <button type="button" data-date-filter="older" aria-pressed="false">更早</button>
+                        <button id="loadArchiveBtn" type="button" class="news-archive-pill" hidden>加载归档</button>
+                    </div>
                     <div id="newsResultMeta" class="mt-1 text-[10px] text-white/35" aria-live="polite" hidden></div>
                 </div>
             </div>
@@ -574,6 +585,15 @@
                             <div class="admin-actions"><button id="adminSave" type="button" class="settings-command-button" disabled>保存频率</button><button id="adminReload" type="button" class="settings-command-button">重新加载</button><button id="adminLogout" type="button" class="settings-command-button" hidden>锁定</button></div>
                         </details>
                     </section>
+                    <section class="settings-section">
+                        <h3 class="settings-section-title">配置与收藏备份</h3>
+                        <p class="mb-3 text-xs leading-relaxed text-white/45">导出本机偏好、快捷入口、行情顺序与资讯收藏为 JSON，方便迁移或恢复。</p>
+                        <div class="flex flex-wrap gap-2">
+                            <button id="exportBackupBtn" type="button" class="settings-command-button">导出备份 JSON</button>
+                            <button id="importBackupBtn" type="button" class="settings-command-button">导入恢复 JSON</button>
+                            <input id="importBackupInput" type="file" accept="application/json,.json" hidden>
+                        </div>
+                    </section>
                 </div>
 
                 <div data-settings-panel="wallpaper" class="settings-panel" hidden>
@@ -683,12 +703,27 @@
         </section>
     </div>
 
+    <!-- 全局命令面板（Ctrl/Cmd + K 或 ? 唤起） -->
+    <div id="commandPaletteOverlay" hidden class="command-palette-overlay">
+        <section id="commandPaletteDialog" role="dialog" aria-modal="true" aria-label="命令面板"
+            class="command-palette-dialog glass-floating-surface text-white shadow-2xl">
+            <div class="command-palette-search">
+                <svg class="h-4 w-4 shrink-0 text-white/45" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+                <input id="commandPaletteInput" type="search" placeholder="输入命令或搜索操作（如：全屏、壁纸、社区、归档、屏保）..." aria-label="搜索命令">
+                <kbd class="command-palette-kbd">Esc</kbd>
+            </div>
+            <div id="commandPaletteList" class="command-palette-list gx-scroll" role="listbox" aria-label="可用命令"></div>
+        </section>
+    </div>
+
     <!-- 底部：实时行情条 (静态双行滑动布局) -->
     <footer id="bottom-ticker" data-enter style="--enter-delay:0.38s"
-        class="fixed bottom-0 left-0 w-full h-[44px] z-50 glass-panel !rounded-none border-x-0 border-b-0 bg-gradient-to-t from-black/55 to-transparent group/ticker">
+        class="fixed bottom-0 left-0 w-full h-[44px] z-50 glass-panel !rounded-none border-x-0 border-b-0 group/ticker">
 
-        <!-- 修复后的翻页按钮：左 -->
-        <button type="button" data-ticker-scroll="-500" aria-label="行情向左滚动"
+        <!-- 翻页按钮：左 -->
+        <button type="button" data-ticker-scroll="-500" data-ticker-dir="prev" aria-label="行情向左滚动"
             class="hidden md:flex absolute left-2 top-1/2 -translate-y-1/2 z-50 w-8 h-8 bg-black/50 backdrop-blur-md border border-white/10 rounded-full items-center justify-center opacity-0 group-hover/ticker:opacity-100 transition-all hover:bg-white/20 outline-none shadow-lg">
             <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
@@ -710,8 +745,8 @@
             </div>
         </div>
 
-        <!-- 修复后的翻页按钮：右 -->
-        <button type="button" data-ticker-scroll="500" aria-label="行情向右滚动"
+        <!-- 翻页按钮：右 -->
+        <button type="button" data-ticker-scroll="500" data-ticker-dir="next" aria-label="行情向右滚动"
             class="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 z-50 w-8 h-8 bg-black/50 backdrop-blur-md border border-white/10 rounded-full items-center justify-center opacity-0 group-hover/ticker:opacity-100 transition-all hover:bg-white/20 outline-none shadow-lg">
             <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -720,7 +755,7 @@
     </footer>
 
     <!-- 应用入口：ES Module。各功能模块在 js/modules/ 下，由 main.js 按依赖顺序启动。 -->
-    <script type="module" src="./js/main.js?v=workspace-20261114c"></script>
+    <script type="module" src="./js/main.js?v=workspace-20261122b"></script>
 </body>
 
 </html>

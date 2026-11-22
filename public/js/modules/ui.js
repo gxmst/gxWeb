@@ -1,10 +1,11 @@
 // ============ 基础 UI 控制：时钟 / 搜索引擎 / 行情条翻页 ============
-import { getSettings, updateSettings } from './settings-store.js?v=workspace-20261114c';
+import { getSettings, updateSettings } from './settings-store.js?v=workspace-20261122b';
 
 // ---- 实时时钟 ----
 const clockEl = document.getElementById('clock');
 const dateInfoEl = document.getElementById('dateInfo');
 let lastTimeKey = '';
+let lastDateKey = '';
 
 function updateClock() {
     const now = new Date();
@@ -25,9 +26,12 @@ function updateClock() {
         minSpan.textContent = mm;
         clockEl.append(hourSpan, colonSpan, minSpan);
     }
-    const dateStr = now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-    // 完美处理日期和星期的空格
-    if (dateInfoEl) dateInfoEl.innerText = dateStr.replace(/(日)\s*(星期)/, '$1 · $2');
+    const dateKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+    if (dateInfoEl && dateKey !== lastDateKey) {
+        lastDateKey = dateKey;
+        const dateStr = now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+        dateInfoEl.innerText = dateStr.replace(/(日)\s*(星期)/, '$1 · $2');
+    }
 }
 
 // ---- 搜索引擎 ----

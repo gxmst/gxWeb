@@ -134,30 +134,6 @@
     z-index: 4;
 }
 
-/* 新闻面板：要承载大量文字，可读性优先，所以比通用 glass-panel 稍微"实"一点点——
-   但仍是玻璃。手法不是加白frost（那会发灰），而是垫一层极淡的冷色暗调让文字浮起，
-   blur 同样降到 ~6px 让背景透出来。 */
-#news-panel {
-    --glass-blur: 6px;
-    --glass-sat: 150%;
-    background:
-        linear-gradient(145deg, rgba(255, 255, 255, 0.030), rgba(var(--wall-rgb), 0.015) 48%, rgba(255, 255, 255, 0.008)),
-        rgba(10, 16, 28, 0.10);
-    border-color: rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(1.05);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(1.05);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.22),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.015),
-        0 18px 48px rgba(0, 0, 0, 0.24),
-        0 0 0 1px rgba(var(--wall-rgb), 0.03);
-    text-shadow: 0 1px 12px rgba(0, 0, 0, 0.44);
-}
-
-#news-panel::after {
-    opacity: 0.20;
-}
-
 /* 真·玻璃折射：仅在 JS 检测到支持 url() backdrop-filter 时加 .glass-refract（见 interactions.js）。
    关键：折射要"显形"靠的是位移幅度盖过模糊半径——所以这里 blur 压到 4px，
    把"玻璃感"完全交给 #glassDisplace 的 feDisplacementMap（scale 已在 SVG 里提到 58）。
@@ -168,7 +144,7 @@ html.glass-refract .glass-panel {
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(185%) brightness(1.05) url(#glassDisplace);
 }
 
-/* news-panel 高斯模糊与毛玻璃样式由 workspace.css 统一控制 */
+/* #news-panel 与 #bottom-ticker 的玻璃质感与材质变量由 workspace.css 统一维护 */
 
 /* 浮层与设置抽屉：接入壁纸取色（--wall-rgb）的高模糊深色液态玻璃，
    既保证表单控件的高对比度可读性，又消除硬编码纯黑板砖的割裂感。 */

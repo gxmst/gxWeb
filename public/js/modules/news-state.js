@@ -1,4 +1,4 @@
-import { safeStorageGet, safeStorageSet } from './storage.js?v=workspace-20261114c';
+import { safeStorageGet, safeStorageSet } from './storage.js?v=workspace-20261122b';
 
 const KEY = 'gxNewsReadingV1';
 export const BOOKMARK_LIMIT = 200;
@@ -30,7 +30,7 @@ function sanitizeTechData(value) {
 
 export function sanitizeReadingState(value) {
     const source = value && typeof value === 'object' ? value : {};
-    const read = Object.fromEntries(Object.entries(source.read || {}).filter(([key, timestamp]) => validKey(key) && Number.isFinite(timestamp) && timestamp > 0).sort((a,b) => b[1]-a[1]).slice(0,5000));
+    const read = Object.fromEntries(Object.entries(source.read || {}).filter(([key, timestamp]) => validKey(key) && Number.isFinite(timestamp) && timestamp > 0).sort((a,b) => b[1]-a[1]).slice(0,10000));
     const saved = {};
     for (const [key, entry] of Object.entries(source.saved || {}).slice(0,BOOKMARK_LIMIT)) {
         if (!entry || typeof entry !== 'object' || !validKey(key) || !entry.content) continue;
@@ -63,6 +63,27 @@ export const isRead = key => Object.hasOwn(state.read,key);
 export const isSaved = key => Object.hasOwn(state.saved,key);
 export const countSavedMatching = predicate => Object.values(state.saved).reduce((total, item) => total + (predicate(item) ? 1 : 0), 0);
 export const savedNews = () => Object.values(state.saved).map(item=>({...item})).sort((a,b)=>b.raw_time-a.raw_time);
+export const getReadSnapshot = () => ({ ...state.read });
+export function restoreReadSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return;
+    state.read = sanitizeReadingState({ read: snapshot, saved: {} }).read;
+    persist('', 'read');
+}
+export function exportReadingState() {
+    return {
+        read: { ...state.read },
+        saved: Object.fromEntries(Object.entries(state.saved).map(([k, v]) => [k, { ...v }])),
+    };
+}
+export function importReadingState(payload) {
+    const clean = sanitizeReadingState(payload);
+    state = {
+        read: { ...state.read, ...clean.read },
+        saved: { ...state.saved, ...clean.saved },
+    };
+    persist('', 'saved');
+    return { readCount: Object.keys(state.read).length, savedCount: Object.keys(state.saved).length };
+}
 export function markRead(key, read=true) {
     if (!validKey(key)) return;
     if (isRead(key) === read) return;

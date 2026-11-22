@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -492,6 +493,191 @@ class TechDataAndHtmlBuilderTests(unittest.TestCase):
         self.assertIn("热门话题", v2_summary)
         self.assertIn("Hot Topics", v2ex_html)
         self.assertIn("Latest", v2ex_html)
+
+
+class SpiderUtilityTests(unittest.TestCase):
+    def test_sanitize_url_allows_only_http_and_https(self):
+        self.assertEqual(spider.sanitize_url("https://example.com/a"), "https://example.com/a")
+        self.assertEqual(spider.sanitize_url("http://example.com"), "http://example.com")
+        self.assertEqual(spider.sanitize_url("javascript:alert(1)"), "")
+        self.assertEqual(spider.sanitize_url("//example.com/path"), "")
+
+    def test_build_ticker_entry_calculates_change(self):
+        config = {
+            "symbol": "demo",
+            "name": "Demo",
+            "category": "test",
+            "decimals": 2,
+        }
+
+        entry = spider.build_ticker_entry(config, price=105, previous_close=100, source="fixture")
+
+        self.assertEqual(entry["price"], "105.00")
+        self.assertEqual(entry["change"], "+5.00%")
+        self.assertEqual(entry["source"], "fixture")
+
+    def test_build_ticker_entry_rejects_missing_previous_close(self):
+        config = {
+            "symbol": "demo",
+            "name": "Demo",
+            "category": "test",
+            "decimals": 2,
+        }
+
+        with self.assertRaises(ValueError):
+            spider.build_ticker_entry(config, price=100, previous_close=0)
+
+    def test_atomic_save_json_replaces_with_valid_json(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "payload.json"
+            target.write_text('{"old": true}', encoding="utf-8")
+
+            spider.atomic_save_json(str(target), {"new": [1, 2, 3]})
+
+            self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"new": [1, 2, 3]})
+            self.assertFalse(Path(f"{target}.tmp").exists())
+
+
+class ArchiveAndNotifierTests(unittest.TestCase):
+    def test_tech_archive_accumulates_and_restart_restores_only_latest_sources(self):
+        old = {"id": "old-hn", "content": "old", "source": "hn", "category": "tech", "raw_time": 100}
+        new = {"id": "new-hn", "content": "new", "source": "hn", "category": "tech", "raw_time": 200}
+        gh = {"id": "gh", "content": "GitHub", "source": "github", "category": "tech", "raw_time": 150}
+        with tempfile.TemporaryDirectory() as tmp, WorkingDirectory(tmp):
+            Path("public").mkdir()
+            app = spider.SpiderApp()
+            app.tech_news = [old, gh]
+            app.tech_archive = [old, gh]
+            app.last_wallpaper_date = spider.get_beijing_time().strftime("%Y-%m-%d")
+            Path("public/bg_0.jpg").touch()
+            with mock.patch.object(app, "_run_job", side_effect=lambda name, *a, **kw: (True, [new]) if name == "tech" else (False, [])), mock.patch.object(
+                app, "_interruptible_sleep", side_effect=lambda seconds: setattr(app, "shutdown", True)
+            ):
+                app._slow_loop()
+            app._publish_finance_news()
+            restarted = spider.SpiderApp()
+        self.assertEqual([n["id"] for n in restarted.tech_archive], ["new-hn", "gh", "old-hn"])
+        self.assertEqual([n["id"] for n in restarted.tech_news], ["new-hn", "gh"])
+
+    def test_slow_webhook_does_not_block_publish_and_queue_stays_bounded(self):
+        started = threading.Event()
+        release = threading.Event()
+
+        def slow_post(*args, **kwargs):
+            started.set()
+            release.wait(5)
+            return mock.Mock()
+
+        notifier = spider.AlertNotifier("https://hooks.example.com/notify", queue_size=2)
+        with mock.patch("crawler.notify.requests.post", side_effect=slow_post):
+            try:
+                self.assertTrue(notifier.send("first", "text", key="first"))
+                self.assertTrue(started.wait(1))
+                self.assertTrue(notifier.send("second", "text", key="second"))
+                self.assertTrue(notifier.send("third", "text", key="third"))
+                self.assertFalse(notifier.send("fourth", "text", key="fourth"))
+                self.assertEqual(notifier._queue.qsize(), 2)
+                with tempfile.TemporaryDirectory() as tmp, WorkingDirectory(tmp):
+                    Path("public").mkdir()
+                    app = spider.SpiderApp()
+                    app.notifier = notifier
+                    app.sina_news = [{"id": "n", "source": "sina", "content": "news", "raw_time": 1}]
+                    self.assertTrue(app._publish_finance_news())
+                    self.assertFalse(release.is_set())
+            finally:
+                release.set()
+                notifier._queue.join()
+                notifier.close()
+        self.assertFalse(notifier.send("closed", "text"))
+
+    def test_startup_recovers_and_merges_archive_snapshot(self):
+        hot = {
+            "last_updated": 200,
+            "news_list": [
+                {"id": "f-new", "content": "new post", "source": "linuxdo", "category": "community", "raw_time": 200},
+            ],
+        }
+        arch = {
+            "last_updated": 150,
+            "news_list": [
+                {"id": "f-old", "content": "old post", "source": "nodeseek", "category": "community", "raw_time": 100},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp, WorkingDirectory(tmp):
+            public = Path("public")
+            public.mkdir()
+            (public / "finance-news.json").write_text(json.dumps(hot), encoding="utf-8")
+            (public / "news-archive.json").write_text(json.dumps(arch), encoding="utf-8")
+            app = spider.SpiderApp()
+            app._archive_dirty = True
+            app._publish_finance_news()
+            published_hot = json.loads((public / "finance-news.json").read_text(encoding="utf-8"))
+            published_arch = json.loads((public / "news-archive.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(len(app.community_archive), 2)
+        self.assertEqual(published_hot["archive_count"], 2)
+        self.assertEqual([item["id"] for item in published_arch["news_list"]], ["f-new", "f-old"])
+
+    def test_alert_notifier_deduplicates_breaking_news_and_failures(self):
+        notifier = spider.AlertNotifier("https://hooks.example.com/notify", min_score=85, cooldown_seconds=60, failure_threshold=2)
+        self.addCleanup(notifier.close)
+        with mock.patch("crawler.notify.requests.post") as post:
+            post.return_value.raise_for_status = mock.Mock()
+            sent = notifier.notify_important_news([
+                {"id": "low", "is_important": True, "importance_score": 70, "content": "minor"},
+                {"id": "high", "is_important": True, "importance_score": 90, "importance_reason": "央行", "source": "sina", "content": "Fed cut"},
+                {"id": "high", "is_important": True, "importance_score": 90, "source": "sina", "content": "Fed cut"},
+            ])
+            self.assertEqual(sent, 1)
+            notifier._queue.join()
+            notifier.record_job_result("rss", succeeded=False, error="err1")
+            self.assertEqual(post.call_count, 1)
+            notifier.record_job_result("rss", succeeded=False, error="err2")
+            notifier._queue.join()
+            self.assertEqual(post.call_count, 2)
+
+    def test_bing_wallpaper_writes_metadata_json(self):
+        import io
+        from PIL import Image
+
+        buf = io.BytesIO()
+        Image.new("RGB", (32, 18), (12, 34, 56)).save(buf, "JPEG")
+        jpeg_bytes = buf.getvalue()
+
+        meta_resp = mock.Mock(
+            json=mock.Mock(return_value={
+                "images": [{"url": "/th?id=OHR.Test.jpg", "title": "测试山谷", "copyright": "© Bing", "startdate": "20261122"}]
+            })
+        )
+        meta_resp.raise_for_status = mock.Mock()
+        img_resp = mock.Mock(content=jpeg_bytes)
+        img_resp.raise_for_status = mock.Mock()
+
+        session = mock.Mock(get=mock.Mock(side_effect=[meta_resp, img_resp]))
+        with tempfile.TemporaryDirectory() as tmp, WorkingDirectory(tmp), mock.patch.object(
+            crawler.media, "get_session", return_value=session
+        ):
+            Path("public").mkdir()
+            count = spider.fetch_bing_wallpaper()
+            meta = json.loads((Path("public") / "wallpapers-meta.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(count, 1)
+        self.assertEqual(meta["bg_0.jpg"]["title"], "测试山谷")
+
+    def test_fetch_ticker_publishes_fast_interval_in_status(self):
+        fake_results = {
+            cfg["symbol"]: spider.build_ticker_entry(cfg, 100 + idx, 99, source="Sina")
+            for idx, cfg in enumerate(crawler.markets.MARKET_TICKERS)
+        }
+        with tempfile.TemporaryDirectory() as tmp, WorkingDirectory(tmp), mock.patch.object(
+            crawler.markets, "_fetch_sina_all", return_value=fake_results
+        ), mock.patch.object(crawler.markets, "read_config", return_value={"intervals": {"fast": 180}}):
+            Path("public").mkdir()
+            payload = spider.fetch_ticker()
+            written = json.loads((Path("public") / "ticker-status.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(payload["interval"], 180)
+        self.assertEqual(written["interval"], 180)
 
 
 if __name__ == "__main__":
