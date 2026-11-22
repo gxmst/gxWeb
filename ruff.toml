@@ -1,0 +1,5 @@
+# Use the same correctness checks locally and in CI, regardless of Ruff defaults.
+target-version = "py311"
+
+[lint]
+select = ["E4", "E7", "E9", "F"]
