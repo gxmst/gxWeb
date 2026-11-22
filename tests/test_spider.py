@@ -610,7 +610,9 @@ class ArchiveAndNotifierTests(unittest.TestCase):
             (public / "news-archive.json").write_text(json.dumps(arch), encoding="utf-8")
             app = spider.SpiderApp()
             app._archive_dirty = True
-            app._publish_finance_news()
+            # A newly booted Linux host may have a monotonic uptime below 120 seconds.
+            with mock.patch("crawler.app.time.monotonic", return_value=30):
+                app._publish_finance_news()
             published_hot = json.loads((public / "finance-news.json").read_text(encoding="utf-8"))
             published_arch = json.loads((public / "news-archive.json").read_text(encoding="utf-8"))
 

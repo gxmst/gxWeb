@@ -46,7 +46,7 @@ class SpiderApp:
         self.rss_archive = []
         self.tech_archive = []
         self.community_archive = []
-        self._last_archive_publish = 0.0
+        self._last_archive_publish = None
         self._archive_dirty = False
         self.last_wallpaper_date = None
         self.last_rss_time = 0
@@ -383,7 +383,8 @@ class SpiderApp:
         atomic_save_json("./public/finance-news.json", output_data, compact=True)
         now_mono = time.monotonic()
         if (self._archive_dirty or not os.path.exists(NEWS_ARCHIVE_FILE)) and (
-            now_mono - self._last_archive_publish >= 120 or not os.path.exists(NEWS_ARCHIVE_FILE)
+            self._last_archive_publish is None or now_mono - self._last_archive_publish >= 120
+            or not os.path.exists(NEWS_ARCHIVE_FILE)
         ):
             atomic_save_json(
                 NEWS_ARCHIVE_FILE,
